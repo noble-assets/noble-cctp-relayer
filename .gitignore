@@ -1,0 +1,8 @@
+build/
+.idea/
+.DS_Store
+.vscode/
+dist/
+
+# Don't commit the vendor directory if anyone runs 'go mod vendor'.
+/vendor

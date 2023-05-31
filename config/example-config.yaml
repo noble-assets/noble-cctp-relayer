@@ -1,0 +1,5 @@
+networks:
+  ethereum:
+    rpc: https://ethereum-mainnet-rpc.allthatnode.com
+  noble:
+    rpc: https://noble-rpc.polkachu.com
