@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -10,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/spf13/cobra"
+	"io"
 	"log"
 	"math/big"
 	"net/http"
@@ -24,6 +26,15 @@ type MintMessage struct {
 	isProcessed bool
 }
 
+func (m MintMessage) String() string {
+	isProcessed := "false"
+	if m.isProcessed {
+		isProcessed = "true"
+	}
+	return fmt.Sprintf("{message: %s, messageHash: %s, attestation: %s, isProcessed: %s",
+		"0x"+hex.EncodeToString(m.message), "0x"+hex.EncodeToString(m.messageHash), "0x"+hex.EncodeToString(m.attestation), isProcessed)
+}
+
 func init() {
 	rootCmd.AddCommand(startCmd)
 }
@@ -35,19 +46,33 @@ var startCmd = &cobra.Command{
 	Run:   start,
 }
 
-const START_BLOCK = 17312317
-const TOKEN_MESSENGER = "0xBd3fa81B58Ba92a82136038B25aDec7066af3155"
-const MESSAGE_TRANSMITTER = "0x0a992d191deec32afe36203ad87d7d289a738f81"
-const NOBLE_DESTINATION_ID = 1 // TODO what is this for noble?
-const ATTESTATION_BASE_URL = "https://iris-api.circle.com/attestations/"
-
-// VALID_TOKEN_ADDRESSES contains valid eth token addresses to mint
-var VALID_TOKEN_ADDRESSES = map[string]bool{"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": true} // just usdc
-
 // TX_MAP maps eth tx_hash to message bytes, attestation
 var TX_MAP = map[string]MintMessage{}
 
 func start(cmd *cobra.Command, args []string) {
+
+	currentBlock := big.NewInt(conf.Indexer.StartBlock)
+
+	// start webserver
+	go func() {
+
+		http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+			responseMap := map[string]string{}
+			responseMap["Current block"] = currentBlock.String()
+			for key, val := range TX_MAP {
+				responseMap[key] = val.String()
+			}
+
+			response, _ := json.Marshal(responseMap)
+
+			fmt.Fprintf(w, string(response))
+		})
+
+		if err := http.ListenAndServe(":80", nil); err != nil {
+			log.Fatal(err)
+		}
+
+	}()
 
 	// Connect to an Ethereum client
 	client, err := ethclient.Dial(conf.Networks.Ethereum.RPC)
@@ -55,24 +80,23 @@ func start(cmd *cobra.Command, args []string) {
 		log.Fatal(err)
 	}
 
-	json, err := os.ReadFile("config/abi/TokenMessenger.json")
+	tokenMessengerJson, err := os.ReadFile("config/abi/TokenMessenger.json")
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	tokenMessengerAbi, err := abi.JSON(strings.NewReader(string(json)))
+	tokenMessengerAbi, err := abi.JSON(strings.NewReader(string(tokenMessengerJson)))
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	json, err = os.ReadFile("config/abi/MessageTransmitter.json")
+	messageTransmitterJson, err := os.ReadFile("config/abi/MessageTransmitter.json")
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	messageTransmitterAbi, err := abi.JSON(strings.NewReader(string(json)))
+	messageTransmitterAbi, err := abi.JSON(strings.NewReader(string(messageTransmitterJson)))
 
-	currentBlock := big.NewInt(START_BLOCK)
 	for {
 		block, err := client.BlockByNumber(context.Background(), currentBlock)
 		if err != nil {
@@ -90,8 +114,6 @@ func start(cmd *cobra.Command, args []string) {
 					}
 
 					for _, vLog := range receipt.Logs {
-						fmt.Println(vLog.Address.Hex())
-						fmt.Println(vLog.TxHash.Hex())
 
 						// topic[0] is the event name
 						event, err := messageTransmitterAbi.EventByID(vLog.Topics[0])
@@ -101,13 +123,11 @@ func start(cmd *cobra.Command, args []string) {
 						}
 
 						if len(vLog.Data) > 0 {
-							fmt.Printf("Log Data in Hex: %s\n", hex.EncodeToString(vLog.Data))
 							outputDataMap := make(map[string]interface{})
 							err = messageTransmitterAbi.UnpackIntoMap(outputDataMap, event.Name, vLog.Data)
 							if err != nil {
 								log.Fatal(err)
 							}
-							fmt.Printf("Event outputs: %v\n", outputDataMap)
 
 							messageHash := crypto.Keccak256Hash(outputDataMap["message"].([]uint8)).Bytes()
 							TX_MAP[tx.Hash().String()] = MintMessage{
@@ -125,21 +145,41 @@ func start(cmd *cobra.Command, args []string) {
 		}
 
 		// look up attestations for all unprocessed blocks
+		broadcastQueue := make(chan MintMessage)
 		for _, pendingTx := range TX_MAP {
-			if pendingTx.isProcessed {
-				// evict
-			} else {
-				resp, err := http.Get(ATTESTATION_BASE_URL + string(pendingTx.messageHash))
+			if !pendingTx.isProcessed {
+				resp, err := http.Get(conf.Indexer.AttestationBaseUrl + "0x" + hex.EncodeToString(pendingTx.messageHash))
 				if err != nil {
-					// TODO failed to look up attestation
+					fmt.Println("Failed to look up attestation with message hash 0x" + hex.EncodeToString(pendingTx.messageHash))
 				}
 				defer resp.Body.Close()
-				//body, err := io.ReadAll(resp.Body)
 
+				type AttestationResponse struct {
+					Attestation string
+					Status      string
+				}
+
+				body, _ := io.ReadAll(resp.Body)
+				response := AttestationResponse{}
+				err = json.Unmarshal(body, &response)
+				if err != nil {
+					fmt.Println("Failure to parse response body.")
+				}
+
+				if resp.StatusCode == 200 && response.Status == "complete" {
+					pendingTx.attestation = []byte(response.Attestation)
+					broadcastQueue <- pendingTx
+
+					pendingTx.isProcessed = true
+
+				}
 			}
 		}
 
-		// TODO query every block on Noble to evict successfully relayed messages from cache
+		// TODO async broadcast all messages from broadcastQueue to Noble and mark as processed
+
+		// query every block on Noble to evict successfully relayed messages from cache
+		// TODO add this in once module is live on Noble testnet
 
 		currentBlock = currentBlock.Add(currentBlock, big.NewInt(1))
 	}
@@ -148,24 +188,27 @@ func start(cmd *cobra.Command, args []string) {
 
 // returns true if tx is a depositForBurn or depositForBurnWithCaller txn from TokenMessenger
 func isDepositForBurnTx(tx *types.Transaction, contractAbi *abi.ABI) bool {
-	if tx.To().String() != TOKEN_MESSENGER {
+	if tx == nil || tx.Data() == nil || tx.To() == nil {
 		return false
 	}
 
-	// decode tx params
+	if tx.To().String() != conf.Networks.Ethereum.TokenMessenger {
+		return false
+	}
+
 	method, inputs := DecodeTransactionInputData(contractAbi, tx.Data())
 	if method != "depositForBurn" && method != "depositForBurnWithCaller" {
 		return false
 	}
 
 	_, destinationDomainFound := inputs["destinationDomain"]
-	if !destinationDomainFound || inputs["destinationDomain"].(uint32) != NOBLE_DESTINATION_ID {
+	if !destinationDomainFound || inputs["destinationDomain"].(uint32) != conf.Networks.Noble.DestinationId {
 		return false
 	}
 
 	// check that it is relaying correct tokens
 	burnToken, burnTokenFound := inputs["burnToken"]
-	isValidTokenAddress := VALID_TOKEN_ADDRESSES[burnToken.(common.Address).String()]
+	isValidTokenAddress := conf.Indexer.ValidTokenAddresses[burnToken.(common.Address).String()]
 
 	if !burnTokenFound || !isValidTokenAddress {
 		return false
@@ -184,8 +227,6 @@ func DecodeTransactionInputData(contractABI *abi.ABI, data []byte) (string, map[
 	inputsMap := make(map[string]interface{})
 	if err := method.Inputs.UnpackIntoMap(inputsMap, inputsSigData); err != nil {
 		log.Fatal(err)
-	} else {
-		fmt.Println(inputsMap)
 	}
 
 	return method.Name, inputsMap

@@ -24,12 +24,20 @@ var (
 type ConfigYaml struct {
 	Networks struct {
 		Ethereum struct {
-			RPC string `yaml:"rpc"`
+			RPC                string `yaml:"rpc"`
+			TokenMessenger     string `yaml:"token-messenger"`
+			MessageTransmitter string `yaml:"message-transmitter"`
 		} `yaml:"ethereum"`
 		Noble struct {
-			RPC string `yaml:"rpc"`
+			RPC           string `yaml:"rpc"`
+			DestinationId uint32 `yaml:"destination-id"`
 		} `yaml:"noble"`
 	} `yaml:"networks"`
+	Indexer struct {
+		StartBlock          int64    `yaml:"start-block"`
+		AttestationBaseUrl  string   `yaml:"attestation-base-url"`
+		ValidTokenAddresses []string `yaml:"valid-token-addresses"`
+	} `yaml:"indexer"`
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -76,6 +84,15 @@ func initConfig() {
 	}
 
 	conf.Networks.Ethereum.RPC = cfgYaml.Networks.Ethereum.RPC
+	conf.Networks.Ethereum.TokenMessenger = cfgYaml.Networks.Ethereum.TokenMessenger
+	conf.Networks.Ethereum.MessageTransmitter = cfgYaml.Networks.Ethereum.MessageTransmitter
 	conf.Networks.Noble.RPC = cfgYaml.Networks.Noble.RPC
+	conf.Networks.Noble.DestinationId = cfgYaml.Networks.Noble.DestinationId
+	conf.Indexer.StartBlock = cfgYaml.Indexer.StartBlock
+	conf.Indexer.AttestationBaseUrl = cfgYaml.Indexer.AttestationBaseUrl
+	conf.Indexer.ValidTokenAddresses = map[string]bool{}
+	for _, address := range cfgYaml.Indexer.ValidTokenAddresses {
+		conf.Indexer.ValidTokenAddresses[address] = true
+	}
 
 }

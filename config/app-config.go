@@ -2,14 +2,28 @@ package config
 
 type Config struct {
 	Networks           networks
+	Indexer            indexer
 	ConfigFileLocation string
 }
 
 type networks struct {
-	Ethereum network
-	Noble    network
+	Ethereum ethereum
+	Noble    noble
 }
 
-type network struct {
-	RPC string
+type ethereum struct {
+	RPC                string
+	TokenMessenger     string
+	MessageTransmitter string
+}
+
+type noble struct {
+	RPC           string
+	DestinationId uint32
+}
+
+type indexer struct {
+	StartBlock          int64
+	AttestationBaseUrl  string
+	ValidTokenAddresses map[string]bool
 }
