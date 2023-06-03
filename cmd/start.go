@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 type MintMessage struct {
@@ -35,6 +36,11 @@ func (m MintMessage) String() string {
 		"0x"+hex.EncodeToString(m.message), "0x"+hex.EncodeToString(m.messageHash), "0x"+hex.EncodeToString(m.attestation), isProcessed)
 }
 
+type AttestationResponse struct {
+	Attestation string
+	Status      string
+}
+
 func init() {
 	rootCmd.AddCommand(startCmd)
 }
@@ -46,66 +52,40 @@ var startCmd = &cobra.Command{
 	Run:   start,
 }
 
-// TX_MAP maps eth tx_hash to message bytes, attestation
-var TX_MAP = map[string]MintMessage{}
-
 func start(cmd *cobra.Command, args []string) {
 
+	// txMap maps eth tx_hash to message metadata
+	var txMap = map[string]MintMessage{}
+	// current ethereum block
 	currentBlock := big.NewInt(conf.Indexer.StartBlock)
 
-	// start webserver
-	go func() {
-
-		http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
-			responseMap := map[string]string{}
-			responseMap["Current block"] = currentBlock.String()
-			for key, val := range TX_MAP {
-				responseMap[key] = val.String()
-			}
-
-			response, _ := json.Marshal(responseMap)
-
-			fmt.Fprintf(w, string(response))
-		})
-
-		if err := http.ListenAndServe(":80", nil); err != nil {
-			log.Fatal(err)
-		}
-
-	}()
-
-	// Connect to an Ethereum client
 	client, err := ethclient.Dial(conf.Networks.Ethereum.RPC)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	// load abi
 	tokenMessengerJson, err := os.ReadFile("config/abi/TokenMessenger.json")
-	if err != nil {
-		fmt.Println(err)
-	}
-
 	tokenMessengerAbi, err := abi.JSON(strings.NewReader(string(tokenMessengerJson)))
+	messageTransmitterJson, err := os.ReadFile("config/abi/MessageTransmitter.json")
+	messageTransmitterAbi, err := abi.JSON(strings.NewReader(string(messageTransmitterJson)))
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	messageTransmitterJson, err := os.ReadFile("config/abi/MessageTransmitter.json")
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	messageTransmitterAbi, err := abi.JSON(strings.NewReader(string(messageTransmitterJson)))
-
 	for {
+		log.Printf("Current block: %s", currentBlock.String())
 		block, err := client.BlockByNumber(context.Background(), currentBlock)
-		if err != nil {
+		if err != nil && err.Error() == "not found" {
+			log.Println("Block not found")
+			time.Sleep(5 * time.Second)
+		} else if err != nil {
 			log.Fatal(err)
 		}
 
 		for _, tx := range block.Transactions() {
 			if isDepositForBurnTx(tx, &tokenMessengerAbi) {
-				_, found := TX_MAP[tx.Hash().String()]
+				_, found := txMap[tx.Hash().String()]
 				if !found {
 					// get keccack-256 hash of MessageSent event
 					receipt, err := client.TransactionReceipt(context.Background(), tx.Hash())
@@ -126,11 +106,12 @@ func start(cmd *cobra.Command, args []string) {
 							outputDataMap := make(map[string]interface{})
 							err = messageTransmitterAbi.UnpackIntoMap(outputDataMap, event.Name, vLog.Data)
 							if err != nil {
-								log.Fatal(err)
+								log.Printf("Unable to parse tx messages for tx hash: %s", tx.Hash().String())
+								continue
 							}
 
 							messageHash := crypto.Keccak256Hash(outputDataMap["message"].([]uint8)).Bytes()
-							TX_MAP[tx.Hash().String()] = MintMessage{
+							txMap[tx.Hash().String()] = MintMessage{
 								message:     tx.Data(),
 								messageHash: messageHash,
 								attestation: nil,
@@ -144,19 +125,16 @@ func start(cmd *cobra.Command, args []string) {
 			}
 		}
 
+		// mints to broadcast
+		// broadcastQueue := make(chan MintMessage)
 		// look up attestations for all unprocessed blocks
-		broadcastQueue := make(chan MintMessage)
-		for _, pendingTx := range TX_MAP {
+
+		for _, pendingTx := range txMap {
 			if !pendingTx.isProcessed {
 				resp, err := http.Get(conf.Indexer.AttestationBaseUrl + "0x" + hex.EncodeToString(pendingTx.messageHash))
 				if err != nil {
 					fmt.Println("Failed to look up attestation with message hash 0x" + hex.EncodeToString(pendingTx.messageHash))
-				}
-				defer resp.Body.Close()
-
-				type AttestationResponse struct {
-					Attestation string
-					Status      string
+					continue
 				}
 
 				body, _ := io.ReadAll(resp.Body)
@@ -168,7 +146,7 @@ func start(cmd *cobra.Command, args []string) {
 
 				if resp.StatusCode == 200 && response.Status == "complete" {
 					pendingTx.attestation = []byte(response.Attestation)
-					broadcastQueue <- pendingTx
+					// broadcastQueue <- pendingTx
 
 					pendingTx.isProcessed = true
 
@@ -188,11 +166,7 @@ func start(cmd *cobra.Command, args []string) {
 
 // returns true if tx is a depositForBurn or depositForBurnWithCaller txn from TokenMessenger
 func isDepositForBurnTx(tx *types.Transaction, contractAbi *abi.ABI) bool {
-	if tx == nil || tx.Data() == nil || tx.To() == nil {
-		return false
-	}
-
-	if tx.To().String() != conf.Networks.Ethereum.TokenMessenger {
+	if tx == nil || tx.Data() == nil || tx.To() == nil || tx.To().String() != conf.Networks.Ethereum.TokenMessenger {
 		return false
 	}
 
