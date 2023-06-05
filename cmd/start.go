@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -52,13 +53,15 @@ var startCmd = &cobra.Command{
 	Run:   start,
 }
 
+// txMap maps eth tx_hash to message metadata
+var txMap = map[string]MintMessage{}
+
+// currentBlock marks the next sequential ethereum block to be processed
+var currentBlock *big.Int
+
 func start(cmd *cobra.Command, args []string) {
 
-	// txMap maps eth tx_hash to message metadata
-	var txMap = map[string]MintMessage{}
-	// current ethereum block
-	currentBlock := big.NewInt(conf.Indexer.StartBlock)
-
+	currentBlock = big.NewInt(conf.Indexer.StartBlock)
 	client, err := ethclient.Dial(conf.Networks.Ethereum.RPC)
 	if err != nil {
 		log.Fatal(err)
@@ -73,9 +76,51 @@ func start(cmd *cobra.Command, args []string) {
 		log.Fatal(err)
 	}
 
+	heightChan := make(chan int64, 10000)
+	threads := 128
+	wg := sync.WaitGroup{}
+
+	for i := 0; i < threads; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			processBlock(client, heightChan, tokenMessengerAbi, messageTransmitterAbi)
+		}()
+	}
+
+	enqueueBlockHeights(client, heightChan)
+
+	wg.Wait()
+}
+
+func enqueueBlockHeights(client *ethclient.Client, heightChan chan int64) {
 	for {
-		log.Printf("Current block: %s", currentBlock.String())
-		block, err := client.BlockByNumber(context.Background(), currentBlock)
+		// add blocks to queue
+		if len(heightChan) < cap(heightChan)/4 {
+			latest, err := client.HeaderByNumber(context.Background(), nil)
+			if err != nil {
+				log.Fatal(err)
+			}
+			latestBlock := latest.Number
+
+			for currentBlock.Int64() <= latestBlock.Int64() && len(heightChan) != cap(heightChan) {
+				heightChan <- currentBlock.Int64()
+				currentBlock = currentBlock.Add(currentBlock, big.NewInt(1))
+			}
+
+		}
+		time.Sleep(20 * time.Second)
+	}
+}
+
+func processBlock(client *ethclient.Client, heightChan chan int64, tokenMessengerAbi abi.ABI, messageTransmitterAbi abi.ABI) {
+	for {
+		rawHeight := <-heightChan
+		block := big.NewInt(rawHeight)
+		log.Printf("Processing blockResponse %s", block.String())
+
+		blockResponse, err := client.BlockByNumber(context.Background(), block)
+		fmt.Println("Block response received from blockResponse " + blockResponse.Number().String())
 		if err != nil && err.Error() == "not found" {
 			log.Println("Block not found")
 			time.Sleep(5 * time.Second)
@@ -83,7 +128,7 @@ func start(cmd *cobra.Command, args []string) {
 			log.Fatal(err)
 		}
 
-		for _, tx := range block.Transactions() {
+		for _, tx := range blockResponse.Transactions() {
 			if isDepositForBurnTx(tx, &tokenMessengerAbi) {
 				_, found := txMap[tx.Hash().String()]
 				if !found {
@@ -154,14 +199,12 @@ func start(cmd *cobra.Command, args []string) {
 			}
 		}
 
+		//time.Sleep(1 * time.Second)
+
 		// TODO async broadcast all messages from broadcastQueue to Noble and mark as processed
 
-		// query every block on Noble to evict successfully relayed messages from cache
-		// TODO add this in once module is live on Noble testnet
-
-		currentBlock = currentBlock.Add(currentBlock, big.NewInt(1))
+		// TODO query every blockResponse on Noble to evict successfully relayed messages from cache
 	}
-
 }
 
 // returns true if tx is a depositForBurn or depositForBurnWithCaller txn from TokenMessenger
