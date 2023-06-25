@@ -1,6 +1,6 @@
 # CCTP Relayer
 
-<img src="header.png" width="512px">
+<img src="assets/header.png" width="512px">
 
 CCTP Relayer is a simple service which listens for events on Ethereum and forwards them to Noble.  It is meant to be used in conjunction Circle's Cross Chain Transfer Protocol.
 
@@ -13,5 +13,5 @@ Installation
 
 Running the relayer
 ```shell
-rly start --config ./config/example-config.yaml
+rly start --config ./config.example.yaml
 ```
