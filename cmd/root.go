@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"cosmossdk.io/log"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -13,14 +14,13 @@ import (
 var logger log.Logger
 
 var (
-	cfg config.Config
-
-	MessageTransmitter common.Address
-	TokenMessenger     common.Address
-	ValidTokens        = make(map[common.Address]bool)
-
+	cfg     config.Config
 	cfgFile string
 	verbose bool
+
+	MessageTransmitter    common.Address
+	MessageTransmitterABI abi.ABI
+	MessageSent           abi.Event
 )
 
 var rootCmd = &cobra.Command{
@@ -36,22 +36,21 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "")
+	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "config.yaml", "")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "")
 
+	rootCmd.AddCommand(startCmd)
+
 	cobra.OnInitialize(func() {
-		cfg = config.Parse(cfgFile)
-
-		MessageTransmitter = common.HexToAddress(cfg.Networks.Ethereum.MessageTransmitter)
-		TokenMessenger = common.HexToAddress(cfg.Networks.Ethereum.TokenMessenger)
-		for _, token := range cfg.Indexer.ValidTokenAddresses {
-			ValidTokens[common.HexToAddress(token)] = true
-		}
-
 		if verbose {
 			logger = log.NewLogger(os.Stdout)
 		} else {
 			logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.InfoLevel))
 		}
+
+		cfg = config.Parse(cfgFile)
+		logger.Info("successfully parsed config file", "location", cfgFile)
+
+		MessageTransmitter = common.HexToAddress(cfg.Networks.Ethereum.MessageTransmitter)
 	})
 }

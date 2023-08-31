@@ -2,207 +2,205 @@ package cmd
 
 import (
 	"context"
+	"github.com/cosmos/cosmos-sdk/client"
+	"github.com/cosmos/cosmos-sdk/testutil/testdata"
+	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
+	"github.com/cosmos/cosmos-sdk/types/tx/signing"
+	xauthsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
+
 	"encoding/hex"
 	"encoding/json"
-	"io"
-	"math/big"
-	"net/http"
-	"os"
-	"sync"
-
+	"fmt"
+	"github.com/cosmos/cosmos-sdk/types/tx"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/spf13/cobra"
+	"github.com/strangelove-ventures/noble-cctp-relayer/utils"
+	"google.golang.org/grpc"
+	"io"
+	"net/http"
+	"os"
 )
-
-var (
-	MessageTransmitterABI abi.ABI
-	TokenMessengerABI     abi.ABI
-
-	DepositForBurn         abi.Event
-	DepositForBurnMetadata abi.Event
-	DepositForBurnTopics   abi.Arguments
-	MessageSent            abi.Event
-)
-
-type Message struct {
-	message     []byte
-	messageHash []byte
-	attestation []byte
-	isProcessed bool
-}
-
-type AttestationResponse struct {
-	Attestation string
-	Status      string
-}
-
-func init() {
-	messageTransmitter, _ := os.Open("config/abi/MessageTransmitter.json")
-	MessageTransmitterABI, _ = abi.JSON(messageTransmitter)
-	tokenMessenger, _ := os.Open("config/abi/TokenMessenger.json")
-	TokenMessengerABI, _ = abi.JSON(tokenMessenger)
-
-	DepositForBurn = TokenMessengerABI.Events["DepositForBurn"]
-	for _, input := range DepositForBurn.Inputs {
-		if input.Indexed {
-			DepositForBurnTopics = append(DepositForBurnTopics, input)
-		}
-	}
-	MessageSent = MessageTransmitterABI.Events["MessageSent"]
-
-	rootCmd.AddCommand(startCmd)
-}
 
 var startCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start relaying CCTP transactions between Ethereum and Noble",
-	Run:   start,
+	Run:   Start,
 }
 
-// txMap maps eth tx_hash to message metadata
-var txMap = map[string]Message{}
+var pendingAttestations chan utils.Attestation
 
-// currentBlock marks the next sequential ethereum block to be processed
-var currentBlock *big.Int
-
-func start(cmd *cobra.Command, args []string) {
-	currentBlock = big.NewInt(cfg.Indexer.StartBlock)
+func Start(cmd *cobra.Command, args []string) {
+	pendingAttestations = make(chan utils.Attestation, 1000) // TODO
 	client, err := ethclient.Dial(cfg.Networks.Ethereum.RPC)
 	if err != nil {
-		logger.Error("unable to initialise client", "err", err)
+		logger.Error("unable to initialise ethereum client", "err", err)
 		os.Exit(1)
 	}
 
-	heightChan := make(chan int64, 10000)
-	threads := 128
-	wg := sync.WaitGroup{}
+	messages := make(chan types.Log)
 
-	for i := 0; i < threads; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			processBlock(client, heightChan)
-		}()
+	filter := ethereum.FilterQuery{
+		Addresses: []common.Address{MessageTransmitter},
+		Topics:    [][]common.Hash{{MessageSent.ID}},
 	}
 
-	enqueueBlockHeights(client, heightChan)
+	sub, err := client.SubscribeFilterLogs(context.Background(), filter, messages)
+	if err != nil {
+		logger.Error("unable to subscribe to logs", "err", err)
+		os.Exit(1)
+	}
 
-	wg.Wait()
-}
+	// TODO remove after testing
+	go func() {
+		utils.InjectMessages(client, filter, messages)
+	}()
 
-func enqueueBlockHeights(client *ethclient.Client, heightChan chan int64) {
-	//for {
-	//	// add blocks to queue
-	//	if len(heightChan) < cap(heightChan)/4 {
-	//		latestBlock, _ := client.BlockNumber(context.Background())
-	//
-	//		for currentBlock.Uint64() <= latestBlock && len(heightChan) != cap(heightChan) {
-	//			heightChan <- currentBlock.Int64()
-	//			currentBlock = currentBlock.Add(currentBlock, big.NewInt(1))
-	//		}
-	//
-	//	}
-	//	time.Sleep(20 * time.Second)
-	//}
-	heightChan <- 17549952
-}
-
-// TODO(@john): Handle all errors.
-func processBlock(client *ethclient.Client, heightChan chan int64) {
 	for {
-		rawHeight := <-heightChan
-		height := big.NewInt(rawHeight)
-		logger.Debug("processing new block", "height", height)
-
-		// Fetch entire block by height, giving us the block hash.
-		block, _ := client.BlockByNumber(context.Background(), height)
-		hash := block.Hash()
-
-		// Query relevant logs for this specific block.
-		filter := ethereum.FilterQuery{
-			BlockHash: &hash,
-			Addresses: []common.Address{TokenMessenger},
-			Topics:    [][]common.Hash{{DepositForBurn.ID}},
+		select {
+		case err := <-sub.Err():
+			logger.Error("connection closed", "err", err)
+			os.Exit(1)
+		case msg := <-messages:
+			HandleMessage(msg)
 		}
-		logs, _ := client.FilterLogs(context.Background(), filter)
-
-		// ...
-		for _, log := range logs {
-			// Ensure the burn token is correct.
-			// NOTE: The first topic is the event name, so we ignore it.
-			topics := make(map[string]interface{})
-			_ = abi.ParseTopicsIntoMap(topics, DepositForBurnTopics, log.Topics[1:])
-
-			isValidBurnToken := ValidTokens[topics["burnToken"].(common.Address)]
-			if !isValidBurnToken {
-				continue
-			}
-
-			// Ensure the destination domain is correct.
-			event := make(map[string]interface{})
-			_ = TokenMessengerABI.UnpackIntoMap(event, DepositForBurn.Name, log.Data)
-
-			if event["destinationDomain"] != cfg.Networks.Noble.DestinationId {
-				continue
-			}
-
-			// ...
-			_, found := txMap[log.TxHash.String()]
-			if !found {
-				receipt, _ := client.TransactionReceipt(context.Background(), log.TxHash)
-
-				messageSentEvent := make(map[string]interface{})
-
-				for _, log := range receipt.Logs {
-					// NOTE: The first topic is the event name, so we filter it.
-					switch log.Topics[0] {
-					case DepositForBurnMetadata.ID:
-						// TODO(@john): Handle IBC Metadata.
-					case MessageSent.ID:
-						if log.Address != MessageTransmitter {
-							continue
-						}
-
-						_ = MessageTransmitterABI.UnpackIntoMap(messageSentEvent, MessageSent.Name, log.Data)
-					}
-				}
-
-				messageHash := crypto.Keccak256Hash(messageSentEvent["message"].([]uint8)).Bytes()
-				txMap[log.TxHash.String()] = Message{
-					messageHash: messageHash,
-				}
-			}
-		}
-
-		// mints to broadcast
-		// broadcastQueue := make(chan Message)
-		// look up attestations for all unprocessed blocks
-
-		for txHash, tx := range txMap {
-			if !tx.isProcessed {
-				rawResponse, _ := http.Get(cfg.Indexer.AttestationBaseUrl + "0x" + hex.EncodeToString(tx.messageHash))
-				body, _ := io.ReadAll(rawResponse.Body)
-
-				response := AttestationResponse{}
-				_ = json.Unmarshal(body, &response)
-
-				logger.Info("queried attestation", "tx", txHash, "status", response.Status)
-
-				if response.Status == "complete" {
-					tx.attestation = []byte(response.Attestation)
-					// broadcastQueue <- pendingTx
-				}
-			}
-		}
-
-		// time.Sleep(1 * time.Second)
-
-		// TODO async broadcast all messages from broadcastQueue to Noble and mark as processed
-
-		// TODO query every blockResponse on Noble to evict successfully relayed messages from cache
 	}
+}
+
+func HandleMessage(log types.Log) {
+	event := make(map[string]interface{})
+	_ = MessageTransmitterABI.UnpackIntoMap(event, MessageSent.Name, log.Data)
+
+	rawMessage := event["message"].([]byte)
+	message, _ := new(utils.Message).Parse(rawMessage)
+
+	if message.DestinationDomain != cfg.Networks.Noble.DomainId {
+		logger.Debug("received irrelevant message", "destination", message.DestinationDomain, "tx", log.TxHash)
+		return
+	}
+
+	if _, err := new(utils.BurnMessage).Parse(message.MessageBody); err == nil {
+		logger.Info("received a new burn message", "nonce", message.Nonce, "tx", log.TxHash)
+
+		pendingAttestations <- utils.Attestation{
+			Message: message.MessageBody,
+			Key:     hex.EncodeToString(crypto.Keccak256(message.MessageBody)),
+		}
+
+		return
+	}
+
+	if content, err := new(utils.MetadataMessage).Parse(message.MessageBody); err == nil {
+		logger.Info("received a new forward message", "channel", content.Channel, "tx", log.TxHash)
+
+		pendingAttestations <- utils.Attestation{
+			Message: message.MessageBody,
+			Key:     hex.EncodeToString(crypto.Keccak256(message.MessageBody)),
+		}
+		return
+	}
+}
+
+func Receive() {
+	for {
+		select {
+		case attestation := <-pendingAttestations:
+			// goroutine
+			checkAttestationAndMint(attestation)
+		}
+	}
+}
+
+// check api for attestation
+// returns
+func checkAttestationAndMint(attestation utils.Attestation) {
+	rawResponse, err := http.Get(cfg.AttestationBaseUrl + "0x" + attestation.Key)
+	if rawResponse.StatusCode != http.StatusOK || err != nil {
+		logger.Info("non 200 response received", "err", err)
+		pendingAttestations <- attestation
+	}
+	body, err := io.ReadAll(rawResponse.Body)
+	if err != nil {
+		logger.Debug("unable to parse message body", "err", err)
+		pendingAttestations <- attestation
+	}
+
+	response := utils.AttestationResponse{}
+	err = json.Unmarshal(body, &response)
+	if err != nil || response.Status != "complete" {
+		logger.Info("unable to parse message body", "err", err)
+		pendingAttestations <- attestation
+	}
+
+	attestation.Attestation = response.Attestation
+
+	// mint
+	app := simapp.NewSimApp()
+	txBuilder := app.TxConfig().NewTxBuilder()
+
+	priv1, _, addr1 := testdata.KeyTestPubAddr()
+
+	msg1 := banktypes.NewMsgSend(addr1, addr3, types.NewCoins(types.NewInt64Coin("atom", 12)))
+	err := txBuilder.SetMsgs(msg1)
+	if err != nil {
+		return err
+	}
+
+	txBuilder.SetGasLimit(...)
+	txBuilder.SetFeeAmount(...)
+	txBuilder.SetMemo(...)
+	txBuilder.SetTimeoutHeight(...)
+
+	// sign
+
+	// broadcast
+	// Create a connection to the gRPC server.
+	grpcConn, err := grpc.Dial(
+		cfg.Networks.Noble.RPC, // Or your gRPC server address.
+		grpc.WithInsecure(),    // The Cosmos SDK doesn't support any transport security mechanism.
+	)
+	if err != nil {
+		logger.Error("error while connecting to Noble", "err", err)
+		return
+	}
+	defer grpcConn.Close()
+
+	// Broadcast the tx via gRPC. We create a new client for the Protobuf Tx
+	// service.
+	txClient := tx.NewServiceClient(grpcConn)
+	// We then call the BroadcastTx method on this client.
+	grpcRes, err := txClient.BroadcastTx(
+		context.Background(),
+		&tx.BroadcastTxRequest{
+			Mode:    tx.BroadcastMode_BROADCAST_MODE_SYNC,
+			TxBytes: txBytes, // Proto-binary of the signed transaction, see previous step.
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(grpcRes.TxResponse.Code) // Should be `0` if the tx is successful
+
+	return nil
+}
+
+func init() {
+	cobra.OnInitialize(func() {
+		messageTransmitter, err := os.Open("./abi/MessageTransmitter.json")
+		if err != nil {
+			logger.Error("unable to read MessageTransmitter abi", "err", err)
+			os.Exit(1)
+		}
+		MessageTransmitterABI, err = abi.JSON(messageTransmitter)
+		if err != nil {
+			logger.Error("unable to parse MessageTransmitter abi", "err", err)
+		}
+
+		MessageSent = MessageTransmitterABI.Events["MessageSent"]
+	})
 }
