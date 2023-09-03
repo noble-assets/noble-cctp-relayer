@@ -1,4 +1,4 @@
-package utils
+package types
 
 // Attestation is the hex encoded attestation received from Circle
 // Message is the message bytes

@@ -2,11 +2,19 @@ package cmd
 
 import (
 	"context"
-	"github.com/cosmos/cosmos-sdk/client"
+	"errors"
+	cctptypes "github.com/circlefin/noble-cctp/x/cctp/types"
+	sdkClient "github.com/cosmos/cosmos-sdk/client"
+	clientTx "github.com/cosmos/cosmos-sdk/client/tx"
+	"github.com/cosmos/cosmos-sdk/codec"
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/testutil/testdata"
-	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
+
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	xauthsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
+	xauthtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
+
+	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 
 	"encoding/hex"
 	"encoding/json"
@@ -15,7 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/spf13/cobra"
@@ -32,17 +40,17 @@ var startCmd = &cobra.Command{
 	Run:   Start,
 }
 
-var pendingAttestations chan utils.Attestation
+var pendingAttestations chan types.Attestation
 
 func Start(cmd *cobra.Command, args []string) {
-	pendingAttestations = make(chan utils.Attestation, 1000) // TODO
+	pendingAttestations = make(chan types.Attestation, 1000) // TODO
 	client, err := ethclient.Dial(cfg.Networks.Ethereum.RPC)
 	if err != nil {
 		logger.Error("unable to initialise ethereum client", "err", err)
 		os.Exit(1)
 	}
 
-	messages := make(chan types.Log)
+	messages := make(chan ethtypes.Log)
 
 	filter := ethereum.FilterQuery{
 		Addresses: []common.Address{MessageTransmitter},
@@ -71,22 +79,22 @@ func Start(cmd *cobra.Command, args []string) {
 	}
 }
 
-func HandleMessage(log types.Log) {
+func HandleMessage(log ethtypes.Log) {
 	event := make(map[string]interface{})
 	_ = MessageTransmitterABI.UnpackIntoMap(event, MessageSent.Name, log.Data)
 
 	rawMessage := event["message"].([]byte)
-	message, _ := new(utils.Message).Parse(rawMessage)
+	message, _ := new(types.Message).Parse(rawMessage)
 
 	if message.DestinationDomain != cfg.Networks.Noble.DomainId {
 		logger.Debug("received irrelevant message", "destination", message.DestinationDomain, "tx", log.TxHash)
 		return
 	}
 
-	if _, err := new(utils.BurnMessage).Parse(message.MessageBody); err == nil {
+	if _, err := new(types.BurnMessage).Parse(message.MessageBody); err == nil {
 		logger.Info("received a new burn message", "nonce", message.Nonce, "tx", log.TxHash)
 
-		pendingAttestations <- utils.Attestation{
+		pendingAttestations <- types.Attestation{
 			Message: message.MessageBody,
 			Key:     hex.EncodeToString(crypto.Keccak256(message.MessageBody)),
 		}
@@ -94,10 +102,10 @@ func HandleMessage(log types.Log) {
 		return
 	}
 
-	if content, err := new(utils.MetadataMessage).Parse(message.MessageBody); err == nil {
+	if content, err := new(types.MetadataMessage).Parse(message.MessageBody); err == nil {
 		logger.Info("received a new forward message", "channel", content.Channel, "tx", log.TxHash)
 
-		pendingAttestations <- utils.Attestation{
+		pendingAttestations <- types.Attestation{
 			Message: message.MessageBody,
 			Key:     hex.EncodeToString(crypto.Keccak256(message.MessageBody)),
 		}
@@ -110,69 +118,121 @@ func Receive() {
 		select {
 		case attestation := <-pendingAttestations:
 			// goroutine
-			checkAttestationAndMint(attestation)
+			if attestationIsReady(attestation) {
+				mint(attestation)
+			}
 		}
 	}
 }
 
 // check api for attestation
-// returns
-func checkAttestationAndMint(attestation utils.Attestation) {
+// returns true if valid attestation
+func attestationIsReady(attestation types.Attestation) bool {
 	rawResponse, err := http.Get(cfg.AttestationBaseUrl + "0x" + attestation.Key)
 	if rawResponse.StatusCode != http.StatusOK || err != nil {
 		logger.Info("non 200 response received", "err", err)
 		pendingAttestations <- attestation
+		return false
 	}
 	body, err := io.ReadAll(rawResponse.Body)
 	if err != nil {
 		logger.Debug("unable to parse message body", "err", err)
 		pendingAttestations <- attestation
+		return false
 	}
 
-	response := utils.AttestationResponse{}
+	response := types.AttestationResponse{}
 	err = json.Unmarshal(body, &response)
 	if err != nil || response.Status != "complete" {
 		logger.Info("unable to parse message body", "err", err)
 		pendingAttestations <- attestation
+		return false
 	}
 
 	attestation.Attestation = response.Attestation
 
-	// mint
-	app := simapp.NewSimApp()
-	txBuilder := app.TxConfig().NewTxBuilder()
+	return true
+}
 
-	priv1, _, addr1 := testdata.KeyTestPubAddr()
+func mint(attestation types.Attestation) error {
 
-	msg1 := banktypes.NewMsgSend(addr1, addr3, types.NewCoins(types.NewInt64Coin("atom", 12)))
-	err := txBuilder.SetMsgs(msg1)
+	cdc := codec.NewProtoCodec(codectypes.NewInterfaceRegistry())
+	client := sdkClient.Context{
+		ChainID:  "noble-1",
+		TxConfig: &xauthtx.NewTxConfig(codec.NewProtoCodec(encodingConfig.InterfaceRegistry), authtx.DefaultSignModes),
+		//AccountRetriever: nil,
+		//NodeURI:          "",
+		Codec: cdc,
+	}
+
+	privKey, pubKey, addr := testdata.KeyTestPubAddr()
+	accNumber := uint64(0)
+	accSeq := uint64(0)
+
+	receiveMsg := cctptypes.NewMsgReceiveMessage(
+		addr.String(),
+		attestation.Message,
+		[]byte(attestation.Attestation),
+	)
+
+	txBuilder := client.TxConfig.NewTxBuilder()
+
+	err := txBuilder.SetMsgs(receiveMsg)
+	if err != nil {
+		return err
+	}
+	txBuilder.SetGasLimit(1)
+	//txBuilder.SetFeeAmount(1)
+
+	sigV2 := signing.SignatureV2{
+		PubKey: pubKey,
+		Data: &signing.SingleSignatureData{
+			SignMode:  client.TxConfig.SignModeHandler().DefaultMode(),
+			Signature: nil,
+		},
+		Sequence: accSeq,
+	}
+
+	signerData := xauthsigning.SignerData{
+		ChainID:       client.ChainID,
+		AccountNumber: accNumber,
+		Sequence:      accSeq,
+	}
+
+	sigV2, err = clientTx.SignWithPrivKey(
+		client.TxConfig.SignModeHandler().DefaultMode(),
+		signerData,
+		txBuilder,
+		privKey,
+		client.TxConfig,
+		accSeq,
+	)
 	if err != nil {
 		return err
 	}
 
-	txBuilder.SetGasLimit(...)
-	txBuilder.SetFeeAmount(...)
-	txBuilder.SetMemo(...)
-	txBuilder.SetTimeoutHeight(...)
-
-	// sign
-
-	// broadcast
-	// Create a connection to the gRPC server.
-	grpcConn, err := grpc.Dial(
-		cfg.Networks.Noble.RPC, // Or your gRPC server address.
-		grpc.WithInsecure(),    // The Cosmos SDK doesn't support any transport security mechanism.
-	)
+	err = txBuilder.SetSignatures(sigV2)
 	if err != nil {
-		logger.Error("error while connecting to Noble", "err", err)
-		return
+		return err
 	}
+
+	txBytes, err := client.TxConfig.TxEncoder()(txBuilder.GetTx())
+	if err != nil {
+		return err
+	}
+
+	// Create a connection to the gRPC server.
+	grpcConn, _ := grpc.Dial(
+		"127.0.0.1:9090",    // Or your gRPC server address.
+		grpc.WithInsecure(), // The Cosmos SDK doesn't support any transport security mechanism.
+	)
 	defer grpcConn.Close()
 
 	// Broadcast the tx via gRPC. We create a new client for the Protobuf Tx
 	// service.
 	txClient := tx.NewServiceClient(grpcConn)
 	// We then call the BroadcastTx method on this client.
+
 	grpcRes, err := txClient.BroadcastTx(
 		context.Background(),
 		&tx.BroadcastTxRequest{
@@ -185,8 +245,11 @@ func checkAttestationAndMint(attestation utils.Attestation) {
 	}
 
 	fmt.Println(grpcRes.TxResponse.Code) // Should be `0` if the tx is successful
-
+	if grpcRes.TxResponse.Code != 0 {
+		return errors.New(fmt.Sprintf("non zero error code: %d", grpcRes.TxResponse.Code))
+	}
 	return nil
+
 }
 
 func init() {
