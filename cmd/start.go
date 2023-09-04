@@ -2,24 +2,20 @@ package cmd
 
 import (
 	"context"
-	"errors"
-	cctptypes "github.com/circlefin/noble-cctp/x/cctp/types"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	nobletypes "github.com/circlefin/noble-cctp/x/cctp/types"
 	sdkClient "github.com/cosmos/cosmos-sdk/client"
 	clientTx "github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/testutil/testdata"
+	"github.com/cosmos/cosmos-sdk/types/tx"
 
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	xauthsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	xauthtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
-
-	"github.com/strangelove-ventures/noble-cctp-relayer/types"
-
-	"encoding/hex"
-	"encoding/json"
-	"fmt"
-	"github.com/cosmos/cosmos-sdk/types/tx"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -27,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/spf13/cobra"
+	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"github.com/strangelove-ventures/noble-cctp-relayer/utils"
 	"google.golang.org/grpc"
 	"io"
@@ -44,7 +41,7 @@ var pendingAttestations chan types.Attestation
 
 func Start(cmd *cobra.Command, args []string) {
 	pendingAttestations = make(chan types.Attestation, 1000) // TODO
-	client, err := ethclient.Dial(cfg.Networks.Ethereum.RPC)
+	client, err := ethclient.Dial(Cfg.Networks.Ethereum.RPC)
 	if err != nil {
 		logger.Error("unable to initialise ethereum client", "err", err)
 		os.Exit(1)
@@ -86,7 +83,7 @@ func HandleMessage(log ethtypes.Log) {
 	rawMessage := event["message"].([]byte)
 	message, _ := new(types.Message).Parse(rawMessage)
 
-	if message.DestinationDomain != cfg.Networks.Noble.DomainId {
+	if message.DestinationDomain != Cfg.Networks.Noble.DomainId {
 		logger.Debug("received irrelevant message", "destination", message.DestinationDomain, "tx", log.TxHash)
 		return
 	}
@@ -118,34 +115,31 @@ func Receive() {
 		select {
 		case attestation := <-pendingAttestations:
 			// goroutine
-			if attestationIsReady(attestation) {
-				mint(attestation)
+			if AttestationIsReady(&attestation) {
+				Mint(attestation)
 			}
 		}
 	}
 }
 
-// check api for attestation
-// returns true if valid attestation
-func attestationIsReady(attestation types.Attestation) bool {
-	rawResponse, err := http.Get(cfg.AttestationBaseUrl + "0x" + attestation.Key)
+// AttestationIsReady checks the iris api for attestation status
+// returns true if attestation is complete
+func AttestationIsReady(attestation *types.Attestation) bool {
+	rawResponse, err := http.Get(Cfg.AttestationBaseUrl + "0x" + attestation.Key)
 	if rawResponse.StatusCode != http.StatusOK || err != nil {
-		logger.Info("non 200 response received", "err", err)
-		pendingAttestations <- attestation
+		//logger.Info("non 200 response received")
 		return false
 	}
 	body, err := io.ReadAll(rawResponse.Body)
 	if err != nil {
-		logger.Debug("unable to parse message body", "err", err)
-		pendingAttestations <- attestation
+		logger.Debug("unable to parse message body")
 		return false
 	}
 
 	response := types.AttestationResponse{}
 	err = json.Unmarshal(body, &response)
 	if err != nil || response.Status != "complete" {
-		logger.Info("unable to parse message body", "err", err)
-		pendingAttestations <- attestation
+		logger.Info("unable to unmarshal response")
 		return false
 	}
 
@@ -154,38 +148,40 @@ func attestationIsReady(attestation types.Attestation) bool {
 	return true
 }
 
-func mint(attestation types.Attestation) error {
+func Mint(attestation types.Attestation) error {
 
 	cdc := codec.NewProtoCodec(codectypes.NewInterfaceRegistry())
 	client := sdkClient.Context{
 		ChainID:  "noble-1",
-		TxConfig: &xauthtx.NewTxConfig(codec.NewProtoCodec(encodingConfig.InterfaceRegistry), authtx.DefaultSignModes),
+		TxConfig: xauthtx.NewTxConfig(cdc, xauthtx.DefaultSignModes),
 		//AccountRetriever: nil,
 		//NodeURI:          "",
-		Codec: cdc,
+		//Codec: cdc,
 	}
-
-	privKey, pubKey, addr := testdata.KeyTestPubAddr()
-	accNumber := uint64(0)
-	accSeq := uint64(0)
-
-	receiveMsg := cctptypes.NewMsgReceiveMessage(
-		addr.String(),
+	msg := nobletypes.NewMsgReceiveMessage(
+		"",
 		attestation.Message,
 		[]byte(attestation.Attestation),
 	)
 
 	txBuilder := client.TxConfig.NewTxBuilder()
-
-	err := txBuilder.SetMsgs(receiveMsg)
+	err := txBuilder.SetMsgs(msg)
 	if err != nil {
 		return err
 	}
-	txBuilder.SetGasLimit(1)
+
+	//txBuilder.SetGasLimit(1)
 	//txBuilder.SetFeeAmount(1)
+	//txBuilder.SetMemo("")
+	//txBuilder.SetTimeoutHeight(1)
+
+	// sign tx
+	priv, _, _ := testdata.KeyTestPubAddr()
+	accNumber := uint64(0)
+	accSeq := uint64(0)
 
 	sigV2 := signing.SignatureV2{
-		PubKey: pubKey,
+		PubKey: priv.PubKey(),
 		Data: &signing.SingleSignatureData{
 			SignMode:  client.TxConfig.SignModeHandler().DefaultMode(),
 			Signature: nil,
@@ -193,8 +189,13 @@ func mint(attestation types.Attestation) error {
 		Sequence: accSeq,
 	}
 
+	err = txBuilder.SetSignatures(sigV2)
+	if err != nil {
+		return err
+	}
+
 	signerData := xauthsigning.SignerData{
-		ChainID:       client.ChainID,
+		ChainID:       Cfg.Networks.Noble.ChainId,
 		AccountNumber: accNumber,
 		Sequence:      accSeq,
 	}
@@ -203,53 +204,50 @@ func mint(attestation types.Attestation) error {
 		client.TxConfig.SignModeHandler().DefaultMode(),
 		signerData,
 		txBuilder,
-		privKey,
+		priv,
 		client.TxConfig,
 		accSeq,
 	)
-	if err != nil {
-		return err
-	}
 
 	err = txBuilder.SetSignatures(sigV2)
 	if err != nil {
 		return err
 	}
 
+	// Generated Protobuf-encoded bytes.
 	txBytes, err := client.TxConfig.TxEncoder()(txBuilder.GetTx())
 	if err != nil {
 		return err
 	}
 
-	// Create a connection to the gRPC server.
-	grpcConn, _ := grpc.Dial(
-		"127.0.0.1:9090",    // Or your gRPC server address.
-		grpc.WithInsecure(), // The Cosmos SDK doesn't support any transport security mechanism.
+	// BROADCAST
+
+	// set up grpc client
+	grpcConn, err := grpc.Dial(
+		"127.0.0.1:9090",
+		grpc.WithInsecure(),
+		grpc.WithDefaultCallOptions(grpc.ForceCodec(codec.NewProtoCodec(nil).GRPCCodec())),
 	)
+	if err != nil {
+		return err
+	}
 	defer grpcConn.Close()
 
-	// Broadcast the tx via gRPC. We create a new client for the Protobuf Tx
-	// service.
 	txClient := tx.NewServiceClient(grpcConn)
-	// We then call the BroadcastTx method on this client.
-
 	grpcRes, err := txClient.BroadcastTx(
 		context.Background(),
 		&tx.BroadcastTxRequest{
-			Mode:    tx.BroadcastMode_BROADCAST_MODE_SYNC,
-			TxBytes: txBytes, // Proto-binary of the signed transaction, see previous step.
+			TxBytes: txBytes,
+			Mode:    0,
 		},
 	)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println(grpcRes.TxResponse.Code) // Should be `0` if the tx is successful
-	if grpcRes.TxResponse.Code != 0 {
-		return errors.New(fmt.Sprintf("non zero error code: %d", grpcRes.TxResponse.Code))
-	}
-	return nil
+	fmt.Println(grpcRes.TxResponse.Code) // should be 0
 
+	return nil
 }
 
 func init() {

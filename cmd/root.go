@@ -14,7 +14,7 @@ import (
 var logger log.Logger
 
 var (
-	cfg     config.Config
+	Cfg     config.Config
 	cfgFile string
 	verbose bool
 
@@ -48,9 +48,9 @@ func init() {
 			logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.InfoLevel))
 		}
 
-		cfg = config.Parse(cfgFile)
+		Cfg = config.Parse(cfgFile)
 		logger.Info("successfully parsed config file", "location", cfgFile)
 
-		MessageTransmitter = common.HexToAddress(cfg.Networks.Ethereum.MessageTransmitter)
+		MessageTransmitter = common.HexToAddress(Cfg.Networks.Ethereum.MessageTransmitter)
 	})
 }
