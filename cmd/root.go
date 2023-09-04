@@ -51,6 +51,5 @@ func init() {
 		Cfg = config.Parse(cfgFile)
 		logger.Info("successfully parsed config file", "location", cfgFile)
 
-		MessageTransmitter = common.HexToAddress(Cfg.Networks.Ethereum.MessageTransmitter)
 	})
 }
