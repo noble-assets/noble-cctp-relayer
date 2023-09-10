@@ -5,22 +5,23 @@ import (
 
 	"cosmossdk.io/log"
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/strangelove-ventures/noble-cctp-relayer/config"
 )
-
-var logger log.Logger
 
 var (
 	Cfg     config.Config
 	cfgFile string
 	verbose bool
 
-	MessageTransmitter    common.Address
 	MessageTransmitterABI abi.ABI
 	MessageSent           abi.Event
+
+	EthClient *ethclient.Client
+
+	Logger log.Logger
 )
 
 var rootCmd = &cobra.Command{
@@ -30,7 +31,7 @@ var rootCmd = &cobra.Command{
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		logger.Error(err.Error())
+		Logger.Error(err.Error())
 		os.Exit(1)
 	}
 }
@@ -43,13 +44,13 @@ func init() {
 
 	cobra.OnInitialize(func() {
 		if verbose {
-			logger = log.NewLogger(os.Stdout)
+			Logger = log.NewLogger(os.Stdout)
 		} else {
-			logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.InfoLevel))
+			Logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.InfoLevel))
 		}
 
 		Cfg = config.Parse(cfgFile)
-		logger.Info("successfully parsed config file", "location", cfgFile)
+		Logger.Info("successfully parsed config file", "location", cfgFile)
 
 	})
 }

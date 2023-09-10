@@ -39,43 +39,41 @@ var startCmd = &cobra.Command{
 	Run:   Start,
 }
 
-func Start(cmd *cobra.Command, args []string) {
-	ethClient, err := ethclient.DialContext(context.Background(), Cfg.Networks.Ethereum.RPC)
-	if err != nil {
-		logger.Error("unable to initialize ethereum ethClient", "err", err)
-		os.Exit(1)
-	}
-
-	Run(ethClient)
-}
-
 // iris api lookup id -> MessageState
 var state = map[string]types.MessageState{}
 
-func Run(ethClient *ethclient.Client) {
+func Start(cmd *cobra.Command, args []string) {
 
 	// set up clients
-	MessageTransmitter = common.HexToAddress(Cfg.Networks.Ethereum.MessageTransmitter)
-	etherReader := etherstream.Reader{Backend: ethClient}
+	messageTransmitterAddress := common.HexToAddress(Cfg.Networks.Ethereum.MessageTransmitter)
+	etherReader := etherstream.Reader{Backend: EthClient}
 
 	query := ethereum.FilterQuery{
-		Addresses: []common.Address{MessageTransmitter},
+		Addresses: []common.Address{messageTransmitterAddress},
 		Topics:    [][]common.Hash{{MessageSent.ID}},
 		FromBlock: big.NewInt(9573850),
-		ToBlock:   big.NewInt(9573860),
+		ToBlock:   big.NewInt(9573860), // TODO add lookback period
 	}
+
+	messageSent := MessageTransmitterABI.Events["MessageSent"]
 
 	// websockets do not query history
 	// https://github.com/ethereum/go-ethereum/issues/15063
 	stream, sub, history, err := etherReader.QueryWithHistory(context.Background(), &query)
 	if err != nil {
-		logger.Error("unable to subscribe to logs", "err", err)
+		Logger.Error("unable to subscribe to logs", "err", err)
 		os.Exit(1)
 	}
 
 	// process history
 	for _, log := range history {
-		messageState, _ := types.ToMessageState(Cfg, &log)
+		messageState, err := types.ToMessageState(Cfg, MessageTransmitterABI, messageSent, &log)
+		if err != nil {
+			if err != nil {
+				Logger.Error("Unable to parse history log into MessageState, skipping")
+				continue
+			}
+		}
 		go Process(messageState)
 	}
 
@@ -84,10 +82,14 @@ func Run(ethClient *ethclient.Client) {
 		for {
 			select {
 			case err := <-sub.Err():
-				logger.Error("connection closed", "err", err)
+				Logger.Error("connection closed", "err", err)
 				os.Exit(1)
 			case log := <-stream:
-				messageState, _ := types.ToMessageState(Cfg, &log)
+				messageState, err := types.ToMessageState(Cfg, MessageTransmitterABI, messageSent, &log)
+				if err != nil {
+					Logger.Error("Unable to parse ws log into MessageState, skipping")
+					continue
+				}
 				Process(messageState)
 			}
 		}
@@ -95,14 +97,14 @@ func Run(ethClient *ethclient.Client) {
 
 	// constantly comb through MessageStates
 	for {
-		time.Sleep(10 * time.Second)
+		time.Sleep(10 * time.Second) // TODO configurable
 		for _, messageState := range state {
 			go Process(&messageState)
 		}
 	}
 }
 
-// Process is the main processing pipeline.  Depending on the
+// Process is the main processing pipeline.
 func Process(messageState *types.MessageState) {
 
 	// if we haven't seen this message, add it to the store
@@ -131,13 +133,13 @@ func Process(messageState *types.MessageState) {
 	}
 	// if the message is attested to, try to mint
 	if messageState.Status == types.Attested {
-		response, err := Mint(messageState)
+		response, err := Broadcast(messageState)
 		if err != nil {
-			logger.Error("unable to mint", "err", err)
+			Logger.Error("unable to mint", "err", err)
 			return
 		}
 		if response.Code != 0 {
-			logger.Error("nonzero response code received", "err", err)
+			Logger.Error("nonzero response code received", "err", err)
 			return
 		}
 		// success!
@@ -154,31 +156,34 @@ func Process(messageState *types.MessageState) {
 // CheckAttestation checks the iris api for attestation status
 // returns true if attestation is complete
 func CheckAttestation(irisLookupId string) (*types.AttestationResponse, bool) {
-	logger.Info(fmt.Sprintf("CheckAttestation for %s%s", Cfg.AttestationBaseUrl, irisLookupId))
+	Logger.Info(fmt.Sprintf("CheckAttestation for %s%s", Cfg.AttestationBaseUrl, irisLookupId))
 
 	rawResponse, err := http.Get(Cfg.AttestationBaseUrl + irisLookupId)
 	if rawResponse.StatusCode != http.StatusOK || err != nil {
-		logger.Debug("non 200 response received")
+		Logger.Debug("non 200 response received")
 		return nil, false
 	}
 	body, err := io.ReadAll(rawResponse.Body)
 	if err != nil {
-		logger.Debug("unable to parse message body")
+		Logger.Debug("unable to parse message body")
 		return nil, false
 	}
 
 	response := types.AttestationResponse{}
 	err = json.Unmarshal(body, &response)
 	if err != nil {
-		logger.Debug("unable to unmarshal response")
+		Logger.Debug("unable to unmarshal response")
 		return nil, false
 	}
 
 	return &response, true
 }
 
-func Mint(messageState *types.MessageState) (*sdktypes.TxResponse, error) {
-	logger.Info("Mint")
+func Broadcast(messageState *types.MessageState) (*sdktypes.TxResponse, error) {
+	Logger.Info(fmt.Sprintf(
+		"Broadcasting message for source domain %d with tx hash %s",
+		messageState.SourceDomain,
+		messageState.SourceTxHash))
 
 	// set up sdk context
 	cdc := codec.NewProtoCodec(codectypes.NewInterfaceRegistry())
@@ -193,24 +198,24 @@ func Mint(messageState *types.MessageState) (*sdktypes.TxResponse, error) {
 	// build txn
 	txBuilder := sdkContext.TxConfig.NewTxBuilder()
 
-	attestationBz, err := hex.DecodeString(messageState.Attestation)
+	attestationBytes, err := hex.DecodeString(messageState.Attestation)
 	if err != nil {
 		return nil, errors.New("unable to decode message attestation")
 	}
 	msg := nobletypes.NewMsgReceiveMessage(
 		"", // TODO
 		messageState.MsgSentBytes,
-		attestationBz,
+		attestationBytes,
 	)
 	err = txBuilder.SetMsgs(msg)
 	if err != nil {
 		return nil, err
 	}
 
+	// TODO configurable
 	//txBuilder.SetGasLimit(1)
 	//txBuilder.SetFeeAmount(1)
 	txBuilder.SetMemo("Thank you for relaying with Strangelove")
-	//txBuilder.SetTimeoutHeight(1)
 
 	// sign tx
 	priv, _, _ := testdata.KeyTestPubAddr() // TODO delete
@@ -292,14 +297,20 @@ func init() {
 	cobra.OnInitialize(func() {
 		messageTransmitter, err := os.Open("./abi/MessageTransmitter.json")
 		if err != nil {
-			logger.Error("unable to read MessageTransmitter abi", "err", err)
+			Logger.Error("unable to read MessageTransmitter abi", "err", err)
 			os.Exit(1)
 		}
 		MessageTransmitterABI, err = abi.JSON(messageTransmitter)
 		if err != nil {
-			logger.Error("unable to parse MessageTransmitter abi", "err", err)
+			Logger.Error("unable to parse MessageTransmitter abi", "err", err)
 		}
 
 		MessageSent = MessageTransmitterABI.Events["MessageSent"]
+
+		EthClient, err = ethclient.DialContext(context.Background(), Cfg.Networks.Ethereum.RPC)
+		if err != nil {
+			Logger.Error("unable to initialize ethereum client", "err", err)
+			os.Exit(1)
+		}
 	})
 }

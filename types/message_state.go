@@ -9,7 +9,6 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/strangelove-ventures/noble-cctp-relayer/config"
-	"os"
 	"time"
 )
 
@@ -37,21 +36,10 @@ type MessageState struct {
 	Updated      time.Time
 }
 
-func ToMessageState(config config.Config, log *ethtypes.Log) (messageState *MessageState, err error) {
-	messageTransmitter, err := os.Open("./abi/MessageTransmitter.json")
-	if err != nil {
-		//logger.Error("unable to read MessageTransmitter abi", "err", err)
-		os.Exit(1)
-	}
-	MessageTransmitterABI, err := abi.JSON(messageTransmitter)
-	if err != nil {
-		//logger.Error("unable to parse MessageTransmitter abi", "err", err)
-	}
-
-	MessageSent := MessageTransmitterABI.Events["MessageSent"]
+func ToMessageState(config config.Config, abi abi.ABI, messageSent abi.Event, log *ethtypes.Log) (messageState *MessageState, err error) {
 
 	event := make(map[string]interface{})
-	_ = MessageTransmitterABI.UnpackIntoMap(event, MessageSent.Name, log.Data)
+	_ = abi.UnpackIntoMap(event, messageSent.Name, log.Data)
 
 	rawMessageSentBytes := event["message"].([]byte)
 	message, _ := new(types.Message).Parse(rawMessageSentBytes)
@@ -76,6 +64,7 @@ func ToMessageState(config config.Config, log *ethtypes.Log) (messageState *Mess
 		Updated:      time.Now(),
 	}
 
+	// TODO add checks for if there's a destination caller (ignored state)
 	if _, err := new(BurnMessage).Parse(message.MessageBody); err == nil {
 		// logger.Info("received a new burn message", "nonce", message.Nonce, "tx", log.TxHash)
 		messageState.Type = Mint
