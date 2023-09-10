@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/kr/pretty"
+	"github.com/pascaldekloe/etherstream"
 	"github.com/spf13/cobra"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"google.golang.org/grpc"
@@ -41,52 +42,59 @@ var startCmd = &cobra.Command{
 }
 
 func Start(cmd *cobra.Command, args []string) {
-	ethClient, err := ethclient.Dial(Cfg.Networks.Ethereum.RPC)
+	ethClient, err := ethclient.DialContext(context.Background(), Cfg.Networks.Ethereum.RPC)
 	if err != nil {
 		logger.Error("unable to initialize ethereum ethClient", "err", err)
 		os.Exit(1)
 	}
 
-	// receive eth events and pass to logChan
 	Run(ethClient)
 
 }
 
-// websockets do not work
+// websockets do not query history
 // https://github.com/ethereum/go-ethereum/issues/15063
 func Run(ethClient *ethclient.Client) {
-	logs := make(chan ethtypes.Log)
 
+	// set up clients
 	MessageTransmitter = common.HexToAddress(Cfg.Networks.Ethereum.MessageTransmitter)
-	MessageTransmitter = common.HexToAddress("0x147B8eb97fD247D06C4006D269c90C1908Fb5D54") // todo del
+	etherReader := etherstream.Reader{Backend: ethClient}
 
 	query := ethereum.FilterQuery{
-		//Addresses: []common.Address{MessageTransmitter},
-		//Topics:    [][]common.Hash{{MessageSent.ID}},
-		FromBlock: big.NewInt(9637317),
-		ToBlock:   big.NewInt(9637335),
+		Addresses: []common.Address{MessageTransmitter},
+		Topics:    [][]common.Hash{{MessageSent.ID}},
+		FromBlock: big.NewInt(9573850),
+		ToBlock:   big.NewInt(9573860),
 	}
 
-	sub, err := ethClient.SubscribeFilterLogs(context.Background(), query, logs)
+	stream, sub, history, err := etherReader.QueryWithHistory(context.Background(), &query)
 	if err != nil {
 		logger.Error("unable to subscribe to logs", "err", err)
 		os.Exit(1)
 	}
+
+	for _, log := range history {
+		attestation := ProcessLog(log)
+
+		if attestation != nil && CheckAttestation(attestation) {
+			Mint(attestation)
+		}
+	}
+
+	fmt.Println()
 
 	for {
 		select {
 		case err := <-sub.Err():
 			logger.Error("connection closed", "err", err)
 			os.Exit(1)
-		case log := <-logs:
+		case log := <-stream:
 			attestation := ProcessLog(log)
 
 			if attestation != nil && CheckAttestation(attestation) {
 				Mint(attestation)
-
 			}
 		}
-
 	}
 }
 
@@ -103,9 +111,23 @@ func ProcessLog(log ethtypes.Log) *types.Attestation {
 		return nil
 	}
 
-	if _, err := new(types.BurnMessage).Parse(message.MessageBody); err == nil {
+	if burn, err := new(types.BurnMessage).Parse(message.MessageBody); err == nil {
 		logger.Info("received a new burn message", "nonce", message.Nonce, "tx", log.TxHash)
 
+		hexRaw, _ := hex.DecodeString("000000000000000000000004000000000003950D000000000000000000000000D0C3DA58F55358142B8D3E06C1C30C5C6114EFE800000000000000000000000057D4EAF1091577A6B7D121202AFBD2808134F11700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007865C6E87B9F70255377E024ACE6630C1EAA37F000000000000000000000000580B5AFD4B41B887339EA92D98F88BF07AAF04F500000000000000000000000000000000000000000000000000000000000F4240000000000000000000000000DB86162D6E6B273A95BD4D20FAADB83D7B5FE1CA")
+		hashed := crypto.Keccak256(hexRaw)
+		hashedHexStr := hex.EncodeToString(hashed) // CORRECT
+		fmt.Println(hashedHexStr)
+
+		k1 := message.MessageBody
+		k1s := hex.EncodeToString(k1)
+		fmt.Println(k1s)
+		k2 := crypto.Keccak256(k1)
+		k2s := crypto.Keccak256Hash(k2).Hex()
+		fmt.Println(k2s)
+		k3 := hex.EncodeToString(k2)
+		fmt.Println(k3)
+		fmt.Println(burn)
 		return &types.Attestation{
 			Message: message.MessageBody,
 			Key:     hex.EncodeToString(crypto.Keccak256(message.MessageBody)),
