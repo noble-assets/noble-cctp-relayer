@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -69,12 +70,17 @@ func Start(cmd *cobra.Command, args []string) {
 	for _, log := range history {
 		messageState, err := types.ToMessageState(Cfg, MessageTransmitterABI, messageSent, &log)
 		if err != nil {
-			if err != nil {
-				Logger.Error("Unable to parse history log into MessageState, skipping")
-				continue
-			}
+			Logger.Error("Unable to parse history log into MessageState, skipping")
+			continue
 		}
-		go Process(messageState)
+
+		// only relay messages where there is no dest caller, or we are the dest caller
+		// TODO minter address might have to be encoded to bytes32
+		if messageState.DestinationCaller == nil ||
+			bytes.Equal(messageState.DestinationCaller, []byte{}) ||
+			bytes.Equal(messageState.DestinationCaller, []byte(Cfg.Networks.Noble.MinterAddress)) {
+			go Process(messageState)
+		}
 	}
 
 	// constantly consume stream updates
@@ -90,6 +96,15 @@ func Start(cmd *cobra.Command, args []string) {
 					Logger.Error("Unable to parse ws log into MessageState, skipping")
 					continue
 				}
+
+				// only relay messages where there is no dest caller, or we are the dest caller
+				// TODO minter address might have to be encoded to bytes32
+				if messageState.DestinationCaller == nil ||
+					bytes.Equal(messageState.DestinationCaller, []byte{}) ||
+					bytes.Equal(messageState.DestinationCaller, []byte(Cfg.Networks.Noble.MinterAddress)) {
+					go Process(messageState)
+				}
+				
 				Process(messageState)
 			}
 		}
