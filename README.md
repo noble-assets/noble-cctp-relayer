@@ -14,15 +14,11 @@ Running the relayer
 rly start --config testnet.yaml
 ```
 
-Architecture
-
-<img src="assets/indexer.jpg">
-
 Store
 
 | IrisLookupId | Type    | Status   | SourceDomain | DestDomain | SourceTxHash  | DestTxHash | MsgSentBytes | Created | Updated |
 |:-------------|:--------|:---------|:-------------|:-----------|:--------------|:-----------|:-------------|:--------|:--------|
-| 0x123        | Mint    | Burned   | 0            | 4          | 0x123         | ABC123     | bytes...     | date    | date    |
+| 0x123        | Mint    | Created  | 0            | 4          | 0x123         | ABC123     | bytes...     | date    | date    |
 | 0x123        | Forward | Pending  | 0            | 4          | 0x123         | ABC123     | bytes...     | date    | date    |
 | 0x123        | Mint    | Attested | 0            | 4          | 0x123         | ABC123     | bytes...     | date    | date    |
 | 0x123        | Forward | Complete | 0            | 4          | 0x123         | ABC123     | bytes...     | date    | date    |

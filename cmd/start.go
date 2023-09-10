@@ -28,11 +28,13 @@ import (
 	"github.com/pascaldekloe/etherstream"
 	"github.com/spf13/cobra"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
+	"google.golang.org/genproto/googleapis/devtools/containeranalysis/v1beta1/attestation"
 	"google.golang.org/grpc"
 	"io"
 	"math/big"
 	"net/http"
 	"os"
+	"time"
 )
 
 var startCmd = &cobra.Command{
@@ -49,11 +51,11 @@ func Start(cmd *cobra.Command, args []string) {
 	}
 
 	Run(ethClient)
-
 }
 
-// websockets do not query history
-// https://github.com/ethereum/go-ethereum/issues/15063
+// iris api lookup id -> MessageState
+var state = map[string]types.MessageState{}
+
 func Run(ethClient *ethclient.Client) {
 
 	// set up clients
@@ -67,39 +69,94 @@ func Run(ethClient *ethclient.Client) {
 		ToBlock:   big.NewInt(9573860),
 	}
 
+	// websockets do not query history
+	// https://github.com/ethereum/go-ethereum/issues/15063
 	stream, sub, history, err := etherReader.QueryWithHistory(context.Background(), &query)
 	if err != nil {
 		logger.Error("unable to subscribe to logs", "err", err)
 		os.Exit(1)
 	}
 
+	// process history
 	for _, log := range history {
-		attestation := ProcessLog(log)
-
-		if attestation != nil && CheckAttestation(attestation) {
-			Mint(attestation)
-		}
+		messageState, _ := types.ToMessageState(Cfg, &log)
+		go Process(messageState)
 	}
 
-	fmt.Println()
-
-	for {
-		select {
-		case err := <-sub.Err():
-			logger.Error("connection closed", "err", err)
-			os.Exit(1)
-		case log := <-stream:
-			attestation := ProcessLog(log)
-
-			if attestation != nil && CheckAttestation(attestation) {
-				Mint(attestation)
+	// constantly consume stream updates
+	go func() {
+		for {
+			select {
+			case err := <-sub.Err():
+				logger.Error("connection closed", "err", err)
+				os.Exit(1)
+			case log := <-stream:
+				messageState, _ := types.ToMessageState(Cfg, &log)
+				Process(messageState)
 			}
+		}
+	}()
+
+	// constantly comb through MessageStates
+	for {
+		time.Sleep(10 * time.Second)
+		for _, messageState := range state {
+			// TODO goroutine
+			Process(&messageState)
 		}
 	}
 }
 
-func ProcessLog(log ethtypes.Log) *types.Attestation {
-	logger.Info("ProcessLog")
+// Process is the main processing pipeline.  Depending on the
+func Process(messageState *types.MessageState) {
+
+	// if we haven't seen this message, add it to the store
+	if _, ok := state[messageState.IrisLookupId]; !ok {
+		messageState.Status = types.Created
+		messageState.Created = time.Now()
+		messageState.Updated = time.Now()
+
+		state[messageState.IrisLookupId] = *messageState
+	}
+	// if the message is burned or pending, check for an attestation
+	if messageState.Status == types.Created || messageState.Status == types.Pending {
+		response, exists := CheckAttestation(messageState.IrisLookupId)
+		if exists {
+			if messageState.Status == types.Created && response.Status == "pending" {
+				messageState.Status = types.Pending
+				messageState.Updated = time.Now()
+				return
+			} else if response.Status == "complete" {
+				messageState.Status = types.Attested
+				messageState.Updated = time.Now()
+			}
+		} else {
+			return
+		}
+	}
+	// if the message is attested to, try to mint
+	if messageState.Status == types.Attested {
+		response, err := Mint(messageState)
+		if err != nil {
+			logger.Error("unable to mint", "err", err)
+			return
+		}
+		if response.Code != 0 {
+			logger.Error("nonzero response code received", "err", err)
+			return
+		}
+		// success!
+		messageState.DestTxHash = response.TxHash
+		messageState.Status = types.Complete
+		messageState.Updated = time.Now()
+	}
+	// if the message is complete, ignore
+	if messageState.Status == types.Complete {
+		return
+	}
+}
+
+func ParseLog(log ethtypes.Log) *types.MessageState {
 	event := make(map[string]interface{})
 	_ = MessageTransmitterABI.UnpackIntoMap(event, MessageSent.Name, log.Data)
 
@@ -149,7 +206,7 @@ func ProcessLog(log ethtypes.Log) *types.Attestation {
 
 // CheckAttestation checks the iris api for attestation status
 // returns true if attestation is complete
-func CheckAttestation(attestation *types.Attestation) bool {
+func CheckAttestation(irisLookupId string) (types.AttestationResponse, bool) {
 	logger.Info("CheckAttestation for " + Cfg.AttestationBaseUrl + "0x" + attestation.Key)
 	rawResponse, err := http.Get(Cfg.AttestationBaseUrl + "0x" + attestation.Key)
 	if rawResponse.StatusCode != http.StatusOK || err != nil {
@@ -174,7 +231,7 @@ func CheckAttestation(attestation *types.Attestation) bool {
 	return true
 }
 
-func Mint(attestation *types.Attestation) error {
+func Mint(messageState *types.MessageState) (sdktypes.TxResponse, error) {
 	logger.Info("Mint")
 
 	// set up sdk context
