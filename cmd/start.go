@@ -21,14 +21,10 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	ethtypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/kr/pretty"
 	"github.com/pascaldekloe/etherstream"
 	"github.com/spf13/cobra"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
-	"google.golang.org/genproto/googleapis/devtools/containeranalysis/v1beta1/attestation"
 	"google.golang.org/grpc"
 	"io"
 	"math/big"
@@ -101,8 +97,7 @@ func Run(ethClient *ethclient.Client) {
 	for {
 		time.Sleep(10 * time.Second)
 		for _, messageState := range state {
-			// TODO goroutine
-			Process(&messageState)
+			go Process(&messageState)
 		}
 	}
 }
@@ -156,82 +151,33 @@ func Process(messageState *types.MessageState) {
 	}
 }
 
-func ParseLog(log ethtypes.Log) *types.MessageState {
-	event := make(map[string]interface{})
-	_ = MessageTransmitterABI.UnpackIntoMap(event, MessageSent.Name, log.Data)
-
-	rawMessage := event["message"].([]byte)
-	message, _ := new(types.Message).Parse(rawMessage)
-
-	if message.DestinationDomain != Cfg.Networks.Noble.DomainId {
-		logger.Debug("received irrelevant message", "destination", message.DestinationDomain, "tx", log.TxHash)
-		return nil
-	}
-
-	if burn, err := new(types.BurnMessage).Parse(message.MessageBody); err == nil {
-		logger.Info("received a new burn message", "nonce", message.Nonce, "tx", log.TxHash)
-
-		hexRaw, _ := hex.DecodeString("000000000000000000000004000000000003950D000000000000000000000000D0C3DA58F55358142B8D3E06C1C30C5C6114EFE800000000000000000000000057D4EAF1091577A6B7D121202AFBD2808134F11700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007865C6E87B9F70255377E024ACE6630C1EAA37F000000000000000000000000580B5AFD4B41B887339EA92D98F88BF07AAF04F500000000000000000000000000000000000000000000000000000000000F4240000000000000000000000000DB86162D6E6B273A95BD4D20FAADB83D7B5FE1CA")
-		hashed := crypto.Keccak256(hexRaw)
-		hashedHexStr := hex.EncodeToString(hashed) // CORRECT
-		fmt.Println(hashedHexStr)
-
-		k1 := message.MessageBody
-		k1s := hex.EncodeToString(k1)
-		fmt.Println(k1s)
-		k2 := crypto.Keccak256(k1)
-		k2s := crypto.Keccak256Hash(k2).Hex()
-		fmt.Println(k2s)
-		k3 := hex.EncodeToString(k2)
-		fmt.Println(k3)
-		fmt.Println(burn)
-		return &types.Attestation{
-			Message: message.MessageBody,
-			Key:     hex.EncodeToString(crypto.Keccak256(message.MessageBody)),
-		}
-	}
-
-	if content, err := new(types.MetadataMessage).Parse(message.MessageBody); err == nil {
-		logger.Info("received a new forward message", "channel", content.Channel, "tx", log.TxHash)
-
-		return &types.Attestation{
-			Message: message.MessageBody,
-			Key:     hex.EncodeToString(crypto.Keccak256(message.MessageBody)),
-		}
-	}
-
-	logger.Info(pretty.Sprintf("unable to parse txn into message.  tx hash %s"))
-	return nil
-}
-
 // CheckAttestation checks the iris api for attestation status
 // returns true if attestation is complete
-func CheckAttestation(irisLookupId string) (types.AttestationResponse, bool) {
-	logger.Info("CheckAttestation for " + Cfg.AttestationBaseUrl + "0x" + attestation.Key)
-	rawResponse, err := http.Get(Cfg.AttestationBaseUrl + "0x" + attestation.Key)
+func CheckAttestation(irisLookupId string) (*types.AttestationResponse, bool) {
+	logger.Info(fmt.Sprintf("CheckAttestation for %s%s", Cfg.AttestationBaseUrl, irisLookupId))
+
+	rawResponse, err := http.Get(Cfg.AttestationBaseUrl + irisLookupId)
 	if rawResponse.StatusCode != http.StatusOK || err != nil {
 		logger.Debug("non 200 response received")
-		return false
+		return nil, false
 	}
 	body, err := io.ReadAll(rawResponse.Body)
 	if err != nil {
 		logger.Debug("unable to parse message body")
-		return false
+		return nil, false
 	}
 
 	response := types.AttestationResponse{}
 	err = json.Unmarshal(body, &response)
-	if err != nil || response.Status != "complete" {
+	if err != nil {
 		logger.Debug("unable to unmarshal response")
-		return false
+		return nil, false
 	}
 
-	attestation.Attestation = response.Attestation
-
-	return true
+	return &response, true
 }
 
-func Mint(messageState *types.MessageState) (sdktypes.TxResponse, error) {
+func Mint(messageState *types.MessageState) (*sdktypes.TxResponse, error) {
 	logger.Info("Mint")
 
 	// set up sdk context
@@ -246,14 +192,19 @@ func Mint(messageState *types.MessageState) (sdktypes.TxResponse, error) {
 
 	// build txn
 	txBuilder := sdkContext.TxConfig.NewTxBuilder()
+
+	attestationBz, err := hex.DecodeString(messageState.Attestation)
+	if err != nil {
+		return nil, errors.New("unable to decode message attestation")
+	}
 	msg := nobletypes.NewMsgReceiveMessage(
 		"", // TODO
-		attestation.Message,
-		[]byte(attestation.Attestation),
+		messageState.MsgSentBytes,
+		attestationBz,
 	)
-	err := txBuilder.SetMsgs(msg)
+	err = txBuilder.SetMsgs(msg)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	//txBuilder.SetGasLimit(1)
@@ -267,7 +218,7 @@ func Mint(messageState *types.MessageState) (sdktypes.TxResponse, error) {
 	// get account number, sequence
 	addrBytes, err := sdktypes.GetFromBech32(Cfg.Networks.Noble.MinterAddress, "noble")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	accountNumber, accountSequence, err := sdkContext.AccountRetriever.GetAccountNumberSequence(sdkContext, addrBytes)
 
@@ -297,13 +248,13 @@ func Mint(messageState *types.MessageState) (sdktypes.TxResponse, error) {
 
 	err = txBuilder.SetSignatures(sigV2)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Generated Protobuf-encoded bytes.
 	txBytes, err := sdkContext.TxConfig.TxEncoder()(txBuilder.GetTx())
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// broadcast txn
@@ -314,7 +265,7 @@ func Mint(messageState *types.MessageState) (sdktypes.TxResponse, error) {
 		grpc.WithDefaultCallOptions(grpc.ForceCodec(codec.NewProtoCodec(nil).GRPCCodec())),
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer grpcConn.Close()
 
@@ -327,14 +278,14 @@ func Mint(messageState *types.MessageState) (sdktypes.TxResponse, error) {
 		},
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if grpcRes.TxResponse.Code != 0 {
-		return errors.New(fmt.Sprintf("nonzero error code: %d", grpcRes.TxResponse.Code))
+		return nil, errors.New(fmt.Sprintf("nonzero error code: %d", grpcRes.TxResponse.Code))
 	}
 
-	return nil
+	return grpcRes.TxResponse, nil
 }
 
 func init() {
