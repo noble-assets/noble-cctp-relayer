@@ -104,7 +104,7 @@ func Start(cmd *cobra.Command, args []string) {
 					bytes.Equal(messageState.DestinationCaller, []byte(Cfg.Networks.Noble.MinterAddress)) {
 					go Process(messageState)
 				}
-				
+
 				Process(messageState)
 			}
 		}
