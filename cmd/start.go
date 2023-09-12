@@ -97,10 +97,10 @@ func RelayEthereum(cmd *cobra.Command, args []string) {
 
 	// constantly comb through MessageStates
 	for {
-		time.Sleep(30 * time.Second) // TODO configurable
 		for _, messageState := range state {
 			go Process(&messageState)
 		}
+		time.Sleep(30 * time.Second) // TODO configurable
 	}
 }
 
@@ -114,7 +114,8 @@ func Process(messageState *types.MessageState) {
 
 	// filters
 	if messageState.FilterDisabledCCTPRoutes(&Cfg) ||
-		messageState.FilterInvalidDestinationCallers(&Cfg) {
+		messageState.FilterInvalidDestinationCallers(&Cfg) ||
+		messageState.FilterNonWhitelistedChannels(&Cfg) {
 		messageState.Status = types.Filtered
 	}
 
@@ -200,6 +201,8 @@ func BroadcastNoble(messageState *types.MessageState) (*sdktypes.TxResponse, err
 		NodeURI:          Cfg.Networks.Destination.Noble.RPC,
 	}
 
+	cfg := Cfg.Networks.Destination.Noble
+
 	// build txn
 	txBuilder := sdkContext.TxConfig.NewTxBuilder()
 	attestationBytes, err := hex.DecodeString(messageState.Attestation)
@@ -207,7 +210,7 @@ func BroadcastNoble(messageState *types.MessageState) (*sdktypes.TxResponse, err
 		return nil, errors.New("unable to decode message attestation")
 	}
 	msg := nobletypes.NewMsgReceiveMessage(
-		"", // TODO
+		cfg.MinterAddress,
 		messageState.MsgSentBytes,
 		attestationBytes,
 	)
@@ -216,21 +219,22 @@ func BroadcastNoble(messageState *types.MessageState) (*sdktypes.TxResponse, err
 		return nil, err
 	}
 
-	txBuilder.SetGasLimit(Cfg.Networks.Destination.Noble.GasLimit)
+	txBuilder.SetGasLimit(cfg.GasLimit)
 	txBuilder.SetMemo(generateRelayerMessage())
 
 	// sign tx
-	priv, _, _ := testdata.KeyTestPubAddr() // TODO delete
+	privKey, _, _ := testdata.KeyTestPubAddr() // TODO delete
+	//privKey := Cfg.Minters[messageState.DestDomain].MinterPrivateKey
 
 	// get account number, sequence
-	addrBytes, err := sdktypes.GetFromBech32(Cfg.Networks.Destination.Noble.MinterAddress, "noble")
+	addrBytes, err := sdktypes.GetFromBech32(cfg.MinterAddress, "noble")
 	if err != nil {
 		return nil, err
 	}
 	accountNumber, accountSequence, err := sdkContext.AccountRetriever.GetAccountNumberSequence(sdkContext, addrBytes)
 
 	sigV2 := signing.SignatureV2{
-		PubKey: priv.PubKey(),
+		PubKey: privKey.PubKey(),
 		Data: &signing.SingleSignatureData{
 			SignMode:  sdkContext.TxConfig.SignModeHandler().DefaultMode(),
 			Signature: nil,
@@ -239,7 +243,7 @@ func BroadcastNoble(messageState *types.MessageState) (*sdktypes.TxResponse, err
 	}
 
 	signerData := xauthsigning.SignerData{
-		ChainID:       Cfg.Networks.Destination.Noble.ChainId,
+		ChainID:       cfg.ChainId,
 		AccountNumber: accountNumber,
 		Sequence:      accountSequence,
 	}
@@ -248,7 +252,7 @@ func BroadcastNoble(messageState *types.MessageState) (*sdktypes.TxResponse, err
 		sdkContext.TxConfig.SignModeHandler().DefaultMode(),
 		signerData,
 		txBuilder,
-		priv,
+		privKey,
 		sdkContext.TxConfig,
 		accountSequence,
 	)
@@ -268,7 +272,7 @@ func BroadcastNoble(messageState *types.MessageState) (*sdktypes.TxResponse, err
 
 	// set up grpc sdkContext
 	grpcConn, err := grpc.Dial(
-		Cfg.Networks.Destination.Noble.RPC,
+		cfg.RPC,
 		grpc.WithDefaultCallOptions(grpc.ForceCodec(codec.NewProtoCodec(nil).GRPCCodec())),
 	)
 	if err != nil {
@@ -284,7 +288,7 @@ func BroadcastNoble(messageState *types.MessageState) (*sdktypes.TxResponse, err
 		messageState.DestDomain,
 		messageState.SourceTxHash))
 
-	for attempt := 0; attempt < Cfg.Networks.Destination.Noble.BroadcastRetries; attempt++ {
+	for attempt := 0; attempt < cfg.BroadcastRetries; attempt++ {
 		grpcRes, err := txClient.BroadcastTx(
 			context.Background(),
 			&tx.BroadcastTxRequest{
@@ -300,9 +304,9 @@ func BroadcastNoble(messageState *types.MessageState) (*sdktypes.TxResponse, err
 		} else {
 			Logger.Info("Failed to broadcast: nonzero error code")
 			// retry
-			if attempt < Cfg.Networks.Destination.Noble.BroadcastRetryInterval-1 {
-				Logger.Info(fmt.Sprintf("Retrying in %d seconds", Cfg.Networks.Destination.Noble.BroadcastRetryInterval))
-				time.Sleep(time.Duration(Cfg.Networks.Destination.Noble.BroadcastRetryInterval) * time.Second)
+			if attempt < cfg.BroadcastRetryInterval-1 {
+				Logger.Info(fmt.Sprintf("Retrying in %d seconds", cfg.BroadcastRetryInterval))
+				time.Sleep(time.Duration(cfg.BroadcastRetryInterval) * time.Second)
 			}
 		}
 	}

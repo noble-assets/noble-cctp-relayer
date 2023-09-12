@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd"
 	"github.com/strangelove-ventures/noble-cctp-relayer/config"
+	"strconv"
 	"time"
 )
 
@@ -38,6 +39,7 @@ type MessageState struct {
 	DestTxHash        string
 	MsgSentBytes      []byte
 	DestinationCaller []byte
+	Channel           string // "channel-%d" if a forward, empty if not a forward
 	Created           time.Time
 	Updated           time.Time
 }
@@ -75,7 +77,8 @@ func ToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log) (mess
 	if forward, err := new(MetadataMessage).Parse(message.MessageBody); err == nil {
 		cmd.Logger.Info("received a new forward", "channel", forward.Channel, "tx", log.TxHash)
 		messageState.Type = Forward
-		// TODO forward.
+		// add forward channel to object so we can filter later
+		messageState.Channel = "channel-" + strconv.Itoa(int(forward.Channel))
 		return messageState, nil
 	}
 
@@ -92,7 +95,7 @@ func (m MessageState) FilterInvalidDestinationCallers(cfg *config.Config) bool {
 		return false
 	}
 	if !bytes.Equal(m.DestinationCaller, zeroByteArr) &&
-		bech32DestinationCaller != cfg.Networks.Destination.Noble.MinterAddress {
+		bech32DestinationCaller != cfg.Minters[m.DestDomain].MinterAddress {
 		return false
 	}
 	return true
@@ -103,6 +106,22 @@ func (m MessageState) FilterInvalidDestinationCallers(cfg *config.Config) bool {
 func (m MessageState) FilterDisabledCCTPRoutes(cfg *config.Config) bool {
 	val, ok := cfg.EnabledRoutes[m.DestDomain]
 	return ok && val == m.DestDomain
+}
+
+// FilterNonWhitelistedChannels is a Noble specific filter that returns true if
+// 'filter_forwards_by_ibc_channel' is set to true and the channel is in the forwarding_channel_whitelist
+//
+//	and false otherwise
+func (m MessageState) FilterNonWhitelistedChannels(cfg *config.Config) bool {
+	if !cfg.Networks.Destination.Noble.FilterForwardsByIbcChannel {
+		return true
+	}
+	for _, channel := range cfg.Networks.Destination.Noble.ForwardingChannelWhitelist {
+		if m.Channel == channel {
+			return true
+		}
+	}
+	return false
 }
 
 // left padded input -> bech32 output

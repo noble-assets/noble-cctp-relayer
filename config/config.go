@@ -21,20 +21,24 @@ type Config struct {
 		} `yaml:"source"`
 		Destination struct {
 			Noble struct {
-				DomainId               uint32 `yaml:"domain_id"`
-				API                    string `yaml:"api"`
-				RPC                    string `yaml:"rpc"`
-				ChainId                string `yaml:"chain_id"`
-				GasLimit               uint64 `yaml:"gas_limit"`
-				BroadcastRetries       int    `yaml:"broadcast_retries"`
-				BroadcastRetryInterval int    `yaml:"broadcast_retry_interval"`
-				MinterAddress          string `yaml:"minter_address"` // "noble1..."
-				MinterPrivKey          string `yaml:"minter_priv_key"`
+				DomainId                   uint32   `yaml:"domain_id"`
+				API                        string   `yaml:"api"`
+				RPC                        string   `yaml:"rpc"`
+				ChainId                    string   `yaml:"chain_id"`
+				GasLimit                   uint64   `yaml:"gas_limit"`
+				BroadcastRetries           int      `yaml:"broadcast_retries"`
+				BroadcastRetryInterval     int      `yaml:"broadcast_retry_interval"`
+				FilterForwardsByIbcChannel bool     `yaml:"filter_forwards_by_ibc_channel"`
+				ForwardingChannelWhitelist []string `yaml:"forwarding_channel_whitelist"`
 			} `yaml:"noble"`
 		} `yaml:"destination"`
 	} `yaml:"networks"`
-	EnabledRoutes      map[uint32]uint32 `yaml:"enabled_routes"`
-	AttestationBaseUrl string            `yaml:"attestation_base_url"`
+	EnabledRoutes map[uint32]uint32 `yaml:"enabled_routes"`
+	Minters       map[uint32]struct {
+		MinterAddress    string `yaml:"minter_address"`
+		MinterPrivateKey string `yaml:"minter_private_key"`
+	} `yaml:"enabled_routes"`
+	AttestationBaseUrl string `yaml:"attestation_base_url"`
 }
 
 func Parse(file string) (cfg Config) {

@@ -11,8 +11,8 @@ import (
 
 func init() {
 	cmd.Cfg.AttestationBaseUrl = "https://iris-api-sandbox.circle.com/attestations/"
-	cmd.Cfg.Networks.Noble.ChainId = "grand-1"
-	cmd.Cfg.Networks.Noble.RPC = "https://rpc.testnet.noble.strange.love"
+	cmd.Cfg.Networks.Destination.Noble.ChainId = "grand-1"
+	cmd.Cfg.Networks.Destination.Noble.RPC = "https://rpc.testnet.noble.strange.love"
 	cmd.Logger = log.NewLogger(os.Stdout)
 }
 
