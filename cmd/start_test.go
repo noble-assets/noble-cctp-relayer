@@ -40,7 +40,7 @@ func TestBroadcastSuccess(t *testing.T) {
 		MsgSentBytes: nil,
 	}
 
-	txResponse, err := cmd.Broadcast(&messageState)
+	txResponse, err := cmd.BroadcastNoble(&messageState)
 	require.Nil(t, err)
 	require.Equal(t, 0, txResponse.Code)
 

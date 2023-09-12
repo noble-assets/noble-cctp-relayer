@@ -1,10 +1,12 @@
 package types
 
 import (
+	"bytes"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/circlefin/noble-cctp/x/cctp/types"
+	"github.com/cosmos/cosmos-sdk/types/bech32"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -19,6 +21,7 @@ const (
 	Attested string = "attested"
 	Complete string = "complete"
 	Failed   string = "failed"
+	Filtered string = "filtered"
 
 	Mint    string = "mint"
 	Forward string = "forward"
@@ -39,17 +42,13 @@ type MessageState struct {
 	Updated           time.Time
 }
 
-func ToMessageState(config config.Config, abi abi.ABI, messageSent abi.Event, log *ethtypes.Log) (messageState *MessageState, err error) {
+func ToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log) (messageState *MessageState, err error) {
 
 	event := make(map[string]interface{})
 	_ = abi.UnpackIntoMap(event, messageSent.Name, log.Data)
 
 	rawMessageSentBytes := event["message"].([]byte)
 	message, _ := new(types.Message).Parse(rawMessageSentBytes)
-
-	if message.DestinationDomain != config.Networks.Noble.DomainId {
-		return nil, errors.New("received message not intended for Noble")
-	}
 
 	hashed := crypto.Keccak256(rawMessageSentBytes)
 	hashedHexStr := hex.EncodeToString(hashed)
@@ -67,8 +66,7 @@ func ToMessageState(config config.Config, abi abi.ABI, messageSent abi.Event, lo
 		Updated:           time.Now(),
 	}
 
-	// TODO add checks for if there's a destination caller (ignored state)
-	if burn, err := new(BurnMessage).Parse(message.MessageBody); err == nil {
+	if _, err := new(BurnMessage).Parse(message.MessageBody); err == nil {
 		cmd.Logger.Info("received a new burn", "nonce", message.Nonce, "tx", log.TxHash)
 		messageState.Type = Mint
 		return messageState, nil
@@ -77,8 +75,41 @@ func ToMessageState(config config.Config, abi abi.ABI, messageSent abi.Event, lo
 	if forward, err := new(MetadataMessage).Parse(message.MessageBody); err == nil {
 		cmd.Logger.Info("received a new forward", "channel", forward.Channel, "tx", log.TxHash)
 		messageState.Type = Forward
+		// TODO forward.
 		return messageState, nil
 	}
 
 	return nil, errors.New(fmt.Sprintf("unable to parse txn into message.  tx hash %s", log.TxHash.Hex()))
+}
+
+// FilterInvalidDestinationCallers returns true if
+// there is no dest caller, or if we are the dest caller for the specified domain
+// and false otherwise, because relaying the message will fail
+func (m MessageState) FilterInvalidDestinationCallers(cfg *config.Config) bool {
+	zeroByteArr := make([]byte, 32)
+	bech32DestinationCaller, err := DecodeDestinationCaller(m.DestinationCaller)
+	if err != nil {
+		return false
+	}
+	if !bytes.Equal(m.DestinationCaller, zeroByteArr) &&
+		bech32DestinationCaller != cfg.Networks.Destination.Noble.MinterAddress {
+		return false
+	}
+	return true
+}
+
+// FilterDisabledCCTPRoutes returns true if we have enabled relaying
+// from a source domain to a destination domain, and false otherwise
+func (m MessageState) FilterDisabledCCTPRoutes(cfg *config.Config) bool {
+	val, ok := cfg.EnabledRoutes[m.DestDomain]
+	return ok && val == m.DestDomain
+}
+
+// left padded input -> bech32 output
+func DecodeDestinationCaller(input []byte) (string, error) {
+	output, err := bech32.ConvertAndEncode("noble", input[12:])
+	if err != nil {
+		return "", errors.New("unable to encode destination caller")
+	}
+	return output, nil
 }

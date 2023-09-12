@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -29,6 +28,7 @@ import (
 	"google.golang.org/grpc"
 	"io"
 	"math/big"
+	"math/rand"
 	"net/http"
 	"os"
 	"time"
@@ -36,24 +36,25 @@ import (
 
 var startCmd = &cobra.Command{
 	Use:   "start",
-	Short: "Start relaying CCTP transactions between Ethereum and Noble",
-	Run:   Start,
+	Short: "Start relaying CCTP transactions from Ethereum to Noble",
+	Run:   RelayEthereum,
 }
 
 // iris api lookup id -> MessageState
 var state = map[string]types.MessageState{}
 
-func Start(cmd *cobra.Command, args []string) {
+func RelayEthereum(cmd *cobra.Command, args []string) {
 
 	// set up clients
-	messageTransmitterAddress := common.HexToAddress(Cfg.Networks.Ethereum.MessageTransmitter)
+	ethConfig := Cfg.Networks.Source.Ethereum
+	messageTransmitterAddress := common.HexToAddress(ethConfig.MessageTransmitter)
 	etherReader := etherstream.Reader{Backend: EthClient}
 
 	query := ethereum.FilterQuery{
 		Addresses: []common.Address{messageTransmitterAddress},
 		Topics:    [][]common.Hash{{MessageSent.ID}},
-		FromBlock: big.NewInt(9573850),
-		ToBlock:   big.NewInt(9573860), // TODO add lookback period
+		FromBlock: big.NewInt(int64(ethConfig.StartBlock - ethConfig.LookbackPeriod)),
+		ToBlock:   big.NewInt(int64(ethConfig.StartBlock)),
 	}
 
 	messageSent := MessageTransmitterABI.Events["MessageSent"]
@@ -68,19 +69,12 @@ func Start(cmd *cobra.Command, args []string) {
 
 	// process history
 	for _, log := range history {
-		messageState, err := types.ToMessageState(Cfg, MessageTransmitterABI, messageSent, &log)
+		messageState, err := types.ToMessageState(MessageTransmitterABI, messageSent, &log)
 		if err != nil {
 			Logger.Error("Unable to parse history log into MessageState, skipping")
 			continue
 		}
-
-		// only relay messages where there is no dest caller, or we are the dest caller
-		// TODO minter address might have to be encoded to bytes32
-		if messageState.DestinationCaller == nil ||
-			bytes.Equal(messageState.DestinationCaller, []byte{}) ||
-			bytes.Equal(messageState.DestinationCaller, []byte(Cfg.Networks.Noble.MinterAddress)) {
-			go Process(messageState)
-		}
+		go Process(messageState)
 	}
 
 	// constantly consume stream updates
@@ -91,28 +85,19 @@ func Start(cmd *cobra.Command, args []string) {
 				Logger.Error("connection closed", "err", err)
 				os.Exit(1)
 			case log := <-stream:
-				messageState, err := types.ToMessageState(Cfg, MessageTransmitterABI, messageSent, &log)
+				messageState, err := types.ToMessageState(MessageTransmitterABI, messageSent, &log)
 				if err != nil {
 					Logger.Error("Unable to parse ws log into MessageState, skipping")
 					continue
 				}
-
-				// only relay messages where there is no dest caller, or we are the dest caller
-				// TODO minter address might have to be encoded to bytes32
-				if messageState.DestinationCaller == nil ||
-					bytes.Equal(messageState.DestinationCaller, []byte{}) ||
-					bytes.Equal(messageState.DestinationCaller, []byte(Cfg.Networks.Noble.MinterAddress)) {
-					go Process(messageState)
-				}
-
-				Process(messageState)
+				go Process(messageState)
 			}
 		}
 	}()
 
 	// constantly comb through MessageStates
 	for {
-		time.Sleep(10 * time.Second) // TODO configurable
+		time.Sleep(30 * time.Second) // TODO configurable
 		for _, messageState := range state {
 			go Process(&messageState)
 		}
@@ -124,12 +109,15 @@ func Process(messageState *types.MessageState) {
 
 	// if we haven't seen this message, add it to the store
 	if _, ok := state[messageState.IrisLookupId]; !ok {
-		messageState.Status = types.Created
-		messageState.Created = time.Now()
-		messageState.Updated = time.Now()
-
 		state[messageState.IrisLookupId] = *messageState
 	}
+
+	// filters
+	if messageState.FilterDisabledCCTPRoutes(&Cfg) ||
+		messageState.FilterInvalidDestinationCallers(&Cfg) {
+		messageState.Status = types.Filtered
+	}
+
 	// if the message is burned or pending, check for an attestation
 	if messageState.Status == types.Created || messageState.Status == types.Pending {
 		response, exists := CheckAttestation(messageState.IrisLookupId)
@@ -148,22 +136,28 @@ func Process(messageState *types.MessageState) {
 	}
 	// if the message is attested to, try to mint
 	if messageState.Status == types.Attested {
-		response, err := Broadcast(messageState)
-		if err != nil {
-			Logger.Error("unable to mint", "err", err)
-			return
+		switch messageState.DestDomain {
+		case 0:
+			response, err := BroadcastNoble(messageState)
+			if err != nil {
+				Logger.Error("unable to mint", "err", err)
+				return
+			}
+			if response.Code != 0 {
+				Logger.Error("nonzero response code received", "err", err)
+				return
+			}
+			// success!
+			messageState.DestTxHash = response.TxHash
 		}
-		if response.Code != 0 {
-			Logger.Error("nonzero response code received", "err", err)
-			return
-		}
-		// success!
-		messageState.DestTxHash = response.TxHash
 		messageState.Status = types.Complete
 		messageState.Updated = time.Now()
 	}
-	// if the message is complete, ignore
-	if messageState.Status == types.Complete {
+
+	// if the message is complete or failed, ignore
+	if messageState.Status == types.Complete ||
+		messageState.Status == types.Failed ||
+		messageState.Status == types.Filtered {
 		return
 	}
 }
@@ -194,25 +188,20 @@ func CheckAttestation(irisLookupId string) (*types.AttestationResponse, bool) {
 	return &response, true
 }
 
-func Broadcast(messageState *types.MessageState) (*sdktypes.TxResponse, error) {
-	Logger.Info(fmt.Sprintf(
-		"Broadcasting message for source domain %d with tx hash %s",
-		messageState.SourceDomain,
-		messageState.SourceTxHash))
-
+// BroadcastNoble broadcasts a message to Noble
+func BroadcastNoble(messageState *types.MessageState) (*sdktypes.TxResponse, error) {
 	// set up sdk context
+	// TODO move this out of BroadcastNoble
 	cdc := codec.NewProtoCodec(codectypes.NewInterfaceRegistry())
 	sdkContext := sdkClient.Context{
-		ChainID:          Cfg.Networks.Noble.ChainId,
+		ChainID:          Cfg.Networks.Destination.Noble.ChainId,
 		TxConfig:         xauthtx.NewTxConfig(cdc, xauthtx.DefaultSignModes),
 		AccountRetriever: xauthtypes.AccountRetriever{},
-		//NodeURI:          "",
-		//Codec: cdc,
+		NodeURI:          Cfg.Networks.Destination.Noble.RPC,
 	}
 
 	// build txn
 	txBuilder := sdkContext.TxConfig.NewTxBuilder()
-
 	attestationBytes, err := hex.DecodeString(messageState.Attestation)
 	if err != nil {
 		return nil, errors.New("unable to decode message attestation")
@@ -227,16 +216,14 @@ func Broadcast(messageState *types.MessageState) (*sdktypes.TxResponse, error) {
 		return nil, err
 	}
 
-	// TODO configurable
-	//txBuilder.SetGasLimit(1)
-	//txBuilder.SetFeeAmount(1)
-	txBuilder.SetMemo("Thank you for relaying with Strangelove")
+	txBuilder.SetGasLimit(Cfg.Networks.Destination.Noble.GasLimit)
+	txBuilder.SetMemo(generateRelayerMessage())
 
 	// sign tx
 	priv, _, _ := testdata.KeyTestPubAddr() // TODO delete
 
 	// get account number, sequence
-	addrBytes, err := sdktypes.GetFromBech32(Cfg.Networks.Noble.MinterAddress, "noble")
+	addrBytes, err := sdktypes.GetFromBech32(Cfg.Networks.Destination.Noble.MinterAddress, "noble")
 	if err != nil {
 		return nil, err
 	}
@@ -252,7 +239,7 @@ func Broadcast(messageState *types.MessageState) (*sdktypes.TxResponse, error) {
 	}
 
 	signerData := xauthsigning.SignerData{
-		ChainID:       Cfg.Networks.Noble.ChainId,
+		ChainID:       Cfg.Networks.Destination.Noble.ChainId,
 		AccountNumber: accountNumber,
 		Sequence:      accountSequence,
 	}
@@ -281,7 +268,7 @@ func Broadcast(messageState *types.MessageState) (*sdktypes.TxResponse, error) {
 
 	// set up grpc sdkContext
 	grpcConn, err := grpc.Dial(
-		Cfg.Networks.Noble.RPC,
+		Cfg.Networks.Destination.Noble.RPC,
 		grpc.WithDefaultCallOptions(grpc.ForceCodec(codec.NewProtoCodec(nil).GRPCCodec())),
 	)
 	if err != nil {
@@ -290,22 +277,49 @@ func Broadcast(messageState *types.MessageState) (*sdktypes.TxResponse, error) {
 	defer grpcConn.Close()
 
 	txClient := tx.NewServiceClient(grpcConn)
-	grpcRes, err := txClient.BroadcastTx(
-		context.Background(),
-		&tx.BroadcastTxRequest{
-			TxBytes: txBytes,
-			Mode:    2,
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
 
-	if grpcRes.TxResponse.Code != 0 {
-		return nil, errors.New(fmt.Sprintf("nonzero error code: %d", grpcRes.TxResponse.Code))
-	}
+	Logger.Info(fmt.Sprintf(
+		"Broadcasting message for source domain %d to dest domain %d with tx hash %s",
+		messageState.SourceDomain,
+		messageState.DestDomain,
+		messageState.SourceTxHash))
 
-	return grpcRes.TxResponse, nil
+	for attempt := 0; attempt < Cfg.Networks.Destination.Noble.BroadcastRetries; attempt++ {
+		grpcRes, err := txClient.BroadcastTx(
+			context.Background(),
+			&tx.BroadcastTxRequest{
+				TxBytes: txBytes,
+				Mode:    2,
+			},
+		)
+		if err != nil {
+			Logger.Error(fmt.Sprintf("error during broadcasting: %s", err.Error()))
+		}
+		if grpcRes.TxResponse.Code == 0 {
+			return grpcRes.TxResponse, nil
+		} else {
+			Logger.Info("Failed to broadcast: nonzero error code")
+			// retry
+			if attempt < Cfg.Networks.Destination.Noble.BroadcastRetryInterval-1 {
+				Logger.Info(fmt.Sprintf("Retrying in %d seconds", Cfg.Networks.Destination.Noble.BroadcastRetryInterval))
+				time.Sleep(time.Duration(Cfg.Networks.Destination.Noble.BroadcastRetryInterval) * time.Second)
+			}
+		}
+	}
+	return nil, errors.New("reached max number of broadcast attempts")
+}
+
+func generateRelayerMessage() string {
+	quotes := []string{
+		"Your Commie has no regard for human life. Not even his own.",
+		"Gee, I wish we had one of them doomsday machines.",
+		"Of course, the whole point of a Doomsday machine is lost if you keep it a secret! Why didn't you tell the world?",
+		"Well, boys, this is it. Nuclear combat, toe to toe with the Rooskies.",
+		"Mister President, we must not allow a mine shaft gap!",
+		"Deterrence is the art of producing, in the mind of the enemy...the fear to attack!",
+	}
+	choice := rand.Intn(len(quotes))
+	return quotes[choice]
 }
 
 func init() {
@@ -322,7 +336,7 @@ func init() {
 
 		MessageSent = MessageTransmitterABI.Events["MessageSent"]
 
-		EthClient, err = ethclient.DialContext(context.Background(), Cfg.Networks.Ethereum.RPC)
+		EthClient, err = ethclient.DialContext(context.Background(), Cfg.Networks.Source.Ethereum.RPC)
 		if err != nil {
 			Logger.Error("unable to initialize ethereum client", "err", err)
 			os.Exit(1)
