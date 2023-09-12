@@ -8,6 +8,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/pascaldekloe/etherstream"
+	"github.com/strangelove-ventures/noble-cctp-relayer/types"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"math/big"
 	"os"
@@ -43,9 +45,25 @@ func TestToMessageStateSuccess(t *testing.T) {
 	_, _, history, err := etherReader.QueryWithHistory(context.Background(), &query)
 	require.Nil(t, err)
 
-	fmt.Println(history)
+	messageState, err := types.ToMessageState(messageTransmitterABI, messageSent, &history[0])
 
-	// TODO
-	//messageState, err := ToMessageState(messageTransmitterABI, messageSent)
-	//require.Nil(t, err)
+	event := make(map[string]interface{})
+	_ = messageTransmitterABI.UnpackIntoMap(event, messageSent.Name, history[0].Data)
+
+	rawMessageSentBytes := event["message"].([]byte)
+
+	destCaller := make([]byte, 32)
+	assert.Equal(t, "e40ed0e983675678715972bd50d6abc417735051b0255f3c0916911957eda603", messageState.IrisLookupId)
+	assert.Equal(t, "mint", messageState.Type)
+	assert.Equal(t, "created", messageState.Status)
+	assert.Equal(t, "", messageState.Attestation)
+	assert.Equal(t, uint32(0), messageState.SourceDomain)
+	assert.Equal(t, uint32(4), messageState.DestDomain)
+	assert.Equal(t, "0xed567f5a62166d0a5df6cdcec710640b1c8079758cd1e1ac95085742f06afb04", messageState.SourceTxHash)
+	assert.Equal(t, "", messageState.DestTxHash)
+	assert.Equal(t, rawMessageSentBytes, messageState.MsgSentBytes)
+	assert.Equal(t, destCaller, messageState.DestinationCaller)
+	assert.Equal(t, "", messageState.Channel)
+	fmt.Println(messageState)
+	require.Nil(t, err)
 }
