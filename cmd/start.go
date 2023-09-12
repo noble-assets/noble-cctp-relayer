@@ -113,9 +113,11 @@ func Process(messageState *types.MessageState) {
 	}
 
 	// filters
-	if messageState.FilterDisabledCCTPRoutes(&Cfg) ||
-		messageState.FilterInvalidDestinationCallers(&Cfg) ||
-		messageState.FilterNonWhitelistedChannels(&Cfg) {
+	if messageState.FilterDisabledCCTPRoutes(Cfg.EnabledRoutes) ||
+		messageState.FilterInvalidDestinationCallers(Cfg.Minters[messageState.DestDomain].MinterAddress) ||
+		messageState.FilterNonWhitelistedChannels(
+			Cfg.Networks.Destination.Noble.FilterForwardsByIbcChannel,
+			Cfg.Networks.Destination.Noble.ForwardingChannelWhitelist) {
 		messageState.Status = types.Filtered
 	}
 
@@ -210,7 +212,7 @@ func BroadcastNoble(messageState *types.MessageState) (*sdktypes.TxResponse, err
 		return nil, errors.New("unable to decode message attestation")
 	}
 	msg := nobletypes.NewMsgReceiveMessage(
-		cfg.MinterAddress,
+		Cfg.Minters[messageState.DestDomain].MinterAddress,
 		messageState.MsgSentBytes,
 		attestationBytes,
 	)
@@ -227,7 +229,7 @@ func BroadcastNoble(messageState *types.MessageState) (*sdktypes.TxResponse, err
 	//privKey := Cfg.Minters[messageState.DestDomain].MinterPrivateKey
 
 	// get account number, sequence
-	addrBytes, err := sdktypes.GetFromBech32(cfg.MinterAddress, "noble")
+	addrBytes, err := sdktypes.GetFromBech32(Cfg.Minters[messageState.DestDomain].MinterAddress, "noble")
 	if err != nil {
 		return nil, err
 	}

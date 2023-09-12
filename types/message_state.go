@@ -10,8 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/strangelove-ventures/noble-cctp-relayer/cmd"
-	"github.com/strangelove-ventures/noble-cctp-relayer/config"
 	"strconv"
 	"time"
 )
@@ -69,13 +67,11 @@ func ToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log) (mess
 	}
 
 	if _, err := new(BurnMessage).Parse(message.MessageBody); err == nil {
-		cmd.Logger.Info("received a new burn", "nonce", message.Nonce, "tx", log.TxHash)
 		messageState.Type = Mint
 		return messageState, nil
 	}
 
 	if forward, err := new(MetadataMessage).Parse(message.MessageBody); err == nil {
-		cmd.Logger.Info("received a new forward", "channel", forward.Channel, "tx", log.TxHash)
 		messageState.Type = Forward
 		// add forward channel to object so we can filter later
 		messageState.Channel = "channel-" + strconv.Itoa(int(forward.Channel))
@@ -88,14 +84,14 @@ func ToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log) (mess
 // FilterInvalidDestinationCallers returns true if
 // there is no dest caller, or if we are the dest caller for the specified domain
 // and false otherwise, because relaying the message will fail
-func (m MessageState) FilterInvalidDestinationCallers(cfg *config.Config) bool {
+func (m *MessageState) FilterInvalidDestinationCallers(minterAddress string) bool {
 	zeroByteArr := make([]byte, 32)
 	bech32DestinationCaller, err := DecodeDestinationCaller(m.DestinationCaller)
 	if err != nil {
 		return false
 	}
 	if !bytes.Equal(m.DestinationCaller, zeroByteArr) &&
-		bech32DestinationCaller != cfg.Minters[m.DestDomain].MinterAddress {
+		bech32DestinationCaller != minterAddress {
 		return false
 	}
 	return true
@@ -103,8 +99,8 @@ func (m MessageState) FilterInvalidDestinationCallers(cfg *config.Config) bool {
 
 // FilterDisabledCCTPRoutes returns true if we have enabled relaying
 // from a source domain to a destination domain, and false otherwise
-func (m MessageState) FilterDisabledCCTPRoutes(cfg *config.Config) bool {
-	val, ok := cfg.EnabledRoutes[m.DestDomain]
+func (m *MessageState) FilterDisabledCCTPRoutes(enabledRoutes map[uint32]uint32) bool {
+	val, ok := enabledRoutes[m.DestDomain]
 	return ok && val == m.DestDomain
 }
 
@@ -112,11 +108,11 @@ func (m MessageState) FilterDisabledCCTPRoutes(cfg *config.Config) bool {
 // 'filter_forwards_by_ibc_channel' is set to true and the channel is in the forwarding_channel_whitelist
 //
 //	and false otherwise
-func (m MessageState) FilterNonWhitelistedChannels(cfg *config.Config) bool {
-	if !cfg.Networks.Destination.Noble.FilterForwardsByIbcChannel {
+func (m *MessageState) FilterNonWhitelistedChannels(enableFiltering bool, channelWhitelist []string) bool {
+	if !enableFiltering {
 		return true
 	}
-	for _, channel := range cfg.Networks.Destination.Noble.ForwardingChannelWhitelist {
+	for _, channel := range channelWhitelist {
 		if m.Channel == channel {
 			return true
 		}
