@@ -15,6 +15,14 @@ Running the relayer
 rly start --config testnet.yaml
 ```
 
+# Generating ABI Go bindings
+
+```shell
+./abi/abigen --abi ./abi/TokenMessenger.json --pkg cmd --type TokenMessenger --out TokenMessenger.go
+./abi/abigen --abi ./abi/ERC20.json --pkg integration_testing --type ERC20 --out ERC20.go
+```
+
+
 Store
 
 | IrisLookupId | Type    | Status   | SourceDomain | DestDomain | SourceTxHash  | DestTxHash | MsgSentBytes | Created | Updated |

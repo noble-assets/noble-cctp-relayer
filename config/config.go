@@ -17,6 +17,7 @@ type Config struct {
 				RequestQueueSize    uint32   `yaml:"request_queue_size"`
 				StartBlock          uint64   `yaml:"start_block"`
 				LookbackPeriod      uint64   `yaml:"lookback_period"`
+				Enabled             bool     `yaml:"enabled"`
 			} `yaml:"ethereum"`
 		} `yaml:"source"`
 		Destination struct {
