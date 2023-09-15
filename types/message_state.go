@@ -27,16 +27,16 @@ const (
 )
 
 type MessageState struct {
-	IrisLookupId      string
-	Type              string
-	Status            string
-	Attestation       string // hex encoded
-	SourceDomain      uint32
-	DestDomain        uint32
+	IrisLookupId      string // hex encoded MessageSent bytes, prepended with "0x"
+	Type              string // 'mint' or 'forward'
+	Status            string // created, pending, attested, complete, failed, filtered
+	Attestation       string // hex encoded attestation, prepended with "0x"
+	SourceDomain      uint32 // source domain id
+	DestDomain        uint32 // destination domain id
 	SourceTxHash      string
 	DestTxHash        string
 	MsgSentBytes      []byte
-	DestinationCaller []byte
+	DestinationCaller []byte // address authorized to call transaction
 	Channel           string // "channel-%d" if a forward, empty if not a forward
 	Created           time.Time
 	Updated           time.Time

@@ -1,4 +1,4 @@
-package cmd_test
+package circle_test
 
 import (
 	"cosmossdk.io/log"
