@@ -1,10 +1,13 @@
 package cmd
 
 import (
+	"bytes"
+	"cosmossdk.io/log"
 	"github.com/spf13/cobra"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/circle"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/noble"
+	"github.com/strangelove-ventures/noble-cctp-relayer/config"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"time"
 )
@@ -15,16 +18,16 @@ var startCmd = &cobra.Command{
 	Run:   Start,
 }
 
-// iris api lookup id -> MessageState - in progress states
-var state = map[string]types.MessageState{}
-
-// iris api lookup id -> MessageState - terminal states
-var store = map[string]types.MessageState{}
-
-// messageState processing queue
-var processingQueue = make(chan *types.MessageState, 10000)
+// State and Store map the iris api lookup id -> MessageState
+// State represents all in progress burns/mints
+// Store represents terminal states
+var State = map[string]types.MessageState{}
+var Store = map[string]types.MessageState{}
 
 func Start(cmd *cobra.Command, args []string) {
+
+	// messageState processing queue
+	var processingQueue = make(chan *types.MessageState, 10000)
 
 	// listeners listen for events, parse them, and enqueue them to processingQueue
 	if Cfg.Networks.Source.Ethereum.Enabled {
@@ -32,40 +35,39 @@ func Start(cmd *cobra.Command, args []string) {
 	}
 	// ...register more chain listeners here
 
-	// spin up StartProcessor worker pool
-	for i := 0; i < 4; i++ {
-		go StartProcessor()
+	// spin up Processor worker pool
+	for i := 0; i < int(Cfg.ProcessorWorkerCount); i++ {
+		go StartProcessor(Cfg, Logger, processingQueue)
 	}
 
-	// constantly cycle through MessageStates
+	// constantly cycle through active MessageStates
 	for {
-		for _, msg := range state {
+		for _, msg := range State {
 			processingQueue <- &msg
 		}
 	}
 }
 
 // StartProcessor is the main processing pipeline.
-func StartProcessor() {
+func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *types.MessageState) {
 	for {
 		msg := <-processingQueue
-		// if this is the first time seeing this message, add it to the state
-		if _, ok := state[msg.IrisLookupId]; !ok {
-			state[msg.IrisLookupId] = *msg
+		// if this is the first time seeing this message, add it to the State
+		if _, ok := State[msg.IrisLookupId]; !ok {
+			msg.Status = types.Created
+			State[msg.IrisLookupId] = *msg
 		}
 
-		// filters
-		if msg.FilterDisabledCCTPRoutes(Cfg.EnabledRoutes) ||
-			msg.FilterInvalidDestinationCallers(Cfg.Minters[msg.DestDomain].MinterAddress) ||
-			msg.FilterNonWhitelistedChannels(
-				Cfg.Networks.Destination.Noble.FilterForwardsByIbcChannel,
-				Cfg.Networks.Destination.Noble.ForwardingChannelWhitelist) {
+		// filters return true if they meet a condition
+		if filterDisabledCCTPRoutes(cfg, msg) ||
+			filterInvalidDestinationCallers(cfg, msg) ||
+			filterNonWhitelistedChannels(cfg, msg) {
 			msg.Status = types.Filtered
 		}
 
 		// if the message is burned or pending, check for an attestation
 		if msg.Status == types.Created || msg.Status == types.Pending {
-			response, exists := circle.CheckAttestation(Cfg, Logger, msg.IrisLookupId)
+			response, exists := circle.CheckAttestation(cfg, logger, msg.IrisLookupId)
 			if exists {
 				if msg.Status == types.Created && response.Status == "pending" {
 					msg.Status = types.Pending
@@ -76,6 +78,7 @@ func StartProcessor() {
 					msg.Updated = time.Now()
 				}
 			} else {
+				// add attestation retry intervals per domain here
 				time.Sleep(30 * time.Second)
 				return
 			}
@@ -83,29 +86,65 @@ func StartProcessor() {
 		// if the message is attested to, try to mint
 		if msg.Status == types.Attested {
 			switch msg.DestDomain {
-			case 0:
-				response, err := noble.Broadcast(Cfg, Logger, msg)
+			case 4: // noble
+				response, err := noble.Broadcast(cfg, logger, *msg)
 				if err != nil {
-					Logger.Error("unable to mint", "err", err)
+					logger.Error("unable to mint", "err", err)
 					return
 				}
 				if response.Code != 0 {
-					Logger.Error("nonzero response code received", "err", err)
+					logger.Error("nonzero response code received", "err", err)
 					return
 				}
 				// success!
 				msg.DestTxHash = response.TxHash
 			}
+			// ...add minters for different domains here
+
 			msg.Status = types.Complete
 			msg.Updated = time.Now()
 		}
 
-		// remove terminal states from state, add to store
+		// remove messages with terminal State, add to Store
 		if msg.Status == types.Complete || msg.Status == types.Failed || msg.Status == types.Filtered {
-			delete(state, msg.IrisLookupId)
-			store[msg.IrisLookupId] = *msg
+			delete(State, msg.IrisLookupId)
+			Store[msg.IrisLookupId] = *msg
 		}
 	}
+}
+
+// filterDisabledCCTPRoutes returns true if we haven't enabled relaying from a source domain to a destination domain
+func filterDisabledCCTPRoutes(cfg config.Config, msg *types.MessageState) bool {
+	val, ok := cfg.Networks.EnabledRoutes[msg.SourceDomain]
+	return !(ok && val == msg.DestDomain)
+}
+
+// filterInvalidDestinationCallers returns true if the minter is not the destination caller for the specified domain
+func filterInvalidDestinationCallers(cfg config.Config, msg *types.MessageState) bool {
+	zeroByteArr := make([]byte, 32)
+	bech32DestinationCaller, err := types.DecodeDestinationCaller(msg.DestinationCaller)
+	if err != nil {
+		return true
+	}
+	if !bytes.Equal(msg.DestinationCaller, zeroByteArr) &&
+		bech32DestinationCaller != cfg.Networks.Minters[msg.DestDomain].MinterAddress {
+		return true
+	}
+	return false
+}
+
+// filterNonWhitelistedChannels is a Noble specific filter that returns true
+// if the channel is not in the forwarding_channel_whitelist
+func filterNonWhitelistedChannels(cfg config.Config, msg *types.MessageState) bool {
+	if !cfg.Networks.Destination.Noble.FilterForwardsByIbcChannel {
+		return false
+	}
+	for _, channel := range cfg.Networks.Destination.Noble.ForwardingChannelWhitelist {
+		if msg.Channel == channel {
+			return false
+		}
+	}
+	return true
 }
 
 func init() {

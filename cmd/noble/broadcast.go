@@ -28,7 +28,7 @@ import (
 
 // BroadcastNoble broadcasts a message to Noble
 // TODO invalid type url
-func Broadcast(cfg config.Config, logger log.Logger, msg *types.MessageState) (*sdktypes.TxResponse, error) {
+func Broadcast(cfg config.Config, logger log.Logger, msg types.MessageState) (*sdktypes.TxResponse, error) {
 	// set up sdk context
 	// TODO move this out of BroadcastNoble
 	cdc := codec.NewProtoCodec(codectypes.NewInterfaceRegistry())
@@ -46,7 +46,7 @@ func Broadcast(cfg config.Config, logger log.Logger, msg *types.MessageState) (*
 		return nil, errors.New("unable to decode message attestation")
 	}
 	receiveMsg := nobletypes.NewMsgReceiveMessage(
-		cfg.Minters[msg.DestDomain].MinterAddress,
+		cfg.Networks.Minters[msg.DestDomain].MinterAddress,
 		msg.MsgSentBytes,
 		attestationBytes,
 	)
@@ -63,7 +63,7 @@ func Broadcast(cfg config.Config, logger log.Logger, msg *types.MessageState) (*
 	//privKey := Cfg.Minters[msg.DestDomain].MinterPrivateKey
 
 	// get account number, sequence
-	addrBytes, err := sdktypes.GetFromBech32(cfg.Minters[msg.DestDomain].MinterAddress, "noble")
+	addrBytes, err := sdktypes.GetFromBech32(cfg.Networks.Minters[msg.DestDomain].MinterAddress, "noble")
 	if err != nil {
 		return nil, err
 	}

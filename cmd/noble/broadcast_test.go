@@ -3,28 +3,33 @@ package noble_test
 import (
 	"cosmossdk.io/log"
 	"encoding/hex"
-	"github.com/strangelove-ventures/noble-cctp-relayer/cmd"
+	"github.com/rs/zerolog"
+	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/noble"
+	"github.com/strangelove-ventures/noble-cctp-relayer/config"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"github.com/stretchr/testify/require"
 	"os"
 	"testing"
 )
 
-func init() {
-	cmd.Cfg.AttestationBaseUrl = "https://iris-api-sandbox.circle.com/attestations/"
-	cmd.Cfg.Networks.Destination.Noble.ChainId = "grand-1"
-	cmd.Cfg.Networks.Destination.Noble.RPC = "rpc.testnet.noble.strange.love:26657"
-	cmd.Cfg.Networks.Destination.Noble.BroadcastRetries = 1
+var cfg config.Config
+var logger log.Logger
 
-	cmd.Logger = log.NewLogger(os.Stdout)
-	cmd.Cfg.Minters = map[uint32]struct {
-		MinterAddress    string "yaml:\"minter_address\""
-		MinterPrivateKey string "yaml:\"minter_private_key\""
+func init() {
+	cfg.AttestationBaseUrl = "https://iris-api-sandbox.circle.com/attestations/"
+	cfg.Networks.Destination.Noble.ChainId = "grand-1"
+	cfg.Networks.Destination.Noble.RPC = "rpc.testnet.noble.strange.love:26657"
+	cfg.Networks.Destination.Noble.BroadcastRetries = 1
+
+	logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.ErrorLevel))
+	cfg.Minters = map[uint32]struct {
+		MinterAddress    string "yaml:\"minter-address\""
+		MinterPrivateKey string "yaml:\"minter-private-key\""
 	}{}
 
-	cmd.Cfg.Minters[4] = struct {
-		MinterAddress    string "yaml:\"minter_address\""
-		MinterPrivateKey string "yaml:\"minter_private_key\""
+	cfg.Minters[4] = struct {
+		MinterAddress    string "yaml:\"minter-address\""
+		MinterPrivateKey string "yaml:\"minter-private-key\""
 	}{
 		MinterAddress:    "noble1wa5g4at8yfmph96jxsvn0ynnf5qx73h0l6ecrs",
 		MinterPrivateKey: "",
@@ -41,7 +46,7 @@ func TestBroadcastNobleSuccess(t *testing.T) {
 		MsgSentBytes: msgBz,
 	}
 
-	txResponse, err := cmd.BroadcastNoble(&msg)
+	txResponse, err := noble.Broadcast(cfg, logger, msg)
 	require.Nil(t, err)
 	require.Equal(t, txResponse, 0)
 

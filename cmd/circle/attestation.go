@@ -10,12 +10,11 @@ import (
 	"net/http"
 )
 
-// CheckAttestation checks the iris api for attestation status
-// returns true if attestation is complete
+// CheckAttestation checks the iris api for attestation status and returns true if attestation is complete
 func CheckAttestation(cfg config.Config, logger log.Logger, irisLookupId string) (*types.AttestationResponse, bool) {
-	logger.Info(fmt.Sprintf("CheckAttestation for %s%s", cfg.AttestationBaseUrl, irisLookupId))
+	logger.Info(fmt.Sprintf("CheckAttestation for %s%s%s", cfg.AttestationBaseUrl, "0x", irisLookupId))
 
-	rawResponse, err := http.Get(cfg.AttestationBaseUrl + irisLookupId)
+	rawResponse, err := http.Get(cfg.AttestationBaseUrl + "0x" + irisLookupId)
 	if rawResponse.StatusCode != http.StatusOK || err != nil {
 		logger.Debug("non 200 response received")
 		return nil, false

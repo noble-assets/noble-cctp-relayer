@@ -1,7 +1,6 @@
 package types
 
 import (
-	"bytes"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -27,7 +26,7 @@ const (
 )
 
 type MessageState struct {
-	IrisLookupId      string // hex encoded MessageSent bytes, prepended with "0x"
+	IrisLookupId      string // hex encoded MessageSent bytes
 	Type              string // 'mint' or 'forward'
 	Status            string // created, pending, attested, complete, failed, filtered
 	Attestation       string // hex encoded attestation, prepended with "0x"
@@ -81,47 +80,11 @@ func ToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log) (mess
 	return nil, errors.New(fmt.Sprintf("unable to parse txn into message.  tx hash %s", log.TxHash.Hex()))
 }
 
-// FilterInvalidDestinationCallers returns true if
-// there is no dest caller, or if we are the dest caller for the specified domain
-// and false otherwise, because relaying the message will fail
-func (m *MessageState) FilterInvalidDestinationCallers(minterAddress string) bool {
-	zeroByteArr := make([]byte, 32)
-	bech32DestinationCaller, err := DecodeDestinationCaller(m.DestinationCaller)
-	if err != nil {
-		return false
-	}
-	if !bytes.Equal(m.DestinationCaller, zeroByteArr) &&
-		bech32DestinationCaller != minterAddress {
-		return false
-	}
-	return true
-}
-
-// FilterDisabledCCTPRoutes returns true if we have enabled relaying
-// from a source domain to a destination domain, and false otherwise
-func (m *MessageState) FilterDisabledCCTPRoutes(enabledRoutes map[uint32]uint32) bool {
-	val, ok := enabledRoutes[m.DestDomain]
-	return ok && val == m.DestDomain
-}
-
-// FilterNonWhitelistedChannels is a Noble specific filter that returns true if
-// 'filter_forwards_by_ibc_channel' is set to true and the channel is in the forwarding_channel_whitelist
-//
-//	and false otherwise
-func (m *MessageState) FilterNonWhitelistedChannels(enableFiltering bool, channelWhitelist []string) bool {
-	if !enableFiltering {
-		return true
-	}
-	for _, channel := range channelWhitelist {
-		if m.Channel == channel {
-			return true
-		}
-	}
-	return false
-}
-
 // left padded input -> bech32 output
 func DecodeDestinationCaller(input []byte) (string, error) {
+	if len(input) <= 12 {
+		return "", errors.New("destinationCaller is too short")
+	}
 	output, err := bech32.ConvertAndEncode("noble", input[12:])
 	if err != nil {
 		return "", errors.New("unable to encode destination caller")

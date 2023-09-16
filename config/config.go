@@ -10,41 +10,41 @@ type Config struct {
 	Networks struct {
 		Source struct {
 			Ethereum struct {
-				DomainId            uint32   `yaml:"domain_id"`
+				DomainId            uint32   `yaml:"domain-id"`
 				RPC                 string   `yaml:"rpc"`
-				MessageTransmitter  string   `yaml:"message_transmitter"`
-				ValidTokenAddresses []string `yaml:"valid_token_addresses"`
-				RequestQueueSize    uint32   `yaml:"request_queue_size"`
-				StartBlock          uint64   `yaml:"start_block"`
-				LookbackPeriod      uint64   `yaml:"lookback_period"`
+				MessageTransmitter  string   `yaml:"message-transmitter"`
+				ValidTokenAddresses []string `yaml:"valid-token-addresses"`
+				RequestQueueSize    uint32   `yaml:"request-queue-size"`
+				StartBlock          uint64   `yaml:"start-block"`
+				LookbackPeriod      uint64   `yaml:"lookback-period"`
 				Enabled             bool     `yaml:"enabled"`
 			} `yaml:"ethereum"`
 		} `yaml:"source"`
 		Destination struct {
 			Noble struct {
-				DomainId                   uint32   `yaml:"domain_id"`
+				DomainId                   uint32   `yaml:"domain-id"`
 				API                        string   `yaml:"api"`
 				RPC                        string   `yaml:"rpc"`
-				ChainId                    string   `yaml:"chain_id"`
-				GasLimit                   uint64   `yaml:"gas_limit"`
-				BroadcastRetries           int      `yaml:"broadcast_retries"`
-				BroadcastRetryInterval     int      `yaml:"broadcast_retry_interval"`
-				FilterForwardsByIbcChannel bool     `yaml:"filter_forwards_by_ibc_channel"`
-				ForwardingChannelWhitelist []string `yaml:"forwarding_channel_whitelist"`
+				ChainId                    string   `yaml:"chain-id"`
+				GasLimit                   uint64   `yaml:"gas-limit"`
+				BroadcastRetries           int      `yaml:"broadcast-retries"`
+				BroadcastRetryInterval     int      `yaml:"broadcast-retry-interval"`
+				FilterForwardsByIbcChannel bool     `yaml:"filter-forwards-by-ibc-channel"`
+				ForwardingChannelWhitelist []string `yaml:"forwarding-channel-whitelist"`
 			} `yaml:"noble"`
 		} `yaml:"destination"`
+		EnabledRoutes map[uint32]uint32 `yaml:"enabled-routes"`
+		Minters       map[uint32]struct {
+			MinterAddress    string `yaml:"minter-address"`
+			MinterPrivateKey string `yaml:"minter-private-key"`
+		} `yaml:"minters"`
 	} `yaml:"networks"`
-	EnabledRoutes map[uint32]uint32 `yaml:"enabled_routes"`
-	Minters       map[uint32]struct {
-		MinterAddress    string `yaml:"minter_address"`
-		MinterPrivateKey string `yaml:"minter_private_key"`
-	} `yaml:"enabled_routes"`
-	AttestationBaseUrl string `yaml:"attestation_base_url"`
+	AttestationBaseUrl   string `yaml:"attestation-base-url"`
+	ProcessorWorkerCount uint32 `yaml:"processor-worker-count"`
 }
 
 func Parse(file string) (cfg Config) {
 	data, _ := os.ReadFile(file)
 	_ = yaml.Unmarshal(data, &cfg)
-
 	return
 }

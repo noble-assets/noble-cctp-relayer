@@ -26,7 +26,7 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 		logger.Error("unable to parse MessageTransmitter abi", "err", err)
 	}
 
-	messageSent := messageTransmitterABI.Events["messageSent"]
+	messageSent := messageTransmitterABI.Events["MessageSent"]
 
 	ethClient, err := ethclient.DialContext(context.Background(), cfg.Networks.Source.Ethereum.RPC)
 	if err != nil {
@@ -34,15 +34,14 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 		os.Exit(1)
 	}
 
-	ethConfig := cfg.Networks.Source.Ethereum
-	messageTransmitterAddress := common.HexToAddress(ethConfig.MessageTransmitter)
+	messageTransmitterAddress := common.HexToAddress(cfg.Networks.Source.Ethereum.MessageTransmitter)
 	etherReader := etherstream.Reader{Backend: ethClient}
 
 	query := ethereum.FilterQuery{
 		Addresses: []common.Address{messageTransmitterAddress},
 		Topics:    [][]common.Hash{{messageSent.ID}},
-		FromBlock: big.NewInt(int64(ethConfig.StartBlock - ethConfig.LookbackPeriod)),
-		ToBlock:   big.NewInt(int64(ethConfig.StartBlock)),
+		FromBlock: big.NewInt(int64(cfg.Networks.Source.Ethereum.StartBlock - cfg.Networks.Source.Ethereum.LookbackPeriod)),
+		ToBlock:   big.NewInt(int64(cfg.Networks.Source.Ethereum.StartBlock)),
 	}
 
 	// websockets do not query history

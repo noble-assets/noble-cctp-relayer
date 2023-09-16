@@ -4,8 +4,6 @@ import (
 	"os"
 
 	"cosmossdk.io/log"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/strangelove-ventures/noble-cctp-relayer/config"
@@ -16,17 +14,12 @@ var (
 	cfgFile string
 	verbose bool
 
-	MessageTransmitterABI abi.ABI
-	MessageSent           abi.Event
-
-	EthClient *ethclient.Client
-
 	Logger log.Logger
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "noble-cctp-relayer",
-	Short: "A CLI tool for relaying CCTP messages to Noble",
+	Short: "A CLI tool for relaying CCTP messages",
 }
 
 func Execute() {
