@@ -22,7 +22,6 @@ var startCmd = &cobra.Command{
 // State represents all in progress burns/mints
 // Store represents terminal states
 var State = types.NewStateMap()
-var Store = types.NewStateMap()
 
 func Start(cmd *cobra.Command, args []string) {
 
@@ -44,11 +43,13 @@ func Start(cmd *cobra.Command, args []string) {
 // StartProcessor is the main processing pipeline.
 func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *types.MessageState) {
 	for {
-		msg := <-processingQueue
+		dequeuedMsg := <-processingQueue
 		// if this is the first time seeing this message, add it to the State
-		if _, ok := State.Load(msg.IrisLookupId); !ok {
+		msg, ok := State.Load(dequeuedMsg.IrisLookupId)
+		if !ok {
+			State.Store(dequeuedMsg.IrisLookupId, dequeuedMsg)
+			msg, _ = State.Load(dequeuedMsg.IrisLookupId)
 			msg.Status = types.Created
-			State.Store(msg.IrisLookupId, msg)
 		}
 
 		// if a filter's condition is met, mark as filtered
@@ -65,7 +66,6 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 				if msg.Status == types.Created && response.Status == "pending" {
 					msg.Status = types.Pending
 					msg.Updated = time.Now()
-					State.Store(msg.IrisLookupId, msg)
 					processingQueue <- msg
 					return
 				} else if response.Status == "complete" {
@@ -76,7 +76,6 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 				// add attestation retry intervals per domain here
 				time.Sleep(30 * time.Second)
 				// retry
-				State.Store(msg.IrisLookupId, msg)
 				processingQueue <- msg
 				return
 			}
@@ -88,13 +87,11 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 				response, err := noble.Broadcast(cfg, logger, *msg)
 				if err != nil {
 					logger.Error("unable to mint", "err", err)
-					State.Store(msg.IrisLookupId, msg)
 					processingQueue <- msg
 					return
 				}
 				if response.Code != 0 {
 					logger.Error("nonzero response code received", "err", err)
-					State.Store(msg.IrisLookupId, msg)
 					processingQueue <- msg
 					return
 				}
@@ -105,12 +102,6 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 
 			msg.Status = types.Complete
 			msg.Updated = time.Now()
-		}
-
-		// remove messages with terminal State, add to Store
-		if msg.Status == types.Complete || msg.Status == types.Failed || msg.Status == types.Filtered {
-			State.Delete(msg.IrisLookupId)
-			Store.Store(msg.IrisLookupId, msg)
 		}
 	}
 }

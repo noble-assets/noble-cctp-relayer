@@ -46,7 +46,7 @@ func TestProcessNewLog(t *testing.T) {
 
 }
 
-// created message -> check attestation -> mark as attested -> mark as complete -> remove from state, save in store
+// created message -> check attestation -> mark as attested -> mark as complete -> remove from state
 func TestProcessCreatedLog(t *testing.T) {
 	setupTest()
 	cfg.Networks.EnabledRoutes[0] = 5 // skip mint
@@ -57,14 +57,9 @@ func TestProcessCreatedLog(t *testing.T) {
 	expectedState := &types.MessageState{
 		IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
 		Status:            types.Created,
-		Attestation:       "",
 		SourceDomain:      0,
 		DestDomain:        5,
-		SourceTxHash:      "",
-		DestTxHash:        "",
-		MsgSentBytes:      nil,
 		DestinationCaller: emptyBz,
-		Channel:           "",
 	}
 
 	processingQueue <- expectedState
