@@ -39,13 +39,6 @@ func Start(cmd *cobra.Command, args []string) {
 	for i := 0; i < int(Cfg.ProcessorWorkerCount); i++ {
 		go StartProcessor(Cfg, Logger, processingQueue)
 	}
-
-	// constantly cycle through active MessageStates
-	for {
-		for _, msg := range State {
-			processingQueue <- &msg
-		}
-	}
 }
 
 // StartProcessor is the main processing pipeline.
@@ -58,7 +51,7 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 			State[msg.IrisLookupId] = *msg
 		}
 
-		// filters return true if they meet a condition
+		// if a filter's condition is met, mark as filtered
 		if filterDisabledCCTPRoutes(cfg, msg) ||
 			filterInvalidDestinationCallers(cfg, msg) ||
 			filterNonWhitelistedChannels(cfg, msg) {
@@ -72,6 +65,8 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 				if msg.Status == types.Created && response.Status == "pending" {
 					msg.Status = types.Pending
 					msg.Updated = time.Now()
+					State[msg.IrisLookupId] = *msg
+					processingQueue <- msg
 					return
 				} else if response.Status == "complete" {
 					msg.Status = types.Attested
@@ -80,6 +75,9 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 			} else {
 				// add attestation retry intervals per domain here
 				time.Sleep(30 * time.Second)
+				// retry
+				State[msg.IrisLookupId] = *msg
+				processingQueue <- msg
 				return
 			}
 		}
@@ -90,10 +88,14 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 				response, err := noble.Broadcast(cfg, logger, *msg)
 				if err != nil {
 					logger.Error("unable to mint", "err", err)
+					State[msg.IrisLookupId] = *msg
+					processingQueue <- msg
 					return
 				}
 				if response.Code != 0 {
 					logger.Error("nonzero response code received", "err", err)
+					State[msg.IrisLookupId] = *msg
+					processingQueue <- msg
 					return
 				}
 				// success!

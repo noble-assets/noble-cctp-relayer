@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"os"
 	"testing"
+	"time"
 )
 
 var cfg config.Config
@@ -24,17 +25,21 @@ func init() {
 
 func TestStartListener(t *testing.T) {
 
+	cfg.Networks.Source.Ethereum.StartBlock = 9702735
+	cfg.Networks.Source.Ethereum.LookbackPeriod = 0
 	go eth.StartListener(cfg, logger, processingQueue)
+
+	time.Sleep(5 * time.Second)
 
 	msg := <-processingQueue
 
 	expectedMsg := &types.MessageState{
-		IrisLookupId: "dad7bd811c877720b137f1a633c9acee528d91146c21fd29d574890c733bc07b",
+		IrisLookupId: "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
 		Type:         "mint",
 		Status:       "created",
 		SourceDomain: 0,
 		DestDomain:   4,
-		SourceTxHash: "0x04882ea24ba2ab9131d54883c0693f117b0330b958edc61c1352741269d4f2a8",
+		SourceTxHash: "0xe1d7729de300274ee3a2fd20ba179b14a8e3ffcd9d847c506b06760f0dad7802",
 	}
 	require.Equal(t, expectedMsg.IrisLookupId, msg.IrisLookupId)
 	require.Equal(t, expectedMsg.Type, msg.Type)

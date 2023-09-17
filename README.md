@@ -20,8 +20,8 @@ noble-cctp-relayer start --config testnet.yaml
 # Generating ABI Go bindings
 
 ```shell
-abi/abigen --abi abi/TokenMessenger.json --pkg cmd --type TokenMessenger --out cmd/TokenMessenger.go
-abi/abigen --abi abi/ERC20.json --pkg integration_testing --type ERC20 --out integration/ERC20.go
+abigen --abi cmd/ethereum/abi/TokenMessenger.json --pkg cmd --type TokenMessenger --out cmd/TokenMessenger.go
+abigen --abi cmd/ethereum/abi/ERC20.json --pkg integration_testing --type ERC20 --out integration/ERC20.go
 ```
 
 

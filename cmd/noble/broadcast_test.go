@@ -22,12 +22,12 @@ func init() {
 	cfg.Networks.Destination.Noble.BroadcastRetries = 1
 
 	logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.ErrorLevel))
-	cfg.Minters = map[uint32]struct {
+	cfg.Networks.Minters = map[uint32]struct {
 		MinterAddress    string "yaml:\"minter-address\""
 		MinterPrivateKey string "yaml:\"minter-private-key\""
 	}{}
 
-	cfg.Minters[4] = struct {
+	cfg.Networks.Minters[4] = struct {
 		MinterAddress    string "yaml:\"minter-address\""
 		MinterPrivateKey string "yaml:\"minter-private-key\""
 	}{

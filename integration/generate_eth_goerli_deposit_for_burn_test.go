@@ -1,19 +1,17 @@
 package integration_testing
 
 import (
-	"context"
 	"cosmossdk.io/log"
 	"encoding/json"
 	"fmt"
+	"github.com/cosmos/cosmos-sdk/testutil/testdata"
 	"github.com/cosmos/cosmos-sdk/types/bech32"
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd"
-	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/noble"
+	eth "github.com/strangelove-ventures/noble-cctp-relayer/cmd/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/config"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"github.com/stretchr/testify/require"
@@ -25,31 +23,47 @@ import (
 	"time"
 )
 
-var testCfg Config
-var mintCfg config.Config
+var testCfg Config    // for testing secrets
+var cfg config.Config // app config
 var logger log.Logger
 
 // goerli
 const TokenMessengerAddress = "0xd0c3da58f55358142b8d3e06c1c30c5c6114efe8"
 const UsdcAddress = "0x07865c6e87b9f70255377e024ace6630c1eaa37f"
-const NobleAddress = "noble1wa5g4at8yfmph96jxsvn0ynnf5qx73h0l6ecrs"
 
 func setupTest() func() {
 	// setup
 	testCfg = Parse("../.ignore/integration.yaml")
-	//mintCfg = config.Parse("") // TODO
+	cfg = config.Parse("../.ignore/testnet.yaml")
 	logger = log.NewLogger(os.Stdout)
 
 	return func() {
-		// tear-down
+		// teardown
 	}
+}
+
+type Coin struct {
+	Denom  string
+	Amount big.Int
 }
 
 // TestGenerateEthDepositForBurn generates and broadcasts a depositForBurn on Ethereum Goerli
 func TestGenerateEthDepositForBurn(t *testing.T) {
 	setupTest()
 
-	// client
+	processingQueue := make(chan *types.MessageState, 10)
+	go eth.StartListener(cfg, logger, processingQueue)
+	go cmd.StartProcessor(cfg, logger, processingQueue)
+
+	_, _, cosmosAddress := testdata.KeyTestPubAddr()
+	nobleAddress, _ := bech32.ConvertAndEncode("noble", cosmosAddress.Bytes())
+
+	fmt.Print("Minting to " + nobleAddress)
+
+	// verify noble address usdc amount
+	nobleAddressBalance := getBalance(nobleAddress)
+
+	// deposit for burn
 	client, err := ethclient.Dial(testCfg.Networks.Ethereum.RPC)
 	require.Nil(t, err)
 	defer client.Close()
@@ -66,18 +80,18 @@ func TestGenerateEthDepositForBurn(t *testing.T) {
 	tokenMessenger, err := cmd.NewTokenMessenger(common.HexToAddress(TokenMessengerAddress), client)
 	require.Nil(t, err)
 
-	_, mintRecipientBz, _ := bech32.DecodeAndConvert(NobleAddress)
+	_, mintRecipientBz, _ := bech32.DecodeAndConvert(nobleAddress)
 	mintRecipientPadded := append([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, mintRecipientBz...)
 	require.Nil(t, err)
 
-	// approve amount
 	erc20, err := NewERC20(common.HexToAddress(UsdcAddress), client)
 	_, err = erc20.Approve(auth, common.HexToAddress(TokenMessengerAddress), big.NewInt(99999))
 	require.Nil(t, err)
 
+	burnAmount := big.NewInt(1)
 	tx, err := tokenMessenger.DepositForBurn(
 		auth,
-		big.NewInt(21),
+		burnAmount,
 		4,
 		[32]byte(mintRecipientPadded),
 		common.HexToAddress(UsdcAddress),
@@ -86,73 +100,20 @@ func TestGenerateEthDepositForBurn(t *testing.T) {
 		logger.Error("Failed to update value: %v", err)
 	}
 	fmt.Printf("Update pending: https://goerli.etherscan.io/tx/0x%x\n", tx.Hash())
-	messageTransmitterAddress := common.HexToAddress("0x26413e8157CD32011E726065a5462e97dD4d03D9")
-	messageTransmitter, err := os.Open("../abi/MessageTransmitter.json")
-	require.Nil(t, err)
 
-	messageTransmitterAbi, err := abi.JSON(messageTransmitter)
-	require.Nil(t, err)
-	messageSent := messageTransmitterAbi.Events["MessageSent"]
-	require.Nil(t, err)
+	fmt.Println("Waiting 90 seconds for the attestation to finalize...")
+	time.Sleep(90 * time.Second)
 
-	query := ethereum.FilterQuery{
-		FromBlock: big.NewInt(
-			9702611),
-		Addresses: []common.Address{
-			messageTransmitterAddress,
-		},
-		Topics: [][]common.Hash{{messageSent.ID}},
-	}
+	// verify burned USDC has showed up in Noble
+	require.Equal(t, nobleAddressBalance+burnAmount.Uint64(), getBalance(nobleAddress))
 
-	var parsedMsg *types.MessageState
-	for i := 0; i < 5; i++ {
-		logs, err := client.FilterLogs(context.Background(), query)
-		require.Nil(t, err)
+	fmt.Println("Successfully minted at https://testnet.mintscan.io/noble-testnet/account/" + nobleAddress)
+}
 
-		for _, log := range logs {
-			parsedMsg, err = types.ToMessageState(messageTransmitterAbi, messageSent, &log)
-			if err == nil && parsedMsg.SourceTxHash == tx.Hash().Hex() {
-				fmt.Printf("Attestation url: https://iris-api-sandbox.circle.com/attestations/0x%s\n", parsedMsg.IrisLookupId)
-				goto Exit
-			}
-		}
-		fmt.Println("No logs found.  Retrying...")
-		time.Sleep(10 * time.Second)
-	}
-	fmt.Println("No logs found after 5 retries. Exiting...")
-	os.Exit(1)
-Exit:
-
-	fmt.Println("Waiting 1 minute for the attestation to finalize...")
-	time.Sleep(1 * time.Minute)
-	for i := 0; i < 20; i++ {
-
-		rawResponse, err := http.Get("https://iris-api-sandbox.circle.com/attestations/0x" + parsedMsg.IrisLookupId)
-		require.Nil(t, err)
-
-		body, err := io.ReadAll(rawResponse.Body)
-		require.Nil(t, err)
-
-		response := types.AttestationResponse{}
-		err = json.Unmarshal(body, &response)
-
-		if response.Status == "complete" {
-			parsedMsg.Attestation = response.Attestation
-			break
-		}
-
-		fmt.Print(".")
-		time.Sleep(2 * time.Second)
-	}
-
-	txResponse, err := noble.Broadcast(mintCfg, logger, *parsedMsg)
-	if err != nil {
-		fmt.Println("Error during broadcast: " + err.Error())
-		os.Exit(1)
-	}
-
-	require.Equal(t, uint32(0), txResponse.Code)
-	fmt.Printf("Minted at https://testnet.mintscan.io/noble-testnet/txs/%s\n", txResponse.TxHash)
-
-	fmt.Print("Finished")
+func getBalance(address string) uint64 {
+	rawResponse, _ := http.Get(fmt.Sprintf("https://api.testnet.noble.strange.love/cosmos/bank/v1beta1/balances/%s/by_denom?denom=uusdc", address))
+	body, _ := io.ReadAll(rawResponse.Body)
+	response := Coin{}
+	_ = json.Unmarshal(body, &response)
+	return response.Amount.Uint64()
 }

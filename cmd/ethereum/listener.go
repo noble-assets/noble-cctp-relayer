@@ -1,8 +1,10 @@
 package ethereum
 
 import (
+	"bytes"
 	"context"
 	"cosmossdk.io/log"
+	"embed"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -14,14 +16,17 @@ import (
 	"os"
 )
 
+//go:embed abi/MessageTransmitter.json
+var content embed.FS
+
 func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *types.MessageState) {
 	// set up client
-	messageTransmitter, err := os.Open("../../abi/MessageTransmitter.json")
+	messageTransmitter, err := content.ReadFile("abi/MessageTransmitter.json")
 	if err != nil {
 		logger.Error("unable to read MessageTransmitter abi", "err", err)
 		os.Exit(1)
 	}
-	messageTransmitterABI, err := abi.JSON(messageTransmitter)
+	messageTransmitterABI, err := abi.JSON(bytes.NewReader(messageTransmitter))
 	if err != nil {
 		logger.Error("unable to parse MessageTransmitter abi", "err", err)
 	}

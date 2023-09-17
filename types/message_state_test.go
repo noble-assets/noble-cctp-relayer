@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/pascaldekloe/etherstream"
+	"github.com/strangelove-ventures/noble-cctp-relayer/config"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,11 +17,15 @@ import (
 	"testing"
 )
 
-var eth_rpc = "wss://goerli.infura.io/ws/v3/d33a2875a8e6483da6ce10fe607eba31"
+var cfg config.Config
+
+func init() {
+	cfg = config.Parse("/Users/joel/src/noble-cctp-relayer/.ignore/testing.yaml")
+}
 
 func TestToMessageStateSuccess(t *testing.T) {
 
-	messageTransmitter, err := os.Open("../abi/MessageTransmitter.json")
+	messageTransmitter, err := os.Open("../cmd/ethereum/abi/MessageTransmitter.json")
 	require.Nil(t, err)
 
 	messageTransmitterABI, err := abi.JSON(messageTransmitter)
@@ -28,7 +33,7 @@ func TestToMessageStateSuccess(t *testing.T) {
 
 	messageSent := messageTransmitterABI.Events["MessageSent"]
 
-	ethClient, err := ethclient.DialContext(context.Background(), eth_rpc)
+	ethClient, err := ethclient.DialContext(context.Background(), cfg.Networks.Source.Ethereum.RPC)
 	require.Nil(t, err)
 
 	messageTransmitterAddress := common.HexToAddress("0x26413e8157CD32011E726065a5462e97dD4d03D9")
