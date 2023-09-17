@@ -3,7 +3,7 @@
 <p align="center"><img src=".github/assets/portal.png"></p>
 
 This service listens and forwards Cross Chain Transfer Protocol events.   
-It is lightweight and extensible; other source/destination chains can be easily added.
+Lightweight and easily extensible with more chains.
 
 Installation
 ```shell
