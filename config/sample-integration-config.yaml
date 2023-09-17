@@ -1,0 +1,9 @@
+networks:
+  ethereum:
+    rpc: "https://goerli.infura.io/v3/<key>"
+    private_key: ""
+    faucet_url: ""
+  noble:
+    rpc: ""
+    private_key: ""
+    faucet_url: ""

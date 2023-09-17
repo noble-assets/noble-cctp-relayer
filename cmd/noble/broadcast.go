@@ -27,16 +27,14 @@ import (
 )
 
 // BroadcastNoble broadcasts a message to Noble
-// TODO invalid type url
 func Broadcast(cfg config.Config, logger log.Logger, msg types.MessageState) (*sdktypes.TxResponse, error) {
 	// set up sdk context
-	// TODO move this out of BroadcastNoble
 	cdc := codec.NewProtoCodec(codectypes.NewInterfaceRegistry())
 	sdkContext := sdkClient.Context{
 		ChainID:          cfg.Networks.Destination.Noble.ChainId,
 		TxConfig:         xauthtx.NewTxConfig(cdc, xauthtx.DefaultSignModes),
 		AccountRetriever: xauthtypes.AccountRetriever{},
-		//NodeURI:          Cfg.Networks.Destination.Noble.RPC,
+		NodeURI:          cfg.Networks.Destination.Noble.RPC,
 	}
 
 	// build txn
@@ -104,23 +102,15 @@ func Broadcast(cfg config.Config, logger log.Logger, msg types.MessageState) (*s
 		return nil, err
 	}
 
-	// Generate a JSON string. // TODO delete
-	txJSONBytes, err := sdkContext.TxConfig.TxJSONEncoder()(txBuilder.GetTx())
-	if err != nil {
-		fmt.Println()
-	}
-	txJSON := string(txJSONBytes)
-	fmt.Println(txJSON)
-
 	// broadcast txn
 
 	// set up grpc sdkContext
 	grpcConn, err := grpc.Dial(
 		"noble-grpc.polkachu.com:21590",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultCallOptions(
-			grpc.ForceCodec(
-				codec.NewProtoCodec(codectypes.NewInterfaceRegistry()).GRPCCodec())),
+		//grpc.WithDefaultCallOptions(
+		//	grpc.ForceCodec(
+		//		codec.NewProtoCodec(codectypes.NewInterfaceRegistry()).GRPCCodec())),
 	)
 	if err != nil {
 		return nil, err

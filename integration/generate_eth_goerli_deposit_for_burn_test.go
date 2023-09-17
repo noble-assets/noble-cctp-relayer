@@ -61,7 +61,7 @@ func TestGenerateEthDepositForBurn(t *testing.T) {
 	fmt.Print("Minting to " + nobleAddress)
 
 	// verify noble address usdc amount
-	nobleAddressBalance := getBalance(nobleAddress)
+	nobleAddressBalance := getNobleBalance(nobleAddress)
 
 	// deposit for burn
 	client, err := ethclient.Dial(testCfg.Networks.Ethereum.RPC)
@@ -72,10 +72,6 @@ func TestGenerateEthDepositForBurn(t *testing.T) {
 	require.Nil(t, err)
 	auth, err := bind.NewKeyedTransactorWithChainID(privateKey, big.NewInt(5))
 	require.Nil(t, err)
-	// set nonce
-	//nextNonce, err := client.PendingNonceAt(context.Background(), auth.From)
-	//require.Nil(t, err)
-	//auth.Nonce = big.NewInt(int64(nextNonce))
 
 	tokenMessenger, err := cmd.NewTokenMessenger(common.HexToAddress(TokenMessengerAddress), client)
 	require.Nil(t, err)
@@ -105,12 +101,12 @@ func TestGenerateEthDepositForBurn(t *testing.T) {
 	time.Sleep(90 * time.Second)
 
 	// verify burned USDC has showed up in Noble
-	require.Equal(t, nobleAddressBalance+burnAmount.Uint64(), getBalance(nobleAddress))
+	require.Equal(t, nobleAddressBalance+burnAmount.Uint64(), getNobleBalance(nobleAddress))
 
 	fmt.Println("Successfully minted at https://testnet.mintscan.io/noble-testnet/account/" + nobleAddress)
 }
 
-func getBalance(address string) uint64 {
+func getNobleBalance(address string) uint64 {
 	rawResponse, _ := http.Get(fmt.Sprintf("https://api.testnet.noble.strange.love/cosmos/bank/v1beta1/balances/%s/by_denom?denom=uusdc", address))
 	body, _ := io.ReadAll(rawResponse.Body)
 	response := Coin{}

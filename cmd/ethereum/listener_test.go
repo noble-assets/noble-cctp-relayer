@@ -17,7 +17,7 @@ var logger log.Logger
 var processingQueue chan *types.MessageState
 
 func init() {
-	cfg = config.Parse("/Users/joel/src/noble-cctp-relayer/.ignore/testing.yaml")
+	cfg = config.Parse("../../.ignore/testing.yaml")
 
 	logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.ErrorLevel))
 	processingQueue = make(chan *types.MessageState, 10000)

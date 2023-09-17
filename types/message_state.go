@@ -29,12 +29,12 @@ type MessageState struct {
 	IrisLookupId      string // hex encoded MessageSent bytes
 	Type              string // 'mint' or 'forward'
 	Status            string // created, pending, attested, complete, failed, filtered
-	Attestation       string // hex encoded attestation, prepended with "0x"
+	Attestation       string // hex encoded attestation
 	SourceDomain      uint32 // source domain id
 	DestDomain        uint32 // destination domain id
 	SourceTxHash      string
 	DestTxHash        string
-	MsgSentBytes      []byte
+	MsgSentBytes      []byte // bytes of the MessageSent message transmitter event
 	DestinationCaller []byte // address authorized to call transaction
 	Channel           string // "channel-%d" if a forward, empty if not a forward
 	Created           time.Time
@@ -80,6 +80,7 @@ func ToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log) (mess
 	return nil, errors.New(fmt.Sprintf("unable to parse txn into message.  tx hash %s", log.TxHash.Hex()))
 }
 
+// DecodeDestinationCaller transforms an encoded Noble cctp address into a noble bech32 address
 // left padded input -> bech32 output
 func DecodeDestinationCaller(input []byte) (string, error) {
 	if len(input) <= 12 {

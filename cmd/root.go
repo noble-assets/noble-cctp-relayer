@@ -18,7 +18,7 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "noble-cctp-relayer",
+	Use:   "rly",
 	Short: "A CLI tool for relaying CCTP messages",
 }
 

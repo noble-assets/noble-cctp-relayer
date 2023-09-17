@@ -1,0 +1,35 @@
+networks:
+  source:
+    ethereum:
+      enabled: true
+      domain-id: 0
+      rpc: "wss://goerli.infura.io/ws/v3/<key>"
+      message-transmitter: "0x26413e8157CD32011E726065a5462e97dD4d03D9"
+      request-queue-size: 1000
+      start-block: 9573860
+      lookback-period: 10 # historical blocks to look back on launch
+  destination:
+    noble:
+      domain-id: 4
+      rpc: "https://rpc.testnet.noble.strange.love"
+      api: "https://api.testnet.noble.strange.love"
+      chain-id: "grand-1"
+      gas-limit: 1
+      broadcast-retries: 1 # number of times to attempt the broadcast
+      broadcast-retry-interval: 60 # time between retries in seconds
+      filter-forwards-by-ibc-channel: false
+      forwarding-channel-whitelist:
+        - "channel-10" # osmo-test-5
+        - "channel-15" # dydx-testnet-2
+  # source domain id -> destination domain id
+  enabled-routes:
+    0: 4 # ethereum to noble
+    4: 0 # noble to ethereum
+  # destination domain -> minter metadata
+  minters:
+    4:
+      minter-address: "noble1...."
+      minter-private-key: "12345"
+
+attestation-base-url: "https://iris-api-sandbox.circle.com/attestations/"
+processor-worker-count: 16

@@ -2,8 +2,8 @@
 
 <p align="center"><img src=".github/assets/portal.png"></p>
 
-This service listens for Cross Chain Transfer Protocol events and forwards them to their destinations.   
-It is lightweight and extensible.  Other source/destination chains can be easily added.
+This service listens and forwards Cross Chain Transfer Protocol events.   
+It is lightweight and extensible; other source/destination chains can be easily added.
 
 Installation
 ```shell
@@ -14,7 +14,7 @@ go install
 
 Running the relayer
 ```shell
-noble-cctp-relayer start --config testnet.yaml
+rly start --config ./config/sample-app-config.yaml
 ```
 
 # Generating ABI Go bindings
@@ -25,8 +25,7 @@ abigen --abi cmd/ethereum/abi/ERC20.json --pkg integration_testing --type ERC20 
 ```
 
 
-Store
-
+State
 | IrisLookupId | Type    | Status   | SourceDomain | DestDomain | SourceTxHash  | DestTxHash | MsgSentBytes | Created | Updated |
 |:-------------|:--------|:---------|:-------------|:-----------|:--------------|:-----------|:-------------|:--------|:--------|
 | 0x123        | Mint    | Created  | 0            | 4          | 0x123         | ABC123     | bytes...     | date    | date    |

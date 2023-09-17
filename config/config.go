@@ -10,14 +10,13 @@ type Config struct {
 	Networks struct {
 		Source struct {
 			Ethereum struct {
-				DomainId            uint32   `yaml:"domain-id"`
-				RPC                 string   `yaml:"rpc"`
-				MessageTransmitter  string   `yaml:"message-transmitter"`
-				ValidTokenAddresses []string `yaml:"valid-token-addresses"`
-				RequestQueueSize    uint32   `yaml:"request-queue-size"`
-				StartBlock          uint64   `yaml:"start-block"`
-				LookbackPeriod      uint64   `yaml:"lookback-period"`
-				Enabled             bool     `yaml:"enabled"`
+				DomainId           uint32 `yaml:"domain-id"`
+				RPC                string `yaml:"rpc"`
+				MessageTransmitter string `yaml:"message-transmitter"`
+				RequestQueueSize   uint32 `yaml:"request-queue-size"`
+				StartBlock         uint64 `yaml:"start-block"`
+				LookbackPeriod     uint64 `yaml:"lookback-period"`
+				Enabled            bool   `yaml:"enabled"`
 			} `yaml:"ethereum"`
 		} `yaml:"source"`
 		Destination struct {

@@ -20,7 +20,7 @@ import (
 var cfg config.Config
 
 func init() {
-	cfg = config.Parse("/Users/joel/src/noble-cctp-relayer/.ignore/testing.yaml")
+	cfg = config.Parse("../.ignore/testing.yaml")
 }
 
 func TestToMessageStateSuccess(t *testing.T) {
