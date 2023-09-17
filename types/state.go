@@ -5,7 +5,7 @@ import (
 )
 
 // StateMap wraps sync.Map with type safety
-// maps iris api lookup id -> MessageState
+// maps source tx hash -> MessageState
 type StateMap struct {
 	internal sync.Map
 }

@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"github.com/gin-gonic/gin"
+	"net/http"
 	"os"
 
 	"cosmossdk.io/log"
@@ -45,5 +47,24 @@ func init() {
 		Cfg = config.Parse(cfgFile)
 		Logger.Info("successfully parsed config file", "location", cfgFile)
 
+		// start api server
+		go startApi()
+
 	})
+}
+
+func startApi() {
+	router := gin.Default()
+	router.GET("/tx/:hash", getTxByHash)
+	router.Run("localhost:8000")
+}
+
+func getTxByHash(c *gin.Context) {
+	id := c.Param("hash")
+
+	if message, ok := State.Load(id); ok {
+		c.IndentedJSON(http.StatusOK, message)
+		return
+	}
+	c.IndentedJSON(http.StatusNotFound, gin.H{"message": "message not found"})
 }

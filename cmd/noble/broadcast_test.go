@@ -46,8 +46,10 @@ func TestBroadcastNobleSuccess(t *testing.T) {
 		MsgSentBytes: msgBz,
 	}
 
-	txResponse, err := noble.Broadcast(cfg, logger, msg)
+	txResponse, err := noble.Broadcast(cfg, logger, &msg)
 	require.Nil(t, err)
 	require.Equal(t, txResponse, 0)
 
 }
+
+// Add test for failed broadcast and failed state

@@ -14,7 +14,7 @@ go install
 
 Running the relayer
 ```shell
-rly start --config ./config/sample-app-config.yaml
+noble-cctp-relayer start --config ./config/sample-app-config.yaml
 ```
 
 # Generating ABI Go bindings

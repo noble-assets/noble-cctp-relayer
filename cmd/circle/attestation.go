@@ -8,13 +8,17 @@ import (
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"io"
 	"net/http"
+	"time"
 )
 
 // CheckAttestation checks the iris api for attestation status and returns true if attestation is complete
 func CheckAttestation(cfg config.Config, logger log.Logger, irisLookupId string) (*types.AttestationResponse, bool) {
 	logger.Info(fmt.Sprintf("CheckAttestation for %s%s%s", cfg.AttestationBaseUrl, "0x", irisLookupId))
 
-	rawResponse, err := http.Get(cfg.AttestationBaseUrl + "0x" + irisLookupId)
+	client := http.Client{
+		Timeout: 5 * time.Second,
+	}
+	rawResponse, err := client.Get(cfg.AttestationBaseUrl + "0x" + irisLookupId)
 	if rawResponse.StatusCode != http.StatusOK || err != nil {
 		logger.Debug("non 200 response received")
 		return nil, false

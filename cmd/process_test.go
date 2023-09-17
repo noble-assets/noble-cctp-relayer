@@ -30,7 +30,7 @@ func TestProcessNewLog(t *testing.T) {
 
 	emptyBz := make([]byte, 32)
 	expectedState := &types.MessageState{
-		IrisLookupId:      "1",
+		SourceTxHash:      "1",
 		SourceDomain:      0,
 		DestDomain:        4,
 		DestinationCaller: emptyBz,
@@ -40,7 +40,7 @@ func TestProcessNewLog(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	actualState, _ := cmd.State.Load(expectedState.IrisLookupId)
+	actualState, _ := cmd.State.Load(expectedState.SourceTxHash)
 
 	require.Equal(t, types.Created, actualState.Status)
 
@@ -55,6 +55,7 @@ func TestProcessCreatedLog(t *testing.T) {
 
 	emptyBz := make([]byte, 32)
 	expectedState := &types.MessageState{
+		SourceTxHash:      "123",
 		IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
 		Status:            types.Created,
 		SourceDomain:      0,
@@ -66,7 +67,7 @@ func TestProcessCreatedLog(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	actualState, ok := cmd.State.Load(expectedState.IrisLookupId)
+	actualState, ok := cmd.State.Load(expectedState.SourceTxHash)
 	require.True(t, ok)
 	require.Equal(t, types.Complete, actualState.Status)
 
@@ -82,6 +83,7 @@ func TestProcessDisabledCctpRoute(t *testing.T) {
 
 	emptyBz := make([]byte, 32)
 	expectedState := &types.MessageState{
+		SourceTxHash:      "123",
 		IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
 		Status:            types.Created,
 		SourceDomain:      0,
@@ -93,7 +95,7 @@ func TestProcessDisabledCctpRoute(t *testing.T) {
 
 	time.Sleep(2 * time.Second)
 
-	actualState, ok := cmd.State.Load(expectedState.IrisLookupId)
+	actualState, ok := cmd.State.Load(expectedState.SourceTxHash)
 	require.True(t, ok)
 	require.Equal(t, types.Filtered, actualState.Status)
 
@@ -109,6 +111,7 @@ func TestProcessInvalidDestinationCaller(t *testing.T) {
 	nonEmptyBytes = append(nonEmptyBytes, 0x1)
 
 	expectedState := &types.MessageState{
+		SourceTxHash:      "123",
 		IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
 		Status:            types.Created,
 		SourceDomain:      0,
@@ -120,7 +123,7 @@ func TestProcessInvalidDestinationCaller(t *testing.T) {
 
 	time.Sleep(2 * time.Second)
 
-	actualState, ok := cmd.State.Load(expectedState.IrisLookupId)
+	actualState, ok := cmd.State.Load(expectedState.SourceTxHash)
 	require.True(t, ok)
 	require.Equal(t, types.Filtered, actualState.Status)
 
@@ -135,6 +138,7 @@ func TestProcessNonWhitelistedChannel(t *testing.T) {
 
 	emptyBz := make([]byte, 32)
 	expectedState := &types.MessageState{
+		SourceTxHash:      "123",
 		IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
 		Status:            types.Created,
 		SourceDomain:      0,
@@ -146,7 +150,7 @@ func TestProcessNonWhitelistedChannel(t *testing.T) {
 
 	time.Sleep(2 * time.Second)
 
-	actualState, ok := cmd.State.Load(expectedState.IrisLookupId)
+	actualState, ok := cmd.State.Load(expectedState.SourceTxHash)
 	require.True(t, ok)
 	require.Equal(t, types.Filtered, actualState.Status)
 

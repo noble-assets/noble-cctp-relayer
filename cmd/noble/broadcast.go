@@ -27,7 +27,7 @@ import (
 )
 
 // BroadcastNoble broadcasts a message to Noble
-func Broadcast(cfg config.Config, logger log.Logger, msg types.MessageState) (*sdktypes.TxResponse, error) {
+func Broadcast(cfg config.Config, logger log.Logger, msg *types.MessageState) (*sdktypes.TxResponse, error) {
 	// set up sdk context
 	cdc := codec.NewProtoCodec(codectypes.NewInterfaceRegistry())
 	sdkContext := sdkClient.Context{
@@ -119,13 +119,13 @@ func Broadcast(cfg config.Config, logger log.Logger, msg types.MessageState) (*s
 
 	txClient := tx.NewServiceClient(grpcConn)
 
-	logger.Info(fmt.Sprintf(
-		"Broadcasting message for source domain %d to dest domain %d with tx hash %s",
-		msg.SourceDomain,
-		msg.DestDomain,
-		msg.SourceTxHash))
+	for attempt := 0; attempt <= cfg.Networks.Destination.Noble.BroadcastRetries; attempt++ {
+		logger.Info(fmt.Sprintf(
+			"Broadcasting message from %d to %d: with source tx hash %s",
+			msg.SourceDomain,
+			msg.DestDomain,
+			msg.SourceTxHash))
 
-	for attempt := 0; attempt < cfg.Networks.Destination.Noble.BroadcastRetries+1; attempt++ {
 		grpcSimRes, err := txClient.Simulate(
 			context.Background(),
 			&tx.SimulateRequest{TxBytes: txBytes},
@@ -133,6 +133,9 @@ func Broadcast(cfg config.Config, logger log.Logger, msg types.MessageState) (*s
 		if err != nil {
 			fmt.Println(grpcSimRes)
 			logger.Error(fmt.Sprintf("error during simulation: %s", err.Error()))
+			logger.Info(fmt.Sprintf("Retrying in %d seconds", cfg.Networks.Destination.Noble.BroadcastRetryInterval))
+			time.Sleep(time.Duration(cfg.Networks.Destination.Noble.BroadcastRetryInterval) * time.Second)
+			continue
 		}
 
 		grpcRes, err := txClient.BroadcastTx(
@@ -149,13 +152,12 @@ func Broadcast(cfg config.Config, logger log.Logger, msg types.MessageState) (*s
 			return grpcRes.TxResponse, nil
 		} else {
 			logger.Info("Failed to broadcast: nonzero error code")
-			// retry
-			if attempt < cfg.Networks.Destination.Noble.BroadcastRetryInterval-1 {
-				logger.Info(fmt.Sprintf("Retrying in %d seconds", cfg.Networks.Destination.Noble.BroadcastRetryInterval))
-				time.Sleep(time.Duration(cfg.Networks.Destination.Noble.BroadcastRetryInterval) * time.Second)
-			}
 		}
+		logger.Info(fmt.Sprintf("Retrying in %d seconds", cfg.Networks.Destination.Noble.BroadcastRetryInterval))
+		time.Sleep(time.Duration(cfg.Networks.Destination.Noble.BroadcastRetryInterval) * time.Second)
 	}
+	msg.Status = types.Failed
+
 	return nil, errors.New("reached max number of broadcast attempts")
 }
 

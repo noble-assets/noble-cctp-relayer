@@ -9,6 +9,7 @@ import (
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/noble"
 	"github.com/strangelove-ventures/noble-cctp-relayer/config"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
+	"sync"
 	"time"
 )
 
@@ -25,19 +26,23 @@ var State = types.NewStateMap()
 
 func Start(cmd *cobra.Command, args []string) {
 
+	var wg sync.WaitGroup
+	wg.Add(1)
 	// messageState processing queue
 	var processingQueue = make(chan *types.MessageState, 10000)
-
-	// listeners listen for events, parse them, and enqueue them to processingQueue
-	if Cfg.Networks.Source.Ethereum.Enabled {
-		go ethereum.StartListener(Cfg, Logger, processingQueue)
-	}
-	// ...register more chain listeners here
 
 	// spin up Processor worker pool
 	for i := 0; i < int(Cfg.ProcessorWorkerCount); i++ {
 		go StartProcessor(Cfg, Logger, processingQueue)
 	}
+
+	// listeners listen for events, parse them, and enqueue them to processingQueue
+	if Cfg.Networks.Source.Ethereum.Enabled {
+		ethereum.StartListener(Cfg, Logger, processingQueue)
+	}
+	// ...register more chain listeners here
+
+	wg.Wait()
 }
 
 // StartProcessor is the main processing pipeline.
@@ -45,10 +50,10 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 	for {
 		dequeuedMsg := <-processingQueue
 		// if this is the first time seeing this message, add it to the State
-		msg, ok := State.Load(dequeuedMsg.IrisLookupId)
+		msg, ok := State.Load(dequeuedMsg.SourceTxHash)
 		if !ok {
-			State.Store(dequeuedMsg.IrisLookupId, dequeuedMsg)
-			msg, _ = State.Load(dequeuedMsg.IrisLookupId)
+			State.Store(dequeuedMsg.SourceTxHash, dequeuedMsg)
+			msg, _ = State.Load(dequeuedMsg.SourceTxHash)
 			msg.Status = types.Created
 		}
 
@@ -70,6 +75,7 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 					return
 				} else if response.Status == "complete" {
 					msg.Status = types.Attested
+					msg.Attestation = response.Attestation
 					msg.Updated = time.Now()
 				}
 			} else {
@@ -84,7 +90,7 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 		if msg.Status == types.Attested {
 			switch msg.DestDomain {
 			case 4: // noble
-				response, err := noble.Broadcast(cfg, logger, *msg)
+				response, err := noble.Broadcast(cfg, logger, msg)
 				if err != nil {
 					logger.Error("unable to mint", "err", err)
 					processingQueue <- msg

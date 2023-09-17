@@ -100,7 +100,7 @@ func TestGenerateEthDepositForBurn(t *testing.T) {
 	fmt.Println("Waiting 90 seconds for the attestation to finalize...")
 	time.Sleep(90 * time.Second)
 
-	// verify burned USDC has showed up in Noble
+	// verify Noble balance
 	require.Equal(t, nobleAddressBalance+burnAmount.Uint64(), getNobleBalance(nobleAddress))
 
 	fmt.Println("Successfully minted at https://testnet.mintscan.io/noble-testnet/account/" + nobleAddress)
