@@ -58,7 +58,7 @@ func Broadcast(cfg config.Config, logger log.Logger, msg *types.MessageState) (*
 
 	// sign tx
 	privKey, _, _ := testdata.KeyTestPubAddr()
-	//privKey := Cfg.Minters[msg.DestDomain].MinterPrivateKey
+	//privKey := Cfg.Minters[msg.DestDomain].MinterPrivateKey // TODO switch back
 
 	// get account number, sequence
 	addrBytes, err := sdktypes.GetFromBech32(cfg.Networks.Minters[msg.DestDomain].MinterAddress, "noble")
@@ -119,7 +119,7 @@ func Broadcast(cfg config.Config, logger log.Logger, msg *types.MessageState) (*
 
 	txClient := tx.NewServiceClient(grpcConn)
 
-	for attempt := 0; attempt <= cfg.Networks.Destination.Noble.BroadcastRetries; attempt++ {
+	for attempt := 0; attempt <= cfg.Networks.Destination.Noble.BroadcastRetries+1; attempt++ {
 		logger.Info(fmt.Sprintf(
 			"Broadcasting message from %d to %d: with source tx hash %s",
 			msg.SourceDomain,

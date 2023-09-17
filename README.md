@@ -24,8 +24,18 @@ abigen --abi cmd/ethereum/abi/TokenMessenger.json --pkg cmd --type TokenMessenge
 abigen --abi cmd/ethereum/abi/ERC20.json --pkg integration_testing --type ERC20 --out integration/ERC20.go
 ```
 
+# Useful links
+Goerli USDC faucet
 
-State
+https://usdcfaucet.com/
+
+Goerli ETH faucet
+
+https://goerlifaucet.com/
+
+
+# State
+
 | IrisLookupId | Type    | Status   | SourceDomain | DestDomain | SourceTxHash  | DestTxHash | MsgSentBytes | Created | Updated |
 |:-------------|:--------|:---------|:-------------|:-----------|:--------------|:-----------|:-------------|:--------|:--------|
 | 0x123        | Mint    | Created  | 0            | 4          | 0x123         | ABC123     | bytes...     | date    | date    |

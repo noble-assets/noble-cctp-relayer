@@ -30,6 +30,9 @@ networks:
     4:
       minter-address: "noble1...."
       minter-private-key: "12345"
+circle:
+  attestation-base-url: "https://iris-api-sandbox.circle.com/attestations/"
+  fetch-retries: 0 # additional times to fetch an attestation
+  fetch-retry-interval: 3 # time between retries in seconds
 
-attestation-base-url: "https://iris-api-sandbox.circle.com/attestations/"
 processor-worker-count: 16
