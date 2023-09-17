@@ -26,7 +26,7 @@ import (
 	"time"
 )
 
-// BroadcastNoble broadcasts a message to Noble
+// Broadcast broadcasts a message to Noble
 func Broadcast(cfg config.Config, logger log.Logger, msg *types.MessageState) (*sdktypes.TxResponse, error) {
 	// set up sdk context
 	cdc := codec.NewProtoCodec(codectypes.NewInterfaceRegistry())
@@ -131,7 +131,7 @@ func Broadcast(cfg config.Config, logger log.Logger, msg *types.MessageState) (*
 			&tx.SimulateRequest{TxBytes: txBytes},
 		)
 		if err != nil {
-			fmt.Println(grpcSimRes)
+			fmt.Println(grpcSimRes) // todo remove
 			logger.Error(fmt.Sprintf("error during simulation: %s", err.Error()))
 			logger.Info(fmt.Sprintf("Retrying in %d seconds", cfg.Networks.Destination.Noble.BroadcastRetryInterval))
 			time.Sleep(time.Duration(cfg.Networks.Destination.Noble.BroadcastRetryInterval) * time.Second)
@@ -151,7 +151,7 @@ func Broadcast(cfg config.Config, logger log.Logger, msg *types.MessageState) (*
 		if grpcRes.TxResponse.Code == 0 {
 			return grpcRes.TxResponse, nil
 		} else {
-			logger.Info("Failed to broadcast: nonzero error code")
+			logger.Error("Failed to broadcast: nonzero error code")
 		}
 		logger.Info(fmt.Sprintf("Retrying in %d seconds", cfg.Networks.Destination.Noble.BroadcastRetryInterval))
 		time.Sleep(time.Duration(cfg.Networks.Destination.Noble.BroadcastRetryInterval) * time.Second)

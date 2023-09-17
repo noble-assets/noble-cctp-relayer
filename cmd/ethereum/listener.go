@@ -5,6 +5,7 @@ import (
 	"context"
 	"cosmossdk.io/log"
 	"embed"
+	"fmt"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -64,6 +65,8 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 			logger.Error("Unable to parse history log into MessageState, skipping")
 			continue
 		}
+		logger.Info(fmt.Sprintf("New historical msg from %d with tx hash %s", parsedMsg.SourceDomain, parsedMsg.SourceTxHash))
+
 		processingQueue <- parsedMsg
 	}
 
@@ -80,6 +83,8 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 					logger.Error("Unable to parse ws log into MessageState, skipping")
 					continue
 				}
+				logger.Info(fmt.Sprintf("New stream msg from %d with tx hash %s", parsedMsg.SourceDomain, parsedMsg.SourceTxHash))
+
 				processingQueue <- parsedMsg
 			}
 		}

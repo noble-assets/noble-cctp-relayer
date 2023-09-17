@@ -16,7 +16,7 @@ var cfg config.Config
 var logger log.Logger
 
 func init() {
-	cfg.AttestationBaseUrl = "https://iris-api-sandbox.circle.com/attestations/"
+	cfg.Circle.AttestationBaseUrl = "https://iris-api-sandbox.circle.com/attestations/"
 	cfg.Networks.Destination.Noble.ChainId = "grand-1"
 	cfg.Networks.Destination.Noble.RPC = "rpc.testnet.noble.strange.love:26657"
 	cfg.Networks.Destination.Noble.BroadcastRetries = 1

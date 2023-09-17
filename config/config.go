@@ -38,7 +38,12 @@ type Config struct {
 			MinterPrivateKey string `yaml:"minter-private-key"`
 		} `yaml:"minters"`
 	} `yaml:"networks"`
-	AttestationBaseUrl   string `yaml:"attestation-base-url"`
+	Circle struct {
+		AttestationBaseUrl string `yaml:"attestation-base-url"`
+		FetchRetries       uint32 `yaml:"fetch-retries"`
+		FetchRetryInterval uint32 `yaml:"fetch-retry-interval"`
+	} `yaml:"circle"`
+
 	ProcessorWorkerCount uint32 `yaml:"processor-worker-count"`
 }
 

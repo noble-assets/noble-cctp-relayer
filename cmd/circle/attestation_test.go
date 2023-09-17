@@ -14,7 +14,7 @@ var cfg config.Config
 var logger log.Logger
 
 func init() {
-	cfg.AttestationBaseUrl = "https://iris-api-sandbox.circle.com/attestations/"
+	cfg.Circle.AttestationBaseUrl = "https://iris-api-sandbox.circle.com/attestations/"
 	logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.ErrorLevel))
 }
 
