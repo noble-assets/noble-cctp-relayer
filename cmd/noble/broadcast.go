@@ -29,12 +29,12 @@ import (
 // Broadcast broadcasts a message to Noble
 func Broadcast(cfg config.Config, logger log.Logger, msg *types.MessageState) (*sdktypes.TxResponse, error) {
 	// set up sdk context
-	cdc := codec.NewProtoCodec(codectypes.NewInterfaceRegistry())
+	registry := codectypes.NewInterfaceRegistry()
+	nobletypes.RegisterInterfaces(registry)
+	cdc := codec.NewProtoCodec(registry)
 	sdkContext := sdkClient.Context{
-		ChainID:          cfg.Networks.Destination.Noble.ChainId,
 		TxConfig:         xauthtx.NewTxConfig(cdc, xauthtx.DefaultSignModes),
 		AccountRetriever: xauthtypes.AccountRetriever{},
-		NodeURI:          cfg.Networks.Destination.Noble.RPC,
 	}
 
 	// build txn
@@ -58,7 +58,7 @@ func Broadcast(cfg config.Config, logger log.Logger, msg *types.MessageState) (*
 
 	// sign tx
 	privKey, _, _ := testdata.KeyTestPubAddr()
-	//privKey := Cfg.Minters[msg.DestDomain].MinterPrivateKey // TODO switch back
+	//mnemonic := cfg.Networks.Minters[msg.DestDomain].MinterMnemonic
 
 	// get account number, sequence
 	addrBytes, err := sdktypes.GetFromBech32(cfg.Networks.Minters[msg.DestDomain].MinterAddress, "noble")
@@ -106,11 +106,9 @@ func Broadcast(cfg config.Config, logger log.Logger, msg *types.MessageState) (*
 
 	// set up grpc sdkContext
 	grpcConn, err := grpc.Dial(
-		"noble-grpc.polkachu.com:21590",
+		cfg.Networks.Destination.Noble.GRPC,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		//grpc.WithDefaultCallOptions(
-		//	grpc.ForceCodec(
-		//		codec.NewProtoCodec(codectypes.NewInterfaceRegistry()).GRPCCodec())),
+		//grpc.WithDefaultCallOptions(grpc.ForceCodec(codec.NewProtoCodec(codectypes.NewInterfaceRegistry()).GRPCCodec())),
 	)
 	if err != nil {
 		return nil, err
@@ -126,6 +124,7 @@ func Broadcast(cfg config.Config, logger log.Logger, msg *types.MessageState) (*
 			msg.DestDomain,
 			msg.SourceTxHash))
 
+		// try to simulate
 		grpcSimRes, err := txClient.Simulate(
 			context.Background(),
 			&tx.SimulateRequest{TxBytes: txBytes},
