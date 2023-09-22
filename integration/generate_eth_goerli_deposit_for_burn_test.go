@@ -56,7 +56,7 @@ func TestGenerateEthDepositForBurn(t *testing.T) {
 	go cmd.StartProcessor(cfg, logger, processingQueue)
 
 	_, _, cosmosAddress := testdata.KeyTestPubAddr()
-	nobleAddress, _ := bech32.ConvertAndEncode("noble", cosmosAddress.Bytes())
+	nobleAddress, _ := bech32.ConvertAndEncode("noble", cosmosAddress)
 
 	fmt.Print("Minting to " + nobleAddress)
 
@@ -76,15 +76,16 @@ func TestGenerateEthDepositForBurn(t *testing.T) {
 	tokenMessenger, err := cmd.NewTokenMessenger(common.HexToAddress(TokenMessengerAddress), client)
 	require.Nil(t, err)
 
-	_, mintRecipientBz, _ := bech32.DecodeAndConvert(nobleAddress)
-	mintRecipientPadded := append([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, mintRecipientBz...)
+	mintRecipientPadded := append([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, cosmosAddress...)
 	require.Nil(t, err)
 
 	erc20, err := NewERC20(common.HexToAddress(UsdcAddress), client)
 	_, err = erc20.Approve(auth, common.HexToAddress(TokenMessengerAddress), big.NewInt(99999))
 	require.Nil(t, err)
 
-	burnAmount := big.NewInt(1)
+	// flakey
+	burnAmount := big.NewInt(18)
+
 	tx, err := tokenMessenger.DepositForBurn(
 		auth,
 		burnAmount,
@@ -95,7 +96,9 @@ func TestGenerateEthDepositForBurn(t *testing.T) {
 	if err != nil {
 		logger.Error("Failed to update value: %v", err)
 	}
-	fmt.Printf("Update pending: https://goerli.etherscan.io/tx/0x%x\n", tx.Hash())
+
+	time.Sleep(2 * time.Second)
+	fmt.Printf("Update pending: https://goerli.etherscan.io/tx/%s\n", tx.Hash().String())
 
 	fmt.Println("Waiting 90 seconds for the attestation to finalize...")
 	time.Sleep(90 * time.Second)

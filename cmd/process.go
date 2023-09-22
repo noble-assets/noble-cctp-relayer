@@ -102,7 +102,7 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 					return
 				}
 				// success!
-				msg.DestTxHash = response.TxHash
+				msg.DestTxHash = response.Hash.String()
 			}
 			// ...add minters for different domains here
 

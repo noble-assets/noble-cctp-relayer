@@ -77,6 +77,7 @@ func Broadcast(
 	// sign tx
 
 	// get account number, sequence
+	fmt.Println(fmt.Sprintf("%s/cosmos/auth/v1beta1/accounts/%s", cfg.Networks.Destination.Noble.API, nobleAddress))
 	rawResp, err := http.Get(fmt.Sprintf("%s/cosmos/auth/v1beta1/accounts/%s", cfg.Networks.Destination.Noble.API, nobleAddress))
 	if err != nil {
 		return nil, errors.New("unable to fetch account number, sequence")
@@ -147,6 +148,7 @@ func Broadcast(
 			msg.DestDomain,
 			msg.SourceTxHash))
 
+		// TODO change to commit
 		rpcResponse, err := rpcClient.BroadcastTxSync(context.Background(), txBytes)
 		if err == nil && rpcResponse.Code == 0 {
 			msg.Status = types.Complete

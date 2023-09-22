@@ -6,7 +6,6 @@ type AccountResp struct {
 type Account struct {
 	Type          string `json:"@type"`
 	Address       string `json:"address"`
-	PubKey        string `json:"pub_key"`
 	AccountNumber string `json:"account_number"`
 	Sequence      string `json:"sequence"`
 }
