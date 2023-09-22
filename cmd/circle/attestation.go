@@ -19,11 +19,11 @@ func CheckAttestation(cfg config.Config, logger log.Logger, irisLookupId string)
 		Timeout: time.Duration(cfg.Circle.FetchRetryInterval) * time.Second,
 	}
 
-	for i := uint32(0); i < cfg.Circle.FetchRetries+1; i++ {
+	for i := 0; i <= cfg.Circle.FetchRetries; i++ {
 		rawResponse, err := client.Get(cfg.Circle.AttestationBaseUrl + "0x" + irisLookupId)
 		if rawResponse.StatusCode != http.StatusOK || err != nil {
 			logger.Debug("non 200 response received")
-			time.Sleep(2 * time.Second)
+			time.Sleep(time.Duration(cfg.Circle.FetchRetryInterval) * time.Second)
 			logger.Debug("retrying...")
 			continue
 		}

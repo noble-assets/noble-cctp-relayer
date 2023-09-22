@@ -65,7 +65,7 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 			logger.Error("Unable to parse history log into MessageState, skipping")
 			continue
 		}
-		logger.Info(fmt.Sprintf("New historical msg from %d with tx hash %s", parsedMsg.SourceDomain, parsedMsg.SourceTxHash))
+		logger.Info(fmt.Sprintf("New historical msg from source domain %d with tx hash %s", parsedMsg.SourceDomain, parsedMsg.SourceTxHash))
 
 		processingQueue <- parsedMsg
 	}

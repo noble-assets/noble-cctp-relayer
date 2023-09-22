@@ -32,7 +32,7 @@ func TestBroadcastNobleSuccess(t *testing.T) {
 
 	txResponse, err := noble.Broadcast(cfg, logger, &msg)
 	require.Nil(t, err)
-	require.Equal(t, txResponse, 0)
+	require.Equal(t, txResponse.Code, 0)
 
 }
 

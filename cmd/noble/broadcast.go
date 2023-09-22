@@ -75,49 +75,9 @@ func Broadcast(
 
 	// sign tx
 
-	// get account number, sequence
-	accountNumber, accountSequence := getAccountNumberSequence(cfg.Networks.Destination.Noble.API, nobleAddress)
-
 	addr, _ := bech32.ConvertAndEncode("noble", privKey.PubKey().Address())
 	if addr != nobleAddress {
 		return nil, fmt.Errorf("private key (%s) does not match noble address (%s)", addr, nobleAddress)
-	}
-
-	sigV2 := signing.SignatureV2{
-		PubKey: privKey.PubKey(),
-		Data: &signing.SingleSignatureData{
-			SignMode:  sdkContext.TxConfig.SignModeHandler().DefaultMode(),
-			Signature: nil,
-		},
-		Sequence: uint64(accountSequence),
-	}
-
-	signerData := xauthsigning.SignerData{
-		ChainID:       cfg.Networks.Destination.Noble.ChainId,
-		AccountNumber: uint64(accountNumber),
-		Sequence:      uint64(accountSequence),
-	}
-
-	txBuilder.SetSignatures(sigV2)
-
-	sigV2, err = clientTx.SignWithPrivKey(
-		sdkContext.TxConfig.SignModeHandler().DefaultMode(),
-		signerData,
-		txBuilder,
-		&privKey,
-		sdkContext.TxConfig,
-		uint64(accountSequence),
-	)
-
-	err = txBuilder.SetSignatures(sigV2)
-	if err != nil {
-		return nil, err
-	}
-
-	// Generated Protobuf-encoded bytes.
-	txBytes, err := sdkContext.TxConfig.TxEncoder()(txBuilder.GetTx())
-	if err != nil {
-		return nil, err
 	}
 
 	// broadcast txn
@@ -130,10 +90,53 @@ func Broadcast(
 
 	for attempt := 0; attempt <= cfg.Networks.Destination.Noble.BroadcastRetries; attempt++ {
 		logger.Info(fmt.Sprintf(
-			"Broadcasting message from %d to %d: with source tx hash %s",
+			"Broadcasting %s message from %d to %d: with source tx hash %s",
+			msg.Type,
 			msg.SourceDomain,
 			msg.DestDomain,
 			msg.SourceTxHash))
+
+		accountNumber, accountSequence, err := getAccountNumberSequence(cfg.Networks.Destination.Noble.API, nobleAddress)
+		if err != nil {
+			logger.Error("unable to retrieve account sequence")
+		}
+
+		sigV2 := signing.SignatureV2{
+			PubKey: privKey.PubKey(),
+			Data: &signing.SingleSignatureData{
+				SignMode:  sdkContext.TxConfig.SignModeHandler().DefaultMode(),
+				Signature: nil,
+			},
+			Sequence: uint64(accountSequence),
+		}
+
+		signerData := xauthsigning.SignerData{
+			ChainID:       cfg.Networks.Destination.Noble.ChainId,
+			AccountNumber: uint64(accountNumber),
+			Sequence:      uint64(accountSequence),
+		}
+
+		txBuilder.SetSignatures(sigV2)
+
+		sigV2, err = clientTx.SignWithPrivKey(
+			sdkContext.TxConfig.SignModeHandler().DefaultMode(),
+			signerData,
+			txBuilder,
+			&privKey,
+			sdkContext.TxConfig,
+			uint64(accountSequence),
+		)
+
+		err = txBuilder.SetSignatures(sigV2)
+		if err != nil {
+			return nil, err
+		}
+
+		// Generated Protobuf-encoded bytes.
+		txBytes, err := sdkContext.TxConfig.TxEncoder()(txBuilder.GetTx())
+		if err != nil {
+			return nil, err
+		}
 
 		// TODO change to commit
 		rpcResponse, err := rpcClient.BroadcastTxSync(context.Background(), txBytes)
@@ -171,19 +174,19 @@ func NewRPCClient(addr string, timeout time.Duration) (*rpchttp.HTTP, error) {
 	return rpcClient, nil
 }
 
-func getAccountNumberSequence(apiEndpoint string, address string) (int64, int64) {
-	rawResp, err := http.Get(fmt.Sprintf("%s/cosmos/auth/v1beta1/accounts/%s", cfg.Networks.Destination.Noble.API, address))
+func getAccountNumberSequence(urlBase string, address string) (int64, int64, error) {
+	rawResp, err := http.Get(fmt.Sprintf("%s/cosmos/auth/v1beta1/accounts/%s", urlBase, address))
 	if err != nil {
-		return nil, errors.New("unable to fetch account number, sequence")
+		return 0, 0, errors.New("unable to fetch account number, sequence")
 	}
 	body, _ := io.ReadAll(rawResp.Body)
 	var resp types.AccountResp
 	err = json.Unmarshal(body, &resp)
 	if err != nil {
-		return nil, errors.New("unable to parse account number, sequence")
+		return 0, 0, errors.New("unable to parse account number, sequence")
 	}
 	accountNumber, _ := strconv.ParseInt(resp.AccountNumber, 10, 0)
 	accountSequence, _ := strconv.ParseInt(resp.Sequence, 10, 0)
 
-	return accountNumber, accountSequence
+	return accountNumber, accountSequence, nil
 }

@@ -94,7 +94,7 @@ func TestGenerateEthDepositForBurnWithForward(t *testing.T) {
 		append([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, []byte("dydx")...)
 	destinationRecipient := append([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, cosmosAddress...)
 
-	burnAmount := big.NewInt(5)
+	burnAmount := big.NewInt(16)
 
 	tx, err := tokenMessengerWithMetadata.DepositForBurn(
 		auth,
@@ -117,20 +117,20 @@ func TestGenerateEthDepositForBurnWithForward(t *testing.T) {
 	time.Sleep(100 * time.Second)
 
 	// start up relayer
-	// set height to current block height
 	cfg.Networks.Source.Ethereum.StartBlock = getEthereumLatestBlockHeight(t)
-	cfg.Networks.Source.Ethereum.LookbackPeriod = 20
+	cfg.Networks.Source.Ethereum.LookbackPeriod = 10
 
 	fmt.Println("Relaying...")
 	processingQueue := make(chan *types.MessageState, 10)
 	go eth.StartListener(cfg, logger, processingQueue)
 	go cmd.StartProcessor(cfg, logger, processingQueue)
 
-	time.Sleep(30 * time.Second)
-	// verify Dydx balance
+	fmt.Println("Waiting 90 seconds for relays to process")
+	time.Sleep(90 * time.Second)
+	// verify dydx balance
 	require.Equal(t, originalDydx+burnAmount.Uint64(), getDydxBalance(dydxAddress))
 
-	fmt.Println("Successfully minted at https://testnet.mintscan.io/noble-testnet/account/" + nobleAddress)
+	fmt.Println("Successfully minted at https://testnet.mintscan.io/dydx-testnet/account/" + dydxAddress)
 }
 
 func getDydxBalance(address string) uint64 {

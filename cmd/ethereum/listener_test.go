@@ -2,6 +2,8 @@ package ethereum_test
 
 import (
 	"cosmossdk.io/log"
+	"encoding/base64"
+	"fmt"
 	"github.com/rs/zerolog"
 	eth "github.com/strangelove-ventures/noble-cctp-relayer/cmd/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/config"
@@ -48,4 +50,21 @@ func TestStartListener(t *testing.T) {
 	require.Equal(t, expectedMsg.DestDomain, msg.DestDomain)
 	require.Equal(t, expectedMsg.SourceTxHash, msg.SourceTxHash)
 
+}
+
+func TestDelete(t *testing.T) {
+	msg, err := base64.StdEncoding.DecodeString("AAAAAAAAAAAAAAAEAAAAAAADLPOAAAAAAAAAAAAAAADQW9PY9VNYFCUNPGBBWWXCYRTV6AAAAAAAAAAAAAAAAFFU6VEJFXEMT9EHICR70OCBNPEXAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB4ZCBOE59WJVN34CSS5MMMHQO38AAAAAAAAAAAAAAACCA5NNNTRTH8WX8RSVXQ038VTCMWAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAAAGUBF2ZI2NLY9WYVAZS0S/CMTBNE=")
+	require.NoError(t, err)
+
+	messageState, err := new(types.Message).Parse(msg)
+	require.NoError(t, err)
+
+	burnMessage, err := new(types.BurnMessage).Parse(msg)
+	fmt.Println()
+	metadataMessage, err := new(types.MetadataMessage).Parse(msg)
+	fmt.Println()
+
+	t.Logf("nonce: %d", messageState.Nonce)
+	fmt.Println(burnMessage)
+	fmt.Println(metadataMessage)
 }
