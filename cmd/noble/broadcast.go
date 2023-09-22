@@ -2,39 +2,41 @@ package noble
 
 import (
 	"context"
+	"strconv"
+
+	//authv1beta1 "cosmossdk.io/api/cosmos/auth/v1beta1"
 	"cosmossdk.io/log"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	nobletypes "github.com/circlefin/noble-cctp/x/cctp/types"
+	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
+	libclient "github.com/cometbft/cometbft/rpc/jsonrpc/client"
 	sdkClient "github.com/cosmos/cosmos-sdk/client"
 	clientTx "github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
-	"github.com/cosmos/cosmos-sdk/testutil/testdata"
+	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	sdktypes "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/types/tx"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	xauthsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	xauthtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
-	xauthtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/strangelove-ventures/noble-cctp-relayer/config"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"math/rand"
+	"io"
+	"net/http"
 	"time"
 )
 
 // Broadcast broadcasts a message to Noble
 func Broadcast(cfg config.Config, logger log.Logger, msg *types.MessageState) (*sdktypes.TxResponse, error) {
 	// set up sdk context
-	registry := codectypes.NewInterfaceRegistry()
-	nobletypes.RegisterInterfaces(registry)
-	cdc := codec.NewProtoCodec(registry)
+	interfaceRegistry := codectypes.NewInterfaceRegistry()
+	nobletypes.RegisterInterfaces(interfaceRegistry)
+	cdc := codec.NewProtoCodec(interfaceRegistry)
 	sdkContext := sdkClient.Context{
-		TxConfig:         xauthtx.NewTxConfig(cdc, xauthtx.DefaultSignModes),
-		AccountRetriever: xauthtypes.AccountRetriever{},
+		TxConfig: xauthtx.NewTxConfig(cdc, xauthtx.DefaultSignModes),
 	}
 
 	// build txn
@@ -43,8 +45,19 @@ func Broadcast(cfg config.Config, logger log.Logger, msg *types.MessageState) (*
 	if err != nil {
 		return nil, errors.New("unable to decode message attestation")
 	}
+
+	// get priv key
+	nobleAddress := cfg.Networks.Minters[4].MinterAddress
+	keyBz, _ := hex.DecodeString(cfg.Networks.Minters[4].MinterPrivateKey)
+	privKey := secp256k1.PrivKey{Key: keyBz}
+	f := sdktypes.Bech32ifyAddressBytes("noble", privKey.PubKey())
+	fmt.Println(f)
+	if err != nil {
+		return nil, errors.New("unable to convert priv key to noble address")
+	}
+
 	receiveMsg := nobletypes.NewMsgReceiveMessage(
-		cfg.Networks.Minters[msg.DestDomain].MinterAddress,
+		nobleAddress,
 		msg.MsgSentBytes,
 		attestationBytes,
 	)
@@ -54,18 +67,23 @@ func Broadcast(cfg config.Config, logger log.Logger, msg *types.MessageState) (*
 	}
 
 	txBuilder.SetGasLimit(cfg.Networks.Destination.Noble.GasLimit)
-	txBuilder.SetMemo(generateRelayerMessage())
+	txBuilder.SetMemo("Thank you for relaying with Strangelove")
 
 	// sign tx
-	privKey, _, _ := testdata.KeyTestPubAddr()
-	//mnemonic := cfg.Networks.Minters[msg.DestDomain].MinterMnemonic
 
 	// get account number, sequence
-	addrBytes, err := sdktypes.GetFromBech32(cfg.Networks.Minters[msg.DestDomain].MinterAddress, "noble")
+	rawResp, err := http.Get(fmt.Sprintf("%s/cosmos/auth/v1beta1/accounts/%s", cfg.Networks.Destination.Noble.API, nobleAddress))
 	if err != nil {
-		return nil, err
+		return nil, errors.New("unable to fetch account number, sequence")
 	}
-	accountNumber, accountSequence, err := sdkContext.AccountRetriever.GetAccountNumberSequence(sdkContext, addrBytes)
+	body, _ := io.ReadAll(rawResp.Body)
+	var resp types.AccountResp
+	err = json.Unmarshal(body, &resp)
+	if err != nil {
+		return nil, errors.New("unable to parse account number, sequence")
+	}
+	accountNumber, _ := strconv.ParseInt(resp.AccountNumber, 10, 0)
+	accountSequence, _ := strconv.ParseInt(resp.Sequence, 10, 0)
 
 	sigV2 := signing.SignatureV2{
 		PubKey: privKey.PubKey(),
@@ -73,22 +91,22 @@ func Broadcast(cfg config.Config, logger log.Logger, msg *types.MessageState) (*
 			SignMode:  sdkContext.TxConfig.SignModeHandler().DefaultMode(),
 			Signature: nil,
 		},
-		Sequence: accountSequence,
+		Sequence: uint64(accountSequence),
 	}
 
 	signerData := xauthsigning.SignerData{
 		ChainID:       cfg.Networks.Destination.Noble.ChainId,
-		AccountNumber: accountNumber,
-		Sequence:      accountSequence,
+		AccountNumber: uint64(accountNumber),
+		Sequence:      uint64(accountSequence),
 	}
 
 	sigV2, err = clientTx.SignWithPrivKey(
 		sdkContext.TxConfig.SignModeHandler().DefaultMode(),
 		signerData,
 		txBuilder,
-		privKey,
+		&privKey,
 		sdkContext.TxConfig,
-		accountSequence,
+		uint64(accountSequence),
 	)
 
 	err = txBuilder.SetSignatures(sigV2)
@@ -104,18 +122,11 @@ func Broadcast(cfg config.Config, logger log.Logger, msg *types.MessageState) (*
 
 	// broadcast txn
 
-	// set up grpc sdkContext
-	grpcConn, err := grpc.Dial(
-		cfg.Networks.Destination.Noble.GRPC,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		//grpc.WithDefaultCallOptions(grpc.ForceCodec(codec.NewProtoCodec(codectypes.NewInterfaceRegistry()).GRPCCodec())),
-	)
+	// set up client
+	rpcClient, err := NewRPCClient(cfg.Networks.Destination.Noble.RPC, 10*time.Second)
 	if err != nil {
-		return nil, err
+		return nil, errors.New("failed to set up rpc client")
 	}
-	defer grpcConn.Close()
-
-	txClient := tx.NewServiceClient(grpcConn)
 
 	for attempt := 0; attempt <= cfg.Networks.Destination.Noble.BroadcastRetries+1; attempt++ {
 		logger.Info(fmt.Sprintf(
@@ -124,51 +135,39 @@ func Broadcast(cfg config.Config, logger log.Logger, msg *types.MessageState) (*
 			msg.DestDomain,
 			msg.SourceTxHash))
 
-		// try to simulate
-		grpcSimRes, err := txClient.Simulate(
-			context.Background(),
-			&tx.SimulateRequest{TxBytes: txBytes},
-		)
+		rpcResponse, err := rpcClient.BroadcastTxSync(context.Background(), txBytes)
 		if err != nil {
-			fmt.Println(grpcSimRes) // todo remove
-			logger.Error(fmt.Sprintf("error during simulation: %s", err.Error()))
+			logger.Error(fmt.Sprintf("error during broadcast: %s", err.Error()))
 			logger.Info(fmt.Sprintf("Retrying in %d seconds", cfg.Networks.Destination.Noble.BroadcastRetryInterval))
 			time.Sleep(time.Duration(cfg.Networks.Destination.Noble.BroadcastRetryInterval) * time.Second)
 			continue
 		}
-
-		grpcRes, err := txClient.BroadcastTx(
-			context.Background(),
-			&tx.BroadcastTxRequest{
-				TxBytes: txBytes,
-				Mode:    tx.BroadcastMode_BROADCAST_MODE_SYNC,
-			},
-		)
-		if err != nil {
-			logger.Error(fmt.Sprintf("error during broadcasting: %s", err.Error()))
-		}
-		if grpcRes.TxResponse.Code == 0 {
-			return grpcRes.TxResponse, nil
+		// check tx response code
+		if rpcResponse.Code != 0 {
+			logger.Error(fmt.Sprintf("received non zero : %d", rpcResponse.Code))
+			logger.Info(fmt.Sprintf("Retrying in %d seconds", cfg.Networks.Destination.Noble.BroadcastRetryInterval))
+			time.Sleep(time.Duration(cfg.Networks.Destination.Noble.BroadcastRetryInterval) * time.Second)
+			continue
 		} else {
-			logger.Error("Failed to broadcast: nonzero error code")
+			logger.Info(fmt.Sprintf("success!"))
 		}
-		logger.Info(fmt.Sprintf("Retrying in %d seconds", cfg.Networks.Destination.Noble.BroadcastRetryInterval))
-		time.Sleep(time.Duration(cfg.Networks.Destination.Noble.BroadcastRetryInterval) * time.Second)
+
 	}
 	msg.Status = types.Failed
 
 	return nil, errors.New("reached max number of broadcast attempts")
 }
 
-func generateRelayerMessage() string {
-	quotes := []string{
-		"Your Commie has no regard for human life. Not even his own.",
-		"Gee, I wish we had one of them doomsday machines.",
-		"Of course, the whole point of a Doomsday machine is lost if you keep it a secret! Why didn't you tell the world?",
-		"Well, boys, this is it. Nuclear combat, toe to toe with the Rooskies.",
-		"Mister President, we must not allow a mine shaft gap!",
-		"Deterrence is the art of producing, in the mind of the enemy...the fear to attack!",
+// NewRPCClient initializes a new tendermint RPC client connected to the specified address.
+func NewRPCClient(addr string, timeout time.Duration) (*rpchttp.HTTP, error) {
+	httpClient, err := libclient.DefaultHTTPClient(addr)
+	if err != nil {
+		return nil, err
 	}
-	choice := rand.Intn(len(quotes))
-	return quotes[choice]
+	httpClient.Timeout = timeout
+	rpcClient, err := rpchttp.NewWithClient(addr, "/websocket", httpClient)
+	if err != nil {
+		return nil, err
+	}
+	return rpcClient, nil
 }

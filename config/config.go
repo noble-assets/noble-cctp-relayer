@@ -22,7 +22,8 @@ type Config struct {
 		Destination struct {
 			Noble struct {
 				DomainId                   uint32   `yaml:"domain-id"`
-				GRPC                       string   `yaml:"grpc"`
+				RPC                        string   `yaml:"rpc"`
+				API                        string   `yaml:"api"`
 				ChainId                    string   `yaml:"chain-id"`
 				GasLimit                   uint64   `yaml:"gas-limit"`
 				BroadcastRetries           int      `yaml:"broadcast-retries"`
@@ -33,8 +34,8 @@ type Config struct {
 		} `yaml:"destination"`
 		EnabledRoutes map[uint32]uint32 `yaml:"enabled-routes"`
 		Minters       map[uint32]struct {
-			MinterAddress  string `yaml:"minter-address"`
-			MinterMnemonic string `yaml:"minter-mnemonic"`
+			MinterAddress    string `yaml:"minter-address"`
+			MinterPrivateKey string `yaml:"minter-private-key"`
 		} `yaml:"minters"`
 	} `yaml:"networks"`
 	Circle struct {

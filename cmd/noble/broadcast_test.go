@@ -16,25 +16,8 @@ var cfg config.Config
 var logger log.Logger
 
 func init() {
-	cfg.Circle.AttestationBaseUrl = "https://iris-api-sandbox.circle.com/attestations/"
-	cfg.Networks.Destination.Noble.ChainId = "grand-1"
-	cfg.Networks.Destination.Noble.GRPC = "noble-grpc.polkachu.com:21590"
-	cfg.Networks.Destination.Noble.BroadcastRetries = 1
-
+	cfg = config.Parse("../../.ignore/broadcast_testing.yaml")
 	logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.ErrorLevel))
-	//cfg.Networks.Minters = map[uint32]struct {
-	//	MinterAddress    string "yaml:\"minter-address\""
-	//	Mnemonic string "yaml:\"mnemonic\""
-	//}{}
-	//
-	//cfg.Networks.Minters[4] = struct {
-	//	MinterAddress    string "yaml:\"minter-address\""
-	//	Mnemonic string "yaml:\"mnemonic\""
-	//}{
-	//	MinterAddress:    "noble1wa5g4at8yfmph96jxsvn0ynnf5qx73h0l6ecrs",
-	//	Mnemonic: "",
-	//}
-
 }
 
 func TestBroadcastNobleSuccess(t *testing.T) {
