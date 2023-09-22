@@ -4,7 +4,6 @@ import (
 	"context"
 	"strconv"
 
-	//authv1beta1 "cosmossdk.io/api/cosmos/auth/v1beta1"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -77,19 +76,7 @@ func Broadcast(
 	// sign tx
 
 	// get account number, sequence
-	fmt.Println(fmt.Sprintf("%s/cosmos/auth/v1beta1/accounts/%s", cfg.Networks.Destination.Noble.API, nobleAddress))
-	rawResp, err := http.Get(fmt.Sprintf("%s/cosmos/auth/v1beta1/accounts/%s", cfg.Networks.Destination.Noble.API, nobleAddress))
-	if err != nil {
-		return nil, errors.New("unable to fetch account number, sequence")
-	}
-	body, _ := io.ReadAll(rawResp.Body)
-	var resp types.AccountResp
-	err = json.Unmarshal(body, &resp)
-	if err != nil {
-		return nil, errors.New("unable to parse account number, sequence")
-	}
-	accountNumber, _ := strconv.ParseInt(resp.AccountNumber, 10, 0)
-	accountSequence, _ := strconv.ParseInt(resp.Sequence, 10, 0)
+	accountNumber, accountSequence := getAccountNumberSequence(cfg.Networks.Destination.Noble.API, nobleAddress)
 
 	addr, _ := bech32.ConvertAndEncode("noble", privKey.PubKey().Address())
 	if addr != nobleAddress {
@@ -141,7 +128,7 @@ func Broadcast(
 		return nil, errors.New("failed to set up rpc client")
 	}
 
-	for attempt := 0; attempt <= cfg.Networks.Destination.Noble.BroadcastRetries+1; attempt++ {
+	for attempt := 0; attempt <= cfg.Networks.Destination.Noble.BroadcastRetries; attempt++ {
 		logger.Info(fmt.Sprintf(
 			"Broadcasting message from %d to %d: with source tx hash %s",
 			msg.SourceDomain,
@@ -182,4 +169,21 @@ func NewRPCClient(addr string, timeout time.Duration) (*rpchttp.HTTP, error) {
 		return nil, err
 	}
 	return rpcClient, nil
+}
+
+func getAccountNumberSequence(apiEndpoint string, address string) (int64, int64) {
+	rawResp, err := http.Get(fmt.Sprintf("%s/cosmos/auth/v1beta1/accounts/%s", cfg.Networks.Destination.Noble.API, address))
+	if err != nil {
+		return nil, errors.New("unable to fetch account number, sequence")
+	}
+	body, _ := io.ReadAll(rawResp.Body)
+	var resp types.AccountResp
+	err = json.Unmarshal(body, &resp)
+	if err != nil {
+		return nil, errors.New("unable to parse account number, sequence")
+	}
+	accountNumber, _ := strconv.ParseInt(resp.AccountNumber, 10, 0)
+	accountSequence, _ := strconv.ParseInt(resp.Sequence, 10, 0)
+
+	return accountNumber, accountSequence
 }

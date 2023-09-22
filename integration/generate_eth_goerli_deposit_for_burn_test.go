@@ -58,7 +58,7 @@ func TestGenerateEthDepositForBurn(t *testing.T) {
 	_, _, cosmosAddress := testdata.KeyTestPubAddr()
 	nobleAddress, _ := bech32.ConvertAndEncode("noble", cosmosAddress)
 
-	fmt.Print("Minting to " + nobleAddress)
+	fmt.Println("Minting to " + nobleAddress)
 
 	// verify noble address usdc amount
 	nobleAddressBalance := getNobleBalance(nobleAddress)
@@ -84,7 +84,7 @@ func TestGenerateEthDepositForBurn(t *testing.T) {
 	require.Nil(t, err)
 
 	// flakey
-	burnAmount := big.NewInt(18)
+	burnAmount := big.NewInt(163)
 
 	tx, err := tokenMessenger.DepositForBurn(
 		auth,

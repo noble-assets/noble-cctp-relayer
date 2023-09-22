@@ -86,7 +86,7 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 				return
 			}
 		}
-		// if the message is attested to, try to mint
+		// if the message is attested to, try to broadcast
 		if msg.Status == types.Attested {
 			switch msg.DestDomain {
 			case 4: // noble
