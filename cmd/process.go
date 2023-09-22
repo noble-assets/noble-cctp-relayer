@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"cosmossdk.io/log"
+	"fmt"
 	"github.com/spf13/cobra"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/circle"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/ethereum"
@@ -50,10 +51,10 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 	for {
 		dequeuedMsg := <-processingQueue
 		// if this is the first time seeing this message, add it to the State
-		msg, ok := State.Load(dequeuedMsg.SourceTxHash)
+		msg, ok := State.Load(LookupKey(dequeuedMsg.Type, dequeuedMsg.SourceTxHash))
 		if !ok {
-			State.Store(dequeuedMsg.SourceTxHash, dequeuedMsg)
-			msg, _ = State.Load(dequeuedMsg.SourceTxHash)
+			State.Store(LookupKey(dequeuedMsg.Type, dequeuedMsg.SourceTxHash), dequeuedMsg)
+			msg, _ = State.Load(LookupKey(dequeuedMsg.Type, dequeuedMsg.SourceTxHash))
 			msg.Status = types.Created
 		}
 
@@ -144,6 +145,10 @@ func filterNonWhitelistedChannels(cfg config.Config, msg *types.MessageState) bo
 		}
 	}
 	return true
+}
+
+func LookupKey(messageType string, sourceTxHash string) string {
+	return fmt.Sprintf("%s-%s", messageType, sourceTxHash)
 }
 
 func init() {

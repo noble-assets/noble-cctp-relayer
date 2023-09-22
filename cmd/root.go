@@ -62,6 +62,7 @@ func startApi() {
 func getTxByHash(c *gin.Context) {
 	id := c.Param("hash")
 
+	// TODO use LookupKey(dequeuedMsg.Type, dequeuedMsg.SourceTxHash)
 	if message, ok := State.Load(id); ok {
 		c.IndentedJSON(http.StatusOK, message)
 		return
