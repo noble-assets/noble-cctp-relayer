@@ -5,32 +5,38 @@ import (
 	"strconv"
 
 	//authv1beta1 "cosmossdk.io/api/cosmos/auth/v1beta1"
-	"cosmossdk.io/log"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"time"
+
+	"cosmossdk.io/log"
 	nobletypes "github.com/circlefin/noble-cctp/x/cctp/types"
 	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
+	ctypes "github.com/cometbft/cometbft/rpc/core/types"
 	libclient "github.com/cometbft/cometbft/rpc/jsonrpc/client"
 	sdkClient "github.com/cosmos/cosmos-sdk/client"
 	clientTx "github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
-	sdktypes "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/types/bech32"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	xauthsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	xauthtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	"github.com/strangelove-ventures/noble-cctp-relayer/config"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
-	"io"
-	"net/http"
-	"time"
 )
 
 // Broadcast broadcasts a message to Noble
-func Broadcast(cfg config.Config, logger log.Logger, msg *types.MessageState) (*sdktypes.TxResponse, error) {
+func Broadcast(
+	cfg config.Config,
+	logger log.Logger,
+	msg *types.MessageState,
+) (*ctypes.ResultBroadcastTx, error) {
 	// set up sdk context
 	interfaceRegistry := codectypes.NewInterfaceRegistry()
 	nobletypes.RegisterInterfaces(interfaceRegistry)
@@ -50,8 +56,7 @@ func Broadcast(cfg config.Config, logger log.Logger, msg *types.MessageState) (*
 	nobleAddress := cfg.Networks.Minters[4].MinterAddress
 	keyBz, _ := hex.DecodeString(cfg.Networks.Minters[4].MinterPrivateKey)
 	privKey := secp256k1.PrivKey{Key: keyBz}
-	f := sdktypes.Bech32ifyAddressBytes("noble", privKey.PubKey())
-	fmt.Println(f)
+
 	if err != nil {
 		return nil, errors.New("unable to convert priv key to noble address")
 	}
@@ -85,6 +90,11 @@ func Broadcast(cfg config.Config, logger log.Logger, msg *types.MessageState) (*
 	accountNumber, _ := strconv.ParseInt(resp.AccountNumber, 10, 0)
 	accountSequence, _ := strconv.ParseInt(resp.Sequence, 10, 0)
 
+	addr, _ := bech32.ConvertAndEncode("noble", privKey.PubKey().Address())
+	if addr != nobleAddress {
+		return nil, fmt.Errorf("private key (%s) does not match noble address (%s)", addr, nobleAddress)
+	}
+
 	sigV2 := signing.SignatureV2{
 		PubKey: privKey.PubKey(),
 		Data: &signing.SingleSignatureData{
@@ -99,6 +109,8 @@ func Broadcast(cfg config.Config, logger log.Logger, msg *types.MessageState) (*
 		AccountNumber: uint64(accountNumber),
 		Sequence:      uint64(accountSequence),
 	}
+
+	txBuilder.SetSignatures(sigV2)
 
 	sigV2, err = clientTx.SignWithPrivKey(
 		sdkContext.TxConfig.SignModeHandler().DefaultMode(),
@@ -136,6 +148,10 @@ func Broadcast(cfg config.Config, logger log.Logger, msg *types.MessageState) (*
 			msg.SourceTxHash))
 
 		rpcResponse, err := rpcClient.BroadcastTxSync(context.Background(), txBytes)
+		if err == nil && rpcResponse.Code == 0 {
+			msg.Status = types.Complete
+			return rpcResponse, nil
+		}
 		if err != nil {
 			logger.Error(fmt.Sprintf("error during broadcast: %s", err.Error()))
 			logger.Info(fmt.Sprintf("Retrying in %d seconds", cfg.Networks.Destination.Noble.BroadcastRetryInterval))
@@ -143,15 +159,9 @@ func Broadcast(cfg config.Config, logger log.Logger, msg *types.MessageState) (*
 			continue
 		}
 		// check tx response code
-		if rpcResponse.Code != 0 {
-			logger.Error(fmt.Sprintf("received non zero : %d", rpcResponse.Code))
-			logger.Info(fmt.Sprintf("Retrying in %d seconds", cfg.Networks.Destination.Noble.BroadcastRetryInterval))
-			time.Sleep(time.Duration(cfg.Networks.Destination.Noble.BroadcastRetryInterval) * time.Second)
-			continue
-		} else {
-			logger.Info(fmt.Sprintf("success!"))
-		}
-
+		logger.Error(fmt.Sprintf("received non zero : %d - %s", rpcResponse.Code, rpcResponse.Log))
+		logger.Info(fmt.Sprintf("Retrying in %d seconds", cfg.Networks.Destination.Noble.BroadcastRetryInterval))
+		time.Sleep(time.Duration(cfg.Networks.Destination.Noble.BroadcastRetryInterval) * time.Second)
 	}
 	msg.Status = types.Failed
 

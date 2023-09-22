@@ -1,15 +1,16 @@
 package noble_test
 
 import (
-	"cosmossdk.io/log"
 	"encoding/hex"
+	"os"
+	"testing"
+
+	"cosmossdk.io/log"
 	"github.com/rs/zerolog"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/noble"
 	"github.com/strangelove-ventures/noble-cctp-relayer/config"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"github.com/stretchr/testify/require"
-	"os"
-	"testing"
 )
 
 var cfg config.Config
