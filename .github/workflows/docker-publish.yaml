@@ -14,7 +14,6 @@ env:
 jobs:
   build-and-push-image:
     runs-on: ubuntu-latest
-    environment: actions
     permissions:
       contents: read
       packages: write
