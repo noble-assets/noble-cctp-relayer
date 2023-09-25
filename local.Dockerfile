@@ -7,7 +7,7 @@ WORKDIR /src
 ARG GITAUTH
 
 RUN mkdir -p /root/.ssh; \
-    echo "$GITAUTH" > /root/.ssh/id_ed25519; \
+    echo "$GITAUTH" | base64 -d  > /root/.ssh/id_ed25519; \
     chmod 600 /root/.ssh/id_ed25519; \
     git config --global --add url."git@github.com:circlefin/noble-cctp.git".insteadOf "https://github.com/circlefin/noble-cctp"; \
     ssh-keyscan github.com >> /root/.ssh/known_hosts
