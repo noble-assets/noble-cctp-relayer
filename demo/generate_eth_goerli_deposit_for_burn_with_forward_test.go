@@ -94,7 +94,7 @@ func TestGenerateEthDepositForBurnWithForward(t *testing.T) {
 		append([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, []byte("dydx")...)
 	destinationRecipient := append([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, cosmosAddress2...)
 
-	burnAmount := big.NewInt(22)
+	burnAmount := big.NewInt(23)
 
 	tx, err := tokenMessengerWithMetadata.DepositForBurn(
 		auth,
