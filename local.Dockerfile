@@ -1,18 +1,8 @@
-FROM --platform=$BUILDPLATFORM golang:1.20-alpine AS build-env
+FROM golang:1.20-alpine AS build-env
 
-RUN apk add --update --no-cache curl make git libc-dev bash gcc linux-headers eudev-dev
-
-ARG TARGETARCH
-ARG BUILDARCH
-
-RUN if [ "${TARGETARCH}" = "arm64" ] && [ "${BUILDARCH}" != "arm64" ]; then \
-        wget -c https://musl.cc/aarch64-linux-musl-cross.tgz -O - | tar -xzvv --strip-components 1 -C /usr; \
-    elif [ "${TARGETARCH}" = "amd64" ] && [ "${BUILDARCH}" != "amd64" ]; then \
-        wget -c https://musl.cc/x86_64-linux-musl-cross.tgz -O - | tar -xzvv --strip-components 1 -C /usr; \
-    fi
+RUN apk add --update --no-cache openssh curl make git libc-dev bash gcc linux-headers eudev-dev
 
 WORKDIR /src
-
 # Only necessary while github.com/circlefin/noble-cctp is private
 ARG GITAUTH
 
@@ -24,17 +14,10 @@ RUN mkdir -p /root/.ssh; \
 
 ADD . .
 
-RUN if [ "${TARGETARCH}" = "arm64" ] && [ "${BUILDARCH}" != "arm64" ]; then \
-        export CC=aarch64-linux-musl-gcc CXX=aarch64-linux-musl-g++;\
-    elif [ "${TARGETARCH}" = "amd64" ] && [ "${BUILDARCH}" != "amd64" ]; then \
-        export CC=x86_64-linux-musl-gcc CXX=x86_64-linux-musl-g++; \
-    fi; \
-    GOPRIVATE='github.com/circlefin/noble-cctp'; \
+RUN GOPRIVATE='github.com/circlefin/noble-cctp'; \
     GOOS=linux GOARCH=$TARGETARCH CGO_ENABLED=1; \
     LDFLAGS='-linkmode external -extldflags "-static"'; \
     go install -ldflags "-s -w $LDFLAGS"
-
-RUN if [ -d "/go/bin/linux_${TARGETARCH}" ]; then mv /go/bin/linux_${TARGETARCH}/* /go/bin/; fi
 
 # Use minimal busybox from infra-toolkit image for final scratch image
 FROM ghcr.io/strangelove-ventures/infra-toolkit:v0.0.8 AS busybox-min
