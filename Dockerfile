@@ -29,8 +29,8 @@ RUN if [ "${TARGETARCH}" = "arm64" ] && [ "${BUILDARCH}" != "arm64" ]; then \
     elif [ "${TARGETARCH}" = "amd64" ] && [ "${BUILDARCH}" != "amd64" ]; then \
         export CC=x86_64-linux-musl-gcc CXX=x86_64-linux-musl-g++; \
     fi; \
+    export GOOS=linux GOARCH=$TARGETARCH CGO_ENABLED=1; \
     GOPRIVATE='github.com/circlefin/noble-cctp'; \
-    GOOS=linux GOARCH=$TARGETARCH CGO_ENABLED=1; \
     LDFLAGS='-linkmode external -extldflags "-static"'; \
     go install -ldflags "-s -w $LDFLAGS"
 

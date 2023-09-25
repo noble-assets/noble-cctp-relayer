@@ -14,8 +14,8 @@ RUN mkdir -p /root/.ssh; \
 
 ADD . .
 
-RUN GOPRIVATE='github.com/circlefin/noble-cctp'; \
-    GOOS=linux GOARCH=$TARGETARCH CGO_ENABLED=1; \
+RUN export GOOS=linux GOARCH=$TARGETARCH CGO_ENABLED=1; \
+    GOPRIVATE='github.com/circlefin/noble-cctp'; \
     LDFLAGS='-linkmode external -extldflags "-static"'; \
     go install -ldflags "-s -w $LDFLAGS"
 
