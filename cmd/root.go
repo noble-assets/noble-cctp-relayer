@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"context"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"os"
@@ -46,25 +48,40 @@ func init() {
 
 		Cfg = config.Parse(cfgFile)
 		Logger.Info("successfully parsed config file", "location", cfgFile)
+		// set defaults
+
+		// if start block not set, default to latest
+		if Cfg.Networks.Source.Ethereum.StartBlock == 0 {
+			client, _ := ethclient.Dial(Cfg.Networks.Source.Ethereum.RPC)
+			defer client.Close()
+			header, _ := client.HeaderByNumber(context.Background(), nil)
+			Cfg.Networks.Source.Ethereum.StartBlock = header.Number.Uint64()
+		}
 
 		// start api server
 		go startApi()
-
 	})
 }
 
 func startApi() {
 	router := gin.Default()
-	router.GET("/tx/:domain/:hash", getTxByHash)
+	router.GET("/tx/:hash", getTxByHash)
 	router.Run("localhost:8000")
 }
 
 func getTxByHash(c *gin.Context) {
-	domain := c.Param("domain")
 	id := c.Param("hash")
 
-	if message, ok := State.Load(LookupKey(domain, id)); ok {
+	found := false
+	if message, ok := State.Load(LookupKey("mint", id)); ok {
 		c.IndentedJSON(http.StatusOK, message)
+		found = true
+	}
+	if message, ok := State.Load(LookupKey("forward", id)); ok {
+		c.IndentedJSON(http.StatusOK, message)
+		found = true
+	}
+	if found {
 		return
 	}
 	c.IndentedJSON(http.StatusNotFound, gin.H{"message": "message not found"})

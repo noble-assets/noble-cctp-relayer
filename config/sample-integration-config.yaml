@@ -1,9 +1,4 @@
 networks:
   ethereum:
     rpc: "https://goerli.infura.io/v3/<key>"
-    private_key: ""
-    faucet_url: ""
-  noble:
-    rpc: ""
-    private_key: ""
-    faucet_url: ""
+    private_key: "..." # hex encoded, no 0x prefix

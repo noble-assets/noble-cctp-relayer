@@ -49,6 +49,11 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 		FromBlock: big.NewInt(int64(cfg.Networks.Source.Ethereum.StartBlock - cfg.Networks.Source.Ethereum.LookbackPeriod)),
 	}
 
+	logger.Info(fmt.Sprintf(
+		"Starting listener at block %d looking back %d blocks",
+		cfg.Networks.Source.Ethereum.StartBlock,
+		cfg.Networks.Source.Ethereum.LookbackPeriod))
+
 	// websockets do not query history
 	// https://github.com/ethereum/go-ethereum/issues/15063
 	stream, sub, history, err := etherReader.QueryWithHistory(context.Background(), &query)

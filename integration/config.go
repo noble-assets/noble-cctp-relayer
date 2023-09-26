@@ -48,12 +48,7 @@ type Config struct {
 		Ethereum struct {
 			RPC        string `yaml:"rpc"`
 			PrivateKey string `yaml:"private_key"`
-			FaucetUrl  string `yaml:"faucet_url"`
 		} `yaml:"ethereum"`
-		Noble struct {
-			RPC       string `yaml:"rpc"`
-			FaucetUrl string `yaml:"faucet_url"`
-		} `yaml:"noble"`
 	} `yaml:"networks"`
 }
 
