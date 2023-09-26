@@ -109,7 +109,7 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 				}
 			} else {
 				// add attestation retry intervals per domain here
-				logger.Info("Unable to find complete attestation for 0x" + msg.IrisLookupId + ".  Retrying...")
+				logger.Debug("Attestation is still processing for 0x" + msg.IrisLookupId + ".  Retrying...")
 				time.Sleep(10 * time.Second)
 				// retry
 				processingQueue <- msg

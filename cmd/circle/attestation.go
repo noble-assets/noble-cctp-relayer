@@ -13,7 +13,7 @@ import (
 
 // CheckAttestation checks the iris api for attestation status and returns true if attestation is complete
 func CheckAttestation(cfg config.Config, logger log.Logger, irisLookupId string) *types.AttestationResponse {
-	logger.Info(fmt.Sprintf("Checking attestation for %s%s%s", cfg.Circle.AttestationBaseUrl, "0x", irisLookupId))
+	logger.Debug(fmt.Sprintf("Checking attestation for %s%s%s", cfg.Circle.AttestationBaseUrl, "0x", irisLookupId))
 
 	client := http.Client{Timeout: 2 * time.Second}
 

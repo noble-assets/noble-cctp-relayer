@@ -25,25 +25,24 @@ import (
 func TestGenerateEthDepositForBurn(t *testing.T) {
 	setupTest()
 
-	// listen over websocket
+	// start up relayer
 	cfg.Networks.Source.Ethereum.StartBlock = getEthereumLatestBlockHeight(t)
+	cfg.Networks.Source.Ethereum.LookbackPeriod = 0
 
+	fmt.Println("Starting relayer...")
 	processingQueue := make(chan *types.MessageState, 10)
 	go eth.StartListener(cfg, logger, processingQueue)
 	go cmd.StartProcessor(cfg, logger, processingQueue, sequenceMap)
 
-	fmt.Println("Give listener a few seconds to start up")
-	time.Sleep(5 * time.Second)
-
+	fmt.Println("Building Ethereum depositForBurnWithMetadata txn...")
 	_, _, cosmosAddress := testdata.KeyTestPubAddr()
 	nobleAddress, _ := bech32.ConvertAndEncode("noble", cosmosAddress)
+	fmt.Println("Minting on Noble to https://testnet.mintscan.io/noble-testnet/account/" + nobleAddress)
 
-	fmt.Println("Minting to " + nobleAddress)
+	// verify noble usdc amount
+	originalNobleBalance := getNobleBalance(nobleAddress)
 
-	// verify noble address usdc amount
-	nobleAddressBalance := getNobleBalance(nobleAddress)
-
-	// deposit for burn
+	// deposit for burn with metadata
 	client, err := ethclient.Dial(testCfg.Networks.Ethereum.RPC)
 	require.Nil(t, err)
 	defer client.Close()
@@ -60,11 +59,10 @@ func TestGenerateEthDepositForBurn(t *testing.T) {
 	require.Nil(t, err)
 
 	erc20, err := NewERC20(common.HexToAddress(UsdcAddress), client)
-	_, err = erc20.Approve(auth, common.HexToAddress(TokenMessengerAddress), big.NewInt(99999))
+	_, err = erc20.Approve(auth, common.HexToAddress(TokenMessengerWithMetadataAddress), big.NewInt(99999))
 	require.Nil(t, err)
 
-	// flakey
-	burnAmount := big.NewInt(171)
+	var burnAmount = big.NewInt(1)
 
 	tx, err := tokenMessenger.DepositForBurn(
 		auth,
@@ -77,23 +75,26 @@ func TestGenerateEthDepositForBurn(t *testing.T) {
 		logger.Error("Failed to update value: %v", err)
 	}
 
-	time.Sleep(2 * time.Second)
+	time.Sleep(5 * time.Second)
 	fmt.Printf("Update pending: https://goerli.etherscan.io/tx/%s\n", tx.Hash().String())
 
-	fmt.Println("Waiting 90 seconds for the attestation to finalize...")
-	time.Sleep(90 * time.Second)
-
-	// verify Noble balance
-	require.Equal(t, nobleAddressBalance+burnAmount.Uint64(), getNobleBalance(nobleAddress))
-
-	fmt.Println("Successfully minted at https://testnet.mintscan.io/noble-testnet/account/" + nobleAddress)
+	fmt.Println("Checking noble wallet...")
+	for i := 0; i < 250; i++ {
+		if originalNobleBalance+burnAmount.Uint64() == getNobleBalance(nobleAddress) {
+			fmt.Println("Successfully minted at https://testnet.mintscan.io/noble-testnet/account/" + nobleAddress)
+			return
+		}
+		time.Sleep(1 * time.Second)
+	}
+	// verify noble balance
+	require.Equal(t, originalNobleBalance+burnAmount.Uint64(), getNobleBalance(nobleAddress))
 }
 
 func getNobleBalance(address string) uint64 {
 	rawResponse, _ := http.Get(fmt.Sprintf("https://api.testnet.noble.strange.love/cosmos/bank/v1beta1/balances/%s/by_denom?denom=uusdc", address))
 	body, _ := io.ReadAll(rawResponse.Body)
-	response := Coin{}
+	response := BalanceResponse{}
 	_ = json.Unmarshal(body, &response)
-	result, _ := strconv.ParseInt(response.Amount, 10, 0)
+	result, _ := strconv.ParseInt(response.Balance.Amount, 10, 0)
 	return uint64(result)
 }

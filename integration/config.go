@@ -2,7 +2,6 @@ package integration_testing
 
 import (
 	"cosmossdk.io/log"
-	"github.com/rs/zerolog"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/noble"
 	"github.com/strangelove-ventures/noble-cctp-relayer/config"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
@@ -26,7 +25,7 @@ func setupTest() func() {
 	// setup
 	testCfg = Parse("../.ignore/integration.yaml")
 	cfg = config.Parse("../.ignore/testnet.yaml")
-	logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.InfoLevel))
+	logger = log.NewLogger(os.Stdout)
 
 	_, nextMinterSequence, err := noble.GetNobleAccountNumberSequence(
 		cfg.Networks.Destination.Noble.API,
