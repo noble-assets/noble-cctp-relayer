@@ -1,8 +1,7 @@
-package demo
+package integration_testing
 
 import (
 	"context"
-	"cosmossdk.io/log"
 	"encoding/json"
 	"fmt"
 	"github.com/cosmos/cosmos-sdk/testutil/testdata"
@@ -13,49 +12,28 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd"
 	eth "github.com/strangelove-ventures/noble-cctp-relayer/cmd/ethereum"
-	"github.com/strangelove-ventures/noble-cctp-relayer/config"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"github.com/stretchr/testify/require"
 	"io"
 	"math/big"
 	"net/http"
-	"os"
 	"strconv"
 	"testing"
 	"time"
 )
 
-var testCfg Config    // for testing secrets
-var cfg config.Config // app config
-var logger log.Logger
-
-// goerli
-const TokenMessengerWithMetadataAddress = "0x1ae045d99236365cbdc1855acd2d2cfc232d04d1"
-const UsdcAddress = "0x07865c6e87b9f70255377e024ace6630c1eaa37f"
-
-type BalanceResponse struct {
-	Balance Coin `json:"balance"`
-}
-
-type Coin struct {
-	Denom  string `json:"denom"`
-	Amount string `json:"amount"`
-}
-
-func setupTest() func() {
-	// setup
-	testCfg = Parse("../.ignore/integration.yaml")
-	cfg = config.Parse("../.ignore/testnet.yaml")
-	logger = log.NewLogger(os.Stdout)
-
-	return func() {
-		// teardown
-	}
-}
-
 // TestGenerateEthDepositForBurn generates and broadcasts a depositForBurnWithMetadata on Ethereum Goerli
 func TestGenerateEthDepositForBurnWithForward(t *testing.T) {
 	setupTest()
+
+	// start up relayer
+	cfg.Networks.Source.Ethereum.StartBlock = getEthereumLatestBlockHeight(t)
+	cfg.Networks.Source.Ethereum.LookbackPeriod = 0
+
+	fmt.Println("Starting relayer...")
+	processingQueue := make(chan *types.MessageState, 10)
+	go eth.StartListener(cfg, logger, processingQueue)
+	go cmd.StartProcessor(cfg, logger, processingQueue, sequenceMap)
 
 	fmt.Println("Building Ethereum depositForBurnWithMetadata txn...")
 	_, _, cosmosAddress := testdata.KeyTestPubAddr()
@@ -94,14 +72,14 @@ func TestGenerateEthDepositForBurnWithForward(t *testing.T) {
 		append([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, []byte("dydx")...)
 	destinationRecipient := append([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, cosmosAddress2...)
 
-	burnAmount := big.NewInt(23)
+	var BurnAmount = big.NewInt(1)
 
 	tx, err := tokenMessengerWithMetadata.DepositForBurn(
 		auth,
 		channel,                           // channel
 		[32]byte(destinationBech32Prefix), // destinationBech32Prefix
 		[32]byte(destinationRecipient),    // destinationRecipient
-		burnAmount,                        // amount
+		BurnAmount,                        // amount
 		[32]byte(mintRecipientPadded),     // mint recipient
 		common.HexToAddress(UsdcAddress),  // burn token
 		[]byte{},                          // memo
@@ -113,24 +91,16 @@ func TestGenerateEthDepositForBurnWithForward(t *testing.T) {
 	time.Sleep(5 * time.Second)
 	fmt.Printf("Update pending: https://goerli.etherscan.io/tx/%s\n", tx.Hash().String())
 
-	fmt.Println("Waiting 100 seconds for the attestation to finalize...")
-	time.Sleep(100 * time.Second)
-
-	// start up relayer
-	cfg.Networks.Source.Ethereum.StartBlock = getEthereumLatestBlockHeight(t)
-	cfg.Networks.Source.Ethereum.LookbackPeriod = 10
-
-	fmt.Println("Relaying...")
-	processingQueue := make(chan *types.MessageState, 10)
-	go eth.StartListener(cfg, logger, processingQueue)
-	go cmd.StartProcessor(cfg, logger, processingQueue)
-
-	fmt.Println("Waiting 90 seconds for relays to process")
-	time.Sleep(90 * time.Second)
+	fmt.Println("Checking dydx wallet...")
+	for i := 0; i < 250; i++ {
+		if originalDydx+BurnAmount.Uint64() == getDydxBalance(dydxAddress) {
+			fmt.Println("Successfully minted at https://testnet.mintscan.io/dydx-testnet/account/" + dydxAddress)
+			return
+		}
+		time.Sleep(1 * time.Second)
+	}
 	// verify dydx balance
-	require.Equal(t, originalDydx+burnAmount.Uint64(), getDydxBalance(dydxAddress))
-
-	fmt.Println("Successfully minted at https://testnet.mintscan.io/dydx-testnet/account/" + dydxAddress)
+	require.Equal(t, originalDydx+BurnAmount.Uint64(), getDydxBalance(dydxAddress))
 }
 
 func getDydxBalance(address string) uint64 {

@@ -12,34 +12,28 @@ import (
 )
 
 // CheckAttestation checks the iris api for attestation status and returns true if attestation is complete
-func CheckAttestation(cfg config.Config, logger log.Logger, irisLookupId string) (*types.AttestationResponse, bool) {
+func CheckAttestation(cfg config.Config, logger log.Logger, irisLookupId string) *types.AttestationResponse {
 	logger.Info(fmt.Sprintf("Checking attestation for %s%s%s", cfg.Circle.AttestationBaseUrl, "0x", irisLookupId))
 
-	client := http.Client{
-		Timeout: time.Duration(cfg.Circle.FetchRetryInterval) * time.Second,
+	client := http.Client{Timeout: 2 * time.Second}
+
+	rawResponse, err := client.Get(cfg.Circle.AttestationBaseUrl + "0x" + irisLookupId)
+	if rawResponse.StatusCode != http.StatusOK || err != nil {
+		logger.Debug("non 200 response received")
+		return nil
+	}
+	body, err := io.ReadAll(rawResponse.Body)
+	if err != nil {
+		logger.Debug("unable to parse message body")
+		return nil
 	}
 
-	for i := 0; i <= cfg.Circle.FetchRetries; i++ {
-		rawResponse, err := client.Get(cfg.Circle.AttestationBaseUrl + "0x" + irisLookupId)
-		if rawResponse.StatusCode != http.StatusOK || err != nil {
-			logger.Debug("non 200 response received")
-			time.Sleep(time.Duration(cfg.Circle.FetchRetryInterval) * time.Second)
-			logger.Debug("retrying...")
-			continue
-		}
-		body, err := io.ReadAll(rawResponse.Body)
-		if err != nil {
-			logger.Debug("unable to parse message body")
-			return nil, false
-		}
-
-		response := types.AttestationResponse{}
-		err = json.Unmarshal(body, &response)
-		if err != nil {
-			logger.Debug("unable to unmarshal response")
-			return nil, false
-		}
-		return &response, true
+	response := types.AttestationResponse{}
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		logger.Debug("unable to unmarshal response")
+		return nil
 	}
-	return nil, false
+
+	return &response
 }

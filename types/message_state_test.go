@@ -20,7 +20,7 @@ import (
 var cfg config.Config
 
 func init() {
-	cfg = config.Parse("../.ignore/testing.yaml")
+	cfg = config.Parse("../.ignore/unit_tests.yaml")
 }
 
 func TestToMessageStateSuccess(t *testing.T) {

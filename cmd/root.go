@@ -55,15 +55,15 @@ func init() {
 
 func startApi() {
 	router := gin.Default()
-	router.GET("/tx/:hash", getTxByHash)
+	router.GET("/tx/:domain/:hash", getTxByHash)
 	router.Run("localhost:8000")
 }
 
 func getTxByHash(c *gin.Context) {
+	domain := c.Param("domain")
 	id := c.Param("hash")
 
-	// TODO use LookupKey(dequeuedMsg.Type, dequeuedMsg.SourceTxHash)
-	if message, ok := State.Load(id); ok {
+	if message, ok := State.Load(LookupKey(domain, id)); ok {
 		c.IndentedJSON(http.StatusOK, message)
 		return
 	}

@@ -17,23 +17,18 @@ Running the relayer
 noble-cctp-relayer start --config ./config/sample-app-config.yaml
 ```
 
-# Generating ABI Go bindings
+# Generating Go ABI bindings
 
 ```shell
 abigen --abi cmd/ethereum/abi/TokenMessenger.json --pkg cmd --type TokenMessenger --out cmd/TokenMessenger.go
 abigen --abi cmd/ethereum/abi/TokenMessengerWithMetadata.json --pkg cmd --type TokenMessengerWithMetadata --out cmd/TokenMessengerWithMetadata.go
 abigen --abi cmd/ethereum/abi/ERC20.json --pkg integration_testing --type ERC20 --out integration/ERC20.go
-abigen --abi cmd/ethereum/abi/ERC20.json --pkg demo --type ERC20 --out demo/ERC20.go
 ```
 
 # Useful links
-Goerli USDC faucet
+[Goerli USDC faucet](https://usdcfaucet.com/)
 
-https://usdcfaucet.com/
-
-Goerli ETH faucet
-
-https://goerlifaucet.com/
+[Goerli ETH faucet](https://goerlifaucet.com/)
 
 
 # State

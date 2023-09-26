@@ -10,6 +10,7 @@ import (
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/noble"
 	"github.com/strangelove-ventures/noble-cctp-relayer/config"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
+	"os"
 	"sync"
 	"time"
 )
@@ -25,16 +26,38 @@ var startCmd = &cobra.Command{
 // Store represents terminal states
 var State = types.NewStateMap()
 
+// SequenceMap maps the domain -> the equivalent minter address sequence/nonce
+var sequenceMap = types.NewSequenceMap()
+
 func Start(cmd *cobra.Command, args []string) {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
+
+	// initialize minter account sequences
+	for key, _ := range Cfg.Networks.Minters {
+		switch key {
+		case 4:
+			_, nextMinterSequence, err := noble.GetNobleAccountNumberSequence(
+				Cfg.Networks.Destination.Noble.API,
+				Cfg.Networks.Minters[4].MinterAddress)
+
+			if err != nil {
+				Logger.Error("Error retrieving account sequence")
+				os.Exit(1)
+			}
+			sequenceMap.Put(key, nextMinterSequence)
+		}
+
+		// ...initialize more here
+	}
+
 	// messageState processing queue
 	var processingQueue = make(chan *types.MessageState, 10000)
 
 	// spin up Processor worker pool
 	for i := 0; i < int(Cfg.ProcessorWorkerCount); i++ {
-		go StartProcessor(Cfg, Logger, processingQueue)
+		go StartProcessor(Cfg, Logger, processingQueue, sequenceMap)
 	}
 
 	// listeners listen for events, parse them, and enqueue them to processingQueue
@@ -47,7 +70,7 @@ func Start(cmd *cobra.Command, args []string) {
 }
 
 // StartProcessor is the main processing pipeline.
-func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *types.MessageState) {
+func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *types.MessageState, sequenceMap *types.SequenceMap) {
 	for {
 		dequeuedMsg := <-processingQueue
 		// if this is the first time seeing this message, add it to the State
@@ -67,13 +90,18 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 
 		// if the message is burned or pending, check for an attestation
 		if msg.Status == types.Created || msg.Status == types.Pending {
-			response, exists := circle.CheckAttestation(cfg, logger, msg.IrisLookupId)
-			if exists {
-				if msg.Status == types.Created && response.Status == "pending" {
+			response := circle.CheckAttestation(cfg, logger, msg.IrisLookupId)
+			if response != nil {
+				if msg.Status == types.Created && response.Status == "pending_confirmations" {
 					msg.Status = types.Pending
 					msg.Updated = time.Now()
+					time.Sleep(10 * time.Second)
 					processingQueue <- msg
-					return
+					continue
+				} else if response.Status == "pending_confirmations" {
+					time.Sleep(10 * time.Second)
+					processingQueue <- msg
+					continue
 				} else if response.Status == "complete" {
 					msg.Status = types.Attested
 					msg.Attestation = response.Attestation
@@ -81,26 +109,27 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 				}
 			} else {
 				// add attestation retry intervals per domain here
-				time.Sleep(30 * time.Second)
+				logger.Info("Unable to find complete attestation for 0x" + msg.IrisLookupId + ".  Retrying...")
+				time.Sleep(10 * time.Second)
 				// retry
 				processingQueue <- msg
-				return
+				continue
 			}
 		}
 		// if the message is attested to, try to broadcast
 		if msg.Status == types.Attested {
 			switch msg.DestDomain {
 			case 4: // noble
-				response, err := noble.Broadcast(cfg, logger, msg)
+				response, err := noble.Broadcast(cfg, logger, msg, sequenceMap)
 				if err != nil {
 					logger.Error("unable to mint", "err", err)
 					processingQueue <- msg
-					return
+					continue
 				}
 				if response.Code != 0 {
 					logger.Error("nonzero response code received", "err", err)
 					processingQueue <- msg
-					return
+					continue
 				}
 				// success!
 				msg.DestTxHash = response.Hash.String()

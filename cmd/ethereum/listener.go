@@ -47,7 +47,6 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 		Addresses: []common.Address{messageTransmitterAddress},
 		Topics:    [][]common.Hash{{messageSent.ID}},
 		FromBlock: big.NewInt(int64(cfg.Networks.Source.Ethereum.StartBlock - cfg.Networks.Source.Ethereum.LookbackPeriod)),
-		ToBlock:   big.NewInt(int64(cfg.Networks.Source.Ethereum.StartBlock)),
 	}
 
 	// websockets do not query history

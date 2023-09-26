@@ -1,7 +1,6 @@
 package integration_testing
 
 import (
-	"cosmossdk.io/log"
 	"encoding/json"
 	"fmt"
 	"github.com/cosmos/cosmos-sdk/testutil/testdata"
@@ -12,48 +11,29 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd"
 	eth "github.com/strangelove-ventures/noble-cctp-relayer/cmd/ethereum"
-	"github.com/strangelove-ventures/noble-cctp-relayer/config"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"github.com/stretchr/testify/require"
 	"io"
 	"math/big"
 	"net/http"
-	"os"
+	"strconv"
 	"testing"
 	"time"
 )
-
-var testCfg Config    // for testing secrets
-var cfg config.Config // app config
-var logger log.Logger
-
-// goerli
-const TokenMessengerAddress = "0xd0c3da58f55358142b8d3e06c1c30c5c6114efe8"
-const UsdcAddress = "0x07865c6e87b9f70255377e024ace6630c1eaa37f"
-
-func setupTest() func() {
-	// setup
-	testCfg = Parse("../.ignore/integration.yaml")
-	cfg = config.Parse("../.ignore/testnet.yaml")
-	logger = log.NewLogger(os.Stdout)
-
-	return func() {
-		// teardown
-	}
-}
-
-type Coin struct {
-	Denom  string
-	Amount big.Int
-}
 
 // TestGenerateEthDepositForBurn generates and broadcasts a depositForBurn on Ethereum Goerli
 func TestGenerateEthDepositForBurn(t *testing.T) {
 	setupTest()
 
+	// listen over websocket
+	cfg.Networks.Source.Ethereum.StartBlock = getEthereumLatestBlockHeight(t)
+
 	processingQueue := make(chan *types.MessageState, 10)
 	go eth.StartListener(cfg, logger, processingQueue)
-	go cmd.StartProcessor(cfg, logger, processingQueue)
+	go cmd.StartProcessor(cfg, logger, processingQueue, sequenceMap)
+
+	fmt.Println("Give listener a few seconds to start up")
+	time.Sleep(5 * time.Second)
 
 	_, _, cosmosAddress := testdata.KeyTestPubAddr()
 	nobleAddress, _ := bech32.ConvertAndEncode("noble", cosmosAddress)
@@ -84,7 +64,7 @@ func TestGenerateEthDepositForBurn(t *testing.T) {
 	require.Nil(t, err)
 
 	// flakey
-	burnAmount := big.NewInt(163)
+	burnAmount := big.NewInt(171)
 
 	tx, err := tokenMessenger.DepositForBurn(
 		auth,
@@ -114,5 +94,6 @@ func getNobleBalance(address string) uint64 {
 	body, _ := io.ReadAll(rawResponse.Body)
 	response := Coin{}
 	_ = json.Unmarshal(body, &response)
-	return response.Amount.Uint64()
+	result, _ := strconv.ParseInt(response.Amount, 10, 0)
+	return uint64(result)
 }

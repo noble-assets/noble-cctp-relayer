@@ -2,14 +2,13 @@ package noble
 
 import (
 	"context"
-	"strconv"
-
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"cosmossdk.io/log"
@@ -35,6 +34,7 @@ func Broadcast(
 	cfg config.Config,
 	logger log.Logger,
 	msg *types.MessageState,
+	sequenceMap *types.SequenceMap,
 ) (*ctypes.ResultBroadcastTx, error) {
 	// set up sdk context
 	interfaceRegistry := codectypes.NewInterfaceRegistry()
@@ -74,31 +74,30 @@ func Broadcast(
 	txBuilder.SetMemo("Thank you for relaying with Strangelove")
 
 	// sign tx
-
 	addr, _ := bech32.ConvertAndEncode("noble", privKey.PubKey().Address())
 	if addr != nobleAddress {
 		return nil, fmt.Errorf("private key (%s) does not match noble address (%s)", addr, nobleAddress)
 	}
 
 	// broadcast txn
-
-	// set up client
 	rpcClient, err := NewRPCClient(cfg.Networks.Destination.Noble.RPC, 10*time.Second)
 	if err != nil {
 		return nil, errors.New("failed to set up rpc client")
 	}
 
 	for attempt := 0; attempt <= cfg.Networks.Destination.Noble.BroadcastRetries; attempt++ {
-		logger.Info(fmt.Sprintf(
+		logger.Debug(fmt.Sprintf(
 			"Broadcasting %s message from %d to %d: with source tx hash %s",
 			msg.Type,
 			msg.SourceDomain,
 			msg.DestDomain,
 			msg.SourceTxHash))
 
-		accountNumber, accountSequence, err := getAccountNumberSequence(cfg.Networks.Destination.Noble.API, nobleAddress)
+		// TODO Account sequence lock is implemented but gets out of sync with remote.
+		// accountSequence := sequenceMap.Next(cfg.Networks.Destination.Noble.DomainId)
+		accountNumber, accountSequence, err := GetNobleAccountNumberSequence(cfg.Networks.Destination.Noble.API, nobleAddress)
 		if err != nil {
-			logger.Error("unable to retrieve account sequence")
+			logger.Error("unable to retrieve account number")
 		}
 
 		sigV2 := signing.SignatureV2{
@@ -138,7 +137,6 @@ func Broadcast(
 			return nil, err
 		}
 
-		// TODO change to commit
 		rpcResponse, err := rpcClient.BroadcastTxSync(context.Background(), txBytes)
 		if err == nil && rpcResponse.Code == 0 {
 			msg.Status = types.Complete
@@ -174,7 +172,7 @@ func NewRPCClient(addr string, timeout time.Duration) (*rpchttp.HTTP, error) {
 	return rpcClient, nil
 }
 
-func getAccountNumberSequence(urlBase string, address string) (int64, int64, error) {
+func GetNobleAccountNumberSequence(urlBase string, address string) (int64, int64, error) {
 	rawResp, err := http.Get(fmt.Sprintf("%s/cosmos/auth/v1beta1/accounts/%s", urlBase, address))
 	if err != nil {
 		return 0, 0, errors.New("unable to fetch account number, sequence")

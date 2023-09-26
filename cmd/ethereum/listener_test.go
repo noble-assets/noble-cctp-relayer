@@ -2,8 +2,6 @@ package ethereum_test
 
 import (
 	"cosmossdk.io/log"
-	"encoding/base64"
-	"fmt"
 	"github.com/rs/zerolog"
 	eth "github.com/strangelove-ventures/noble-cctp-relayer/cmd/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/config"
@@ -19,12 +17,13 @@ var logger log.Logger
 var processingQueue chan *types.MessageState
 
 func init() {
-	cfg = config.Parse("../../.ignore/testing.yaml")
+	cfg = config.Parse("../../.ignore/unit_tests.yaml")
 
 	logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.ErrorLevel))
 	processingQueue = make(chan *types.MessageState, 10000)
 }
 
+// tests for a historical log
 func TestStartListener(t *testing.T) {
 
 	cfg.Networks.Source.Ethereum.StartBlock = 9702735
@@ -50,21 +49,4 @@ func TestStartListener(t *testing.T) {
 	require.Equal(t, expectedMsg.DestDomain, msg.DestDomain)
 	require.Equal(t, expectedMsg.SourceTxHash, msg.SourceTxHash)
 
-}
-
-func TestDelete(t *testing.T) {
-	msg, err := base64.StdEncoding.DecodeString("AAAAAAAAAAAAAAAEAAAAAAADlqQAAAAAAAAAAAAAAAAa4EXZkjY2XL3BhVrNLSz8Iy0E0QAAAAAAAAAAAAAAAHTJVgQENCfwvuHQ4Wv6U6/VN/c2AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOWowAAAAAAAAAAAAAAAJccVKbreC+szQC8PtXpNMxb2OPvAAAAAAAAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZHlkeAAAAAAAAAAAAAAAAAgaAk0u4iu1ufOjCF0jiUzEoOMi")
-	require.NoError(t, err)
-
-	messageState, err := new(types.Message).Parse(msg)
-	require.NoError(t, err)
-
-	burnMessage, err := new(types.BurnMessage).Parse(msg)
-	fmt.Println()
-	metadataMessage, err := new(types.MetadataMessage).Parse(msg)
-	fmt.Println()
-
-	t.Logf("nonce: %d", messageState.Nonce)
-	fmt.Println(burnMessage)
-	fmt.Println(metadataMessage)
 }

@@ -19,13 +19,12 @@ func init() {
 }
 
 func TestAttestationIsReady(t *testing.T) {
-	resp, found := circle.CheckAttestation(cfg, logger, "85bbf7e65a5992e6317a61f005e06d9972a033d71b514be183b179e1b47723fe")
-	require.True(t, found)
+	resp := circle.CheckAttestation(cfg, logger, "85bbf7e65a5992e6317a61f005e06d9972a033d71b514be183b179e1b47723fe")
+	require.NotNil(t, resp)
 	require.Equal(t, "complete", resp.Status)
 }
 
 func TestAttestationNotFound(t *testing.T) {
-	resp, found := circle.CheckAttestation(cfg, logger, "not an attestation")
-	require.False(t, found)
+	resp := circle.CheckAttestation(cfg, logger, "not an attestation")
 	require.Nil(t, resp)
 }
