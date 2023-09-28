@@ -55,7 +55,7 @@ func TestProcessNewLog(t *testing.T) {
 
 	time.Sleep(2 * time.Second)
 
-	actualState, _ := cmd.State.Load(cmd.LookupKey(expectedState.Type, expectedState.SourceTxHash))
+	actualState, _ := cmd.State.Load(cmd.LookupKey(expectedState.SourceTxHash, expectedState.Type))
 
 	require.Equal(t, types.Created, actualState.Status)
 
@@ -83,7 +83,7 @@ func TestProcessCreatedLog(t *testing.T) {
 
 	time.Sleep(2 * time.Second)
 
-	actualState, ok := cmd.State.Load(cmd.LookupKey(expectedState.Type, expectedState.SourceTxHash))
+	actualState, ok := cmd.State.Load(cmd.LookupKey(expectedState.SourceTxHash, expectedState.Type))
 	require.True(t, ok)
 	require.Equal(t, types.Complete, actualState.Status)
 
@@ -111,7 +111,7 @@ func TestProcessDisabledCctpRoute(t *testing.T) {
 
 	time.Sleep(2 * time.Second)
 
-	actualState, ok := cmd.State.Load(cmd.LookupKey(expectedState.Type, expectedState.SourceTxHash))
+	actualState, ok := cmd.State.Load(cmd.LookupKey(expectedState.SourceTxHash, expectedState.Type))
 	require.True(t, ok)
 	require.Equal(t, types.Filtered, actualState.Status)
 
@@ -139,7 +139,7 @@ func TestProcessInvalidDestinationCaller(t *testing.T) {
 
 	time.Sleep(2 * time.Second)
 
-	actualState, ok := cmd.State.Load(cmd.LookupKey(expectedState.Type, expectedState.SourceTxHash))
+	actualState, ok := cmd.State.Load(cmd.LookupKey(expectedState.SourceTxHash, expectedState.Type))
 	require.True(t, ok)
 	require.Equal(t, types.Filtered, actualState.Status)
 
@@ -166,7 +166,7 @@ func TestProcessNonWhitelistedChannel(t *testing.T) {
 
 	time.Sleep(2 * time.Second)
 
-	actualState, ok := cmd.State.Load(cmd.LookupKey(expectedState.Type, expectedState.SourceTxHash))
+	actualState, ok := cmd.State.Load(cmd.LookupKey(expectedState.SourceTxHash, expectedState.Type))
 	require.True(t, ok)
 	require.Equal(t, types.Filtered, actualState.Status)
 

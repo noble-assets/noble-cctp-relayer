@@ -4,8 +4,10 @@ import (
 	"context"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/gin-gonic/gin"
+	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"net/http"
 	"os"
+	"strconv"
 
 	"cosmossdk.io/log"
 	"github.com/rs/zerolog"
@@ -65,24 +67,42 @@ func init() {
 
 func startApi() {
 	router := gin.Default()
-	router.GET("/tx/:hash", getTxByHash)
+	router.GET("/tx/:txHash", getTxByHash)
 	router.Run("localhost:8000")
 }
 
 func getTxByHash(c *gin.Context) {
-	id := c.Param("hash")
+	txHash := c.Param("txHash")
+
+	domain := c.Query("domain")
+	domainInt, err := strconv.ParseInt(domain, 10, 0)
+	if domain != "" && err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "unable to parse domain"})
+	}
 
 	found := false
-	if message, ok := State.Load(LookupKey("mint", id)); ok {
-		c.IndentedJSON(http.StatusOK, message)
-		found = true
+	var result []types.MessageState
+	msgType := c.Query("type") // mint or forward
+	if msgType == types.Mint || msgType == "" {
+		if message, ok := State.Load(LookupKey(txHash, types.Mint)); ok {
+			if domain == "" || (domain != "" && message.SourceDomain == uint32(domainInt)) {
+				result = append(result, *message)
+				found = true
+			}
+		}
 	}
-	if message, ok := State.Load(LookupKey("forward", id)); ok {
-		c.IndentedJSON(http.StatusOK, message)
-		found = true
+	if msgType == types.Forward || msgType == "" {
+		if message, ok := State.Load(LookupKey(txHash, types.Forward)); ok {
+			if domain == "" || (domain != "" && message.SourceDomain == uint32(domainInt)) {
+				result = append(result, *message)
+				found = true
+			}
+		}
 	}
+
 	if found {
-		return
+		c.JSON(http.StatusOK, result)
+	} else {
+		c.JSON(http.StatusNotFound, gin.H{"message": "message not found"})
 	}
-	c.IndentedJSON(http.StatusNotFound, gin.H{"message": "message not found"})
 }

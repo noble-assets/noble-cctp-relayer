@@ -74,10 +74,10 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 	for {
 		dequeuedMsg := <-processingQueue
 		// if this is the first time seeing this message, add it to the State
-		msg, ok := State.Load(LookupKey(dequeuedMsg.Type, dequeuedMsg.SourceTxHash))
+		msg, ok := State.Load(LookupKey(dequeuedMsg.SourceTxHash, dequeuedMsg.Type))
 		if !ok {
-			State.Store(LookupKey(dequeuedMsg.Type, dequeuedMsg.SourceTxHash), dequeuedMsg)
-			msg, _ = State.Load(LookupKey(dequeuedMsg.Type, dequeuedMsg.SourceTxHash))
+			State.Store(LookupKey(dequeuedMsg.SourceTxHash, dequeuedMsg.Type), dequeuedMsg)
+			msg, _ = State.Load(LookupKey(dequeuedMsg.SourceTxHash, dequeuedMsg.Type))
 			msg.Status = types.Created
 		}
 
@@ -176,8 +176,8 @@ func filterNonWhitelistedChannels(cfg config.Config, msg *types.MessageState) bo
 	return true
 }
 
-func LookupKey(messageType string, sourceTxHash string) string {
-	return fmt.Sprintf("%s-%s", messageType, sourceTxHash)
+func LookupKey(sourceTxHash string, messageType string) string {
+	return fmt.Sprintf("%s-%s", sourceTxHash, messageType)
 }
 
 func init() {
