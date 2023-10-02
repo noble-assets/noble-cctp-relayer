@@ -2,7 +2,23 @@ package integration_testing
 
 import (
 	"context"
+	"cosmossdk.io/math"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
+	nobletypes "github.com/circlefin/noble-cctp/x/cctp/types"
+	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
+	libclient "github.com/cometbft/cometbft/rpc/jsonrpc/client"
+	sdkClient "github.com/cosmos/cosmos-sdk/client"
+	clientTx "github.com/cosmos/cosmos-sdk/client/tx"
+	"github.com/cosmos/cosmos-sdk/codec"
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
+	"github.com/cosmos/cosmos-sdk/types/bech32"
+	"github.com/cosmos/cosmos-sdk/types/tx/signing"
+	xauthsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
+	xauthtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -11,8 +27,11 @@ import (
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/noble"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"github.com/stretchr/testify/require"
+	"io"
 	"log"
 	"math/big"
+	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -42,15 +61,82 @@ func TestNobleBurnToEthMint(t *testing.T) {
 	originalEthBalance := getEthBalance(client, ethAddress)
 
 	// deposit for burn
-	client, err := ethclient.Dial(testCfg.Networks.Ethereum.RPC)
+
+	// set up sdk context
+	interfaceRegistry := codectypes.NewInterfaceRegistry()
+	nobletypes.RegisterInterfaces(interfaceRegistry)
+	cdc := codec.NewProtoCodec(interfaceRegistry)
+	sdkContext := sdkClient.Context{
+		TxConfig: xauthtx.NewTxConfig(cdc, xauthtx.DefaultSignModes),
+	}
+	txBuilder := sdkContext.TxConfig.NewTxBuilder()
+	// get priv key
+	keyBz, _ := hex.DecodeString(testCfg.Networks.Noble.PrivateKey)
+	privKey := secp256k1.PrivKey{Key: keyBz}
+	nobleAddress, err := bech32.ConvertAndEncode("noble", privKey.PubKey().Address())
 	require.Nil(t, err)
-	defer client.Close()
 
-	var burnAmount = big.NewInt(1)
+	var burnAmount = math.NewInt(1)
 
-	// TODO sample deposit for burn noble
+	// deposit for burn on noble
+	burnMsg := nobletypes.NewMsgDepositForBurn(
+		nobleAddress,
+		burnAmount,
+		uint32(0),
+		[]byte("0x971c54a6Eb782fAccD00bc3Ed5E934Cc5bD8e3Ef"), // mint recipient
+		"uusdc",
+	)
+	err = txBuilder.SetMsgs(burnMsg)
+	require.Nil(t, err)
 
-	time.Sleep(5 * time.Second)
+	txBuilder.SetGasLimit(cfg.Networks.Destination.Noble.GasLimit)
+
+	// sign + broadcast txn
+	rpcClient, err := NewRPCClient(testCfg.Networks.Noble.RPC, 10*time.Second)
+	require.Nil(t, err)
+
+	accountNumber, accountSequence, err := GetNobleAccountNumberSequence(cfg.Networks.Destination.Noble.API, nobleAddress)
+	require.Nil(t, err)
+
+	sigV2 := signing.SignatureV2{
+		PubKey: privKey.PubKey(),
+		Data: &signing.SingleSignatureData{
+			SignMode:  sdkContext.TxConfig.SignModeHandler().DefaultMode(),
+			Signature: nil,
+		},
+		Sequence: uint64(accountSequence),
+	}
+
+	signerData := xauthsigning.SignerData{
+		ChainID:       cfg.Networks.Destination.Noble.ChainId,
+		AccountNumber: uint64(accountNumber),
+		Sequence:      uint64(accountSequence),
+	}
+
+	txBuilder.SetSignatures(sigV2)
+
+	sigV2, err = clientTx.SignWithPrivKey(
+		sdkContext.TxConfig.SignModeHandler().DefaultMode(),
+		signerData,
+		txBuilder,
+		&privKey,
+		sdkContext.TxConfig,
+		uint64(accountSequence),
+	)
+
+	err = txBuilder.SetSignatures(sigV2)
+	if err != nil {
+		return nil, err
+	}
+
+	// Generated Protobuf-encoded bytes.
+	txBytes, err := sdkContext.TxConfig.TxEncoder()(txBuilder.GetTx())
+	if err != nil {
+		return nil, err
+	}
+
+	rpcResponse, err := rpcClient.BroadcastTxSync(context.Background(), txBytes)
+	
 	//fmt.Printf("Update pending: https://goerli.etherscan.io/tx/%s\n", tx.Hash().String())
 
 	fmt.Println("Checking eth wallet...")
@@ -92,4 +178,35 @@ func getEthBalance(client *ethclient.Client, address string) uint64 {
 
 	// Convert to uint64
 	return balance.Uint64()
+}
+
+// NewRPCClient initializes a new tendermint RPC client connected to the specified address.
+func NewRPCClient(addr string, timeout time.Duration) (*rpchttp.HTTP, error) {
+	httpClient, err := libclient.DefaultHTTPClient(addr)
+	if err != nil {
+		return nil, err
+	}
+	httpClient.Timeout = timeout
+	rpcClient, err := rpchttp.NewWithClient(addr, "/websocket", httpClient)
+	if err != nil {
+		return nil, err
+	}
+	return rpcClient, nil
+}
+
+func GetNobleAccountNumberSequence(urlBase string, address string) (int64, int64, error) {
+	rawResp, err := http.Get(fmt.Sprintf("%s/cosmos/auth/v1beta1/accounts/%s", urlBase, address))
+	if err != nil {
+		return 0, 0, errors.New("unable to fetch account number, sequence")
+	}
+	body, _ := io.ReadAll(rawResp.Body)
+	var resp types.AccountResp
+	err = json.Unmarshal(body, &resp)
+	if err != nil {
+		return 0, 0, errors.New("unable to parse account number, sequence")
+	}
+	accountNumber, _ := strconv.ParseInt(resp.AccountNumber, 10, 0)
+	accountSequence, _ := strconv.ParseInt(resp.Sequence, 10, 0)
+
+	return accountNumber, accountSequence, nil
 }

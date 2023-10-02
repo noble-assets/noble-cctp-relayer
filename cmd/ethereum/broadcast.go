@@ -25,7 +25,6 @@ func Broadcast(
 	msg *types.MessageState,
 	sequenceMap *types.SequenceMap,
 ) (*ctypes.ResultBroadcastTx, error) {
-
 	// build txn
 	attestationBytes, err := hex.DecodeString(msg.Attestation[2:])
 	if err != nil {
@@ -63,7 +62,7 @@ func Broadcast(
 		}
 
 		// broadcast txn
-		// TODO do for Erh
+		// TODO do for Eth
 		rpcResponse, err := rpcClient.BroadcastTxSync(context.Background(), txBytes)
 		if err == nil && rpcResponse.Code == 0 {
 			msg.Status = types.Complete

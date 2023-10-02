@@ -1,4 +1,5 @@
 networks:
   ethereum:
     rpc: "https://goerli.infura.io/v3/<key>"
+    address: "noble1...."
     private_key: "..." # hex encoded, no 0x prefix

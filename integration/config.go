@@ -49,6 +49,10 @@ type Config struct {
 			RPC        string `yaml:"rpc"`
 			PrivateKey string `yaml:"private_key"`
 		} `yaml:"ethereum"`
+		Noble struct {
+			RPC        string `yaml:"rpc"`
+			PrivateKey string `yaml:"private_key"`
+		} `yaml:"noble"`
 	} `yaml:"networks"`
 }
 
