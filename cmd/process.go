@@ -82,9 +82,9 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 		}
 
 		// if a filter's condition is met, mark as filtered
-		if filterDisabledCCTPRoutes(cfg, msg) ||
-			filterInvalidDestinationCallers(cfg, msg) ||
-			filterNonWhitelistedChannels(cfg, msg) {
+		if filterDisabledCCTPRoutes(cfg, logger, msg) ||
+			filterInvalidDestinationCallers(cfg, logger, msg) ||
+			filterNonWhitelistedChannels(cfg, logger, msg) {
 			msg.Status = types.Filtered
 		}
 
@@ -143,28 +143,41 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 }
 
 // filterDisabledCCTPRoutes returns true if we haven't enabled relaying from a source domain to a destination domain
-func filterDisabledCCTPRoutes(cfg config.Config, msg *types.MessageState) bool {
+func filterDisabledCCTPRoutes(cfg config.Config, logger log.Logger, msg *types.MessageState) bool {
 	val, ok := cfg.Networks.EnabledRoutes[msg.SourceDomain]
-	return !(ok && val == msg.DestDomain)
+	result := !(ok && val == msg.DestDomain)
+	if result {
+		logger.Info(fmt.Sprintf("Filtered tx %s because relaying from %d to %d is not enabled",
+			msg.SourceTxHash, msg.SourceDomain, msg.DestDomain))
+	}
+	return result
 }
 
 // filterInvalidDestinationCallers returns true if the minter is not the destination caller for the specified domain
-func filterInvalidDestinationCallers(cfg config.Config, msg *types.MessageState) bool {
+func filterInvalidDestinationCallers(cfg config.Config, logger log.Logger, msg *types.MessageState) bool {
 	zeroByteArr := make([]byte, 32)
 	bech32DestinationCaller, err := types.DecodeDestinationCaller(msg.DestinationCaller)
+
+	result := false
 	if err != nil {
-		return true
+		result = true
 	}
 	if !bytes.Equal(msg.DestinationCaller, zeroByteArr) &&
 		bech32DestinationCaller != cfg.Networks.Minters[msg.DestDomain].MinterAddress {
-		return true
+		result = true
 	}
-	return false
+
+	if result {
+		logger.Info(fmt.Sprintf("Filtered tx %s because the destination caller %s is specified and it's not the minter %s",
+			msg.SourceTxHash, msg.DestinationCaller, cfg.Networks.Minters[msg.DestDomain].MinterAddress))
+	}
+
+	return result
 }
 
 // filterNonWhitelistedChannels is a Noble specific filter that returns true
 // if the channel is not in the forwarding_channel_whitelist
-func filterNonWhitelistedChannels(cfg config.Config, msg *types.MessageState) bool {
+func filterNonWhitelistedChannels(cfg config.Config, logger log.Logger, msg *types.MessageState) bool {
 	if !cfg.Networks.Destination.Noble.FilterForwardsByIbcChannel {
 		return false
 	}
@@ -173,6 +186,8 @@ func filterNonWhitelistedChannels(cfg config.Config, msg *types.MessageState) bo
 			return false
 		}
 	}
+	logger.Info(fmt.Sprintf("Filtered tx %s because channel whitelisting is enabled and the tx's channel is not in the whitelist: %s",
+		msg.SourceTxHash, msg.Channel))
 	return true
 }
 

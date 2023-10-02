@@ -16,6 +16,7 @@ Running the relayer
 ```shell
 noble-cctp-relayer start --config ./config/sample-app-config.yaml
 ```
+Sample configs can be found in config/.
 ### API
 Simple API to query message state cache
 ```shell

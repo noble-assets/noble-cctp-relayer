@@ -11,7 +11,7 @@ networks:
   destination:
     noble:
       domain-id: 4
-      api: "https://api.testnet.noble.strange.love:443"
+      api: "https://lcd.testnet.noble.strange.love:443"
       rpc: "https://rpc.testnet.noble.strange.love:443"
       chain-id: "grand-1"
       gas-limit: 200000
@@ -21,7 +21,6 @@ networks:
       forwarding-channel-whitelist:
         - "channel-10" # osmo-test-5
         - "channel-15" # dydx-testnet-2
-
   # source domain id -> destination domain id
   enabled-routes:
     0: 4 # ethereum to noble
@@ -29,7 +28,7 @@ networks:
   minters:
     4:
       minter-address: "noble1...."
-      minter-mnemonic: "12345" # hex encoded
+      minter-mnemonic: "12345" # hex encoded, no prepended 0x
 circle:
   attestation-base-url: "https://iris-api-sandbox.circle.com/attestations/"
   fetch-retries: 10 # additional times to fetch an attestation

@@ -20,7 +20,7 @@ var sequenceMap *types.SequenceMap
 
 func setupTest() {
 	cfg = config.Parse("../.ignore/unit_tests.yaml")
-	logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.Disabled))
+	logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.DebugLevel))
 	processingQueue = make(chan *types.MessageState, 10000)
 
 	_, nextMinterSequence, err := noble.GetNobleAccountNumberSequence(

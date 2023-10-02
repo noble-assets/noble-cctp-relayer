@@ -91,7 +91,7 @@ func TestGenerateEthDepositForBurn(t *testing.T) {
 }
 
 func getNobleBalance(address string) uint64 {
-	rawResponse, _ := http.Get(fmt.Sprintf("https://api.testnet.noble.strange.love/cosmos/bank/v1beta1/balances/%s/by_denom?denom=uusdc", address))
+	rawResponse, _ := http.Get(fmt.Sprintf("https://lcd.testnet.noble.strange.love/cosmos/bank/v1beta1/balances/%s/by_denom?denom=uusdc", address))
 	body, _ := io.ReadAll(rawResponse.Body)
 	response := BalanceResponse{}
 	_ = json.Unmarshal(body, &response)

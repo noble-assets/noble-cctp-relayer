@@ -18,7 +18,11 @@ func CheckAttestation(cfg config.Config, logger log.Logger, irisLookupId string)
 	client := http.Client{Timeout: 2 * time.Second}
 
 	rawResponse, err := client.Get(cfg.Circle.AttestationBaseUrl + "0x" + irisLookupId)
-	if rawResponse.StatusCode != http.StatusOK || err != nil {
+	if err != nil {
+		logger.Debug("error during request: " + err.Error())
+		return nil
+	}
+	if rawResponse.StatusCode != http.StatusOK {
 		logger.Debug("non 200 response received")
 		return nil
 	}
