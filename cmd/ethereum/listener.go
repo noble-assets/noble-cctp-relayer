@@ -50,7 +50,7 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 	}
 
 	logger.Info(fmt.Sprintf(
-		"Starting listener at block %d looking back %d blocks",
+		"Starting Ethereum listener at block %d looking back %d blocks",
 		cfg.Networks.Source.Ethereum.StartBlock,
 		cfg.Networks.Source.Ethereum.LookbackPeriod))
 

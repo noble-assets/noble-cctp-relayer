@@ -66,7 +66,15 @@ func init() {
 }
 
 func startApi() {
+	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
+
+	err := router.SetTrustedProxies(Cfg.Api.TrustedProxies) // vpn.primary.strange.love
+	if err != nil {
+		Logger.Error("unable to set trusted proxies on API server: " + err.Error())
+		os.Exit(1)
+	}
+
 	router.GET("/tx/:txHash", getTxByHash)
 	router.Run("localhost:8000")
 }

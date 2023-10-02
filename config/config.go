@@ -43,8 +43,10 @@ type Config struct {
 		FetchRetries       int    `yaml:"fetch-retries"`
 		FetchRetryInterval int    `yaml:"fetch-retry-interval"`
 	} `yaml:"circle"`
-
 	ProcessorWorkerCount uint32 `yaml:"processor-worker-count"`
+	Api                  struct {
+		TrustedProxies []string `yaml:"trusted-proxies"`
+	} `yaml:"api"`
 }
 
 func Parse(file string) (cfg Config) {
