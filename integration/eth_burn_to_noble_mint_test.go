@@ -1,7 +1,6 @@
 package integration_testing
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/cosmos/cosmos-sdk/testutil/testdata"
 	"github.com/cosmos/cosmos-sdk/types/bech32"
@@ -13,16 +12,13 @@ import (
 	eth "github.com/strangelove-ventures/noble-cctp-relayer/cmd/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"github.com/stretchr/testify/require"
-	"io"
 	"math/big"
-	"net/http"
-	"strconv"
 	"testing"
 	"time"
 )
 
-// TestGenerateEthDepositForBurn generates and broadcasts a depositForBurn on Ethereum Goerli
-func TestGenerateEthDepositForBurn(t *testing.T) {
+// TestEthBurnToNobleMint generates a depositForBurn on Ethereum Goerli and mints on Noble
+func TestEthBurnToNobleMint(t *testing.T) {
 	setupTest()
 
 	// start up relayer
@@ -88,13 +84,4 @@ func TestGenerateEthDepositForBurn(t *testing.T) {
 	}
 	// verify noble balance
 	require.Equal(t, originalNobleBalance+burnAmount.Uint64(), getNobleBalance(nobleAddress))
-}
-
-func getNobleBalance(address string) uint64 {
-	rawResponse, _ := http.Get(fmt.Sprintf("https://lcd.testnet.noble.strange.love/cosmos/bank/v1beta1/balances/%s/by_denom?denom=uusdc", address))
-	body, _ := io.ReadAll(rawResponse.Body)
-	response := BalanceResponse{}
-	_ = json.Unmarshal(body, &response)
-	result, _ := strconv.ParseInt(response.Balance.Amount, 10, 0)
-	return uint64(result)
 }

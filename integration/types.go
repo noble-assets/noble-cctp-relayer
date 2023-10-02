@@ -1,12 +1,20 @@
 package integration_testing
 
 type BalanceResponse struct {
-	Balance Coin `json:"balance"`
+	Balance struct {
+		Denom  string `json:"denom"`
+		Amount string `json:"amount"`
+	} `json:"balance"`
 }
 
-type Coin struct {
-	Denom  string `json:"denom"`
-	Amount string `json:"amount"`
+type NobleBlockResponse struct {
+	Result struct {
+		Block struct {
+			Header struct {
+				Height string `json:"height"`
+			} `json:"header"`
+		} `json:"block"`
+	} `json:"result"`
 }
 
 type EthereumRPCPayload struct {

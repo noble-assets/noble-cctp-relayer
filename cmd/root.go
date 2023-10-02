@@ -52,8 +52,17 @@ func init() {
 		Logger.Info("successfully parsed config file", "location", cfgFile)
 		// set defaults
 
-		// if start block not set, default to latest
+		// if Ethereum start block not set, default to latest
 		if Cfg.Networks.Source.Ethereum.StartBlock == 0 {
+			client, _ := ethclient.Dial(Cfg.Networks.Source.Ethereum.RPC)
+			defer client.Close()
+			header, _ := client.HeaderByNumber(context.Background(), nil)
+			Cfg.Networks.Source.Ethereum.StartBlock = header.Number.Uint64()
+		}
+
+		// if Noble start block not set, default to latest
+		if Cfg.Networks.Source.Ethereum.StartBlock == 0 {
+			// TODO set to latest block
 			client, _ := ethclient.Dial(Cfg.Networks.Source.Ethereum.RPC)
 			defer client.Close()
 			header, _ := client.HeaderByNumber(context.Background(), nil)

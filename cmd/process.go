@@ -64,6 +64,9 @@ func Start(cmd *cobra.Command, args []string) {
 	if Cfg.Networks.Source.Ethereum.Enabled {
 		ethereum.StartListener(Cfg, Logger, processingQueue)
 	}
+	if Cfg.Networks.Source.Noble.Enabled {
+		noble.StartListener(Cfg, Logger, processingQueue)
+	}
 	// ...register more chain listeners here
 
 	wg.Wait()
