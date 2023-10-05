@@ -1,7 +1,9 @@
 package types
 
 import (
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/circlefin/noble-cctp/x/cctp/types"
@@ -41,7 +43,8 @@ type MessageState struct {
 	Updated           time.Time
 }
 
-func ToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log) (messageState *MessageState, err error) {
+// EvmLogToMessageState transforms an evm log into a messageState given an ABI
+func EvmLogToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log) (messageState *MessageState, err error) {
 
 	event := make(map[string]interface{})
 	_ = abi.UnpackIntoMap(event, messageSent.Name, log.Data)
@@ -78,6 +81,57 @@ func ToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log) (mess
 	}
 
 	return nil, errors.New(fmt.Sprintf("unable to parse txn into message.  tx hash %s", log.TxHash.Hex()))
+}
+
+// NobleLogToMessageState transforms a Noble log into a messageState
+func NobleLogToMessageState(tx Tx) (messageState *MessageState, err error) {
+
+	var eventsList []struct {
+		Events []Event `json:"events"`
+	}
+	err = json.Unmarshal([]byte(tx.TxResult.Log), &eventsList)
+	if err != nil {
+		return nil, errors.New("unable to parse log events")
+	}
+
+	for _, event := range eventsList[0].Events {
+		if event.Type == "circle.cctp.v1.MessageSent" {
+			for _, attr := range event.Attributes {
+				if attr.Key == "message" {
+					encoded := attr.Value[1 : len(attr.Value)-1]
+					rawMessageSentBytes, err := base64.StdEncoding.DecodeString(encoded)
+					if err != nil {
+						continue
+					}
+
+					msg, err := new(types.Message).Parse(rawMessageSentBytes)
+					if err != nil {
+						continue
+					}
+
+					hashed := crypto.Keccak256(rawMessageSentBytes)
+					hashedHexStr := hex.EncodeToString(hashed) // TODO is this right?
+
+					messageState = &MessageState{
+						IrisLookupId:      hashedHexStr,
+						Type:              Mint,
+						Status:            Created,
+						SourceDomain:      msg.SourceDomain,
+						DestDomain:        msg.DestinationDomain,
+						SourceTxHash:      tx.Hash,
+						MsgSentBytes:      rawMessageSentBytes,
+						DestinationCaller: msg.DestinationCaller,
+						Created:           time.Now(),
+						Updated:           time.Now(),
+					}
+
+					return messageState, nil
+				}
+			}
+		}
+	}
+
+	return nil, errors.New(fmt.Sprintf("unable to parse txn into message.  tx hash %s", tx.Hash))
 }
 
 // DecodeDestinationCaller transforms an encoded Noble cctp address into a noble bech32 address

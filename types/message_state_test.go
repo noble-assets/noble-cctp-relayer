@@ -50,7 +50,7 @@ func TestToMessageStateSuccess(t *testing.T) {
 	_, _, history, err := etherReader.QueryWithHistory(context.Background(), &query)
 	require.Nil(t, err)
 
-	messageState, err := types.ToMessageState(messageTransmitterABI, messageSent, &history[0])
+	messageState, err := types.EvmLogToMessageState(messageTransmitterABI, messageSent, &history[0])
 
 	event := make(map[string]interface{})
 	_ = messageTransmitterABI.UnpackIntoMap(event, messageSent.Name, history[0].Data)

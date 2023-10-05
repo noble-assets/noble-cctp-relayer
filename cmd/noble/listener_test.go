@@ -22,10 +22,8 @@ func init() {
 	processingQueue = make(chan *types.MessageState, 10000)
 }
 
-// TODO
 func TestStartListener(t *testing.T) {
-
-	cfg.Networks.Source.Noble.StartBlock = 9702735
+	cfg.Networks.Source.Noble.StartBlock = 3273557
 	cfg.Networks.Source.Noble.LookbackPeriod = 0
 	go StartListener(cfg, logger, processingQueue)
 
@@ -34,12 +32,12 @@ func TestStartListener(t *testing.T) {
 	msg := <-processingQueue
 
 	expectedMsg := &types.MessageState{
-		IrisLookupId: "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
+		IrisLookupId: "efe7cea3fd4785c3beab7f37876bdd48c5d4689c84d85a250813a2a7f01fe765",
 		Type:         "mint",
 		Status:       "created",
-		SourceDomain: 0,
-		DestDomain:   4,
-		SourceTxHash: "0xe1d7729de300274ee3a2fd20ba179b14a8e3ffcd9d847c506b06760f0dad7802",
+		SourceDomain: 4,
+		DestDomain:   0,
+		SourceTxHash: "5002A249B1353FA59C1660EBAE5FA7FC652AC1E77F69CEF3A4533B0DF2864012",
 	}
 	require.Equal(t, expectedMsg.IrisLookupId, msg.IrisLookupId)
 	require.Equal(t, expectedMsg.Type, msg.Type)

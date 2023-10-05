@@ -64,7 +64,7 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 
 	// process history
 	for _, historicalLog := range history {
-		parsedMsg, err := types.ToMessageState(messageTransmitterABI, messageSent, &historicalLog)
+		parsedMsg, err := types.EvmLogToMessageState(messageTransmitterABI, messageSent, &historicalLog)
 		if err != nil {
 			logger.Error("Unable to parse history log into MessageState, skipping")
 			continue
@@ -82,7 +82,7 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 				logger.Error("connection closed", "err", err)
 				os.Exit(1)
 			case streamLog := <-stream:
-				parsedMsg, err := types.ToMessageState(messageTransmitterABI, messageSent, &streamLog)
+				parsedMsg, err := types.EvmLogToMessageState(messageTransmitterABI, messageSent, &streamLog)
 				if err != nil {
 					logger.Error("Unable to parse ws log into MessageState, skipping")
 					continue

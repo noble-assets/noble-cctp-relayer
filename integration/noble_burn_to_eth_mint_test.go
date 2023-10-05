@@ -76,6 +76,8 @@ func TestNobleBurnToEthMint(t *testing.T) {
 	nobleAddress, err := bech32.ConvertAndEncode("noble", privKey.PubKey().Address())
 	require.Nil(t, err)
 
+	mintRecipient := make([]byte, 32)
+	copy(mintRecipient[12:], common.FromHex(ethAddress))
 	var burnAmount = math.NewInt(1)
 
 	// deposit for burn on noble
@@ -83,7 +85,7 @@ func TestNobleBurnToEthMint(t *testing.T) {
 		nobleAddress,
 		burnAmount,
 		uint32(0),
-		[]byte("0x971c54a6Eb782fAccD00bc3Ed5E934Cc5bD8e3Ef"), // mint recipient
+		mintRecipient,
 		"uusdc",
 	)
 	err = txBuilder.SetMsgs(burnMsg)
@@ -114,7 +116,6 @@ func TestNobleBurnToEthMint(t *testing.T) {
 	}
 
 	txBuilder.SetSignatures(sigV2)
-
 	sigV2, err = clientTx.SignWithPrivKey(
 		sdkContext.TxConfig.SignModeHandler().DefaultMode(),
 		signerData,
@@ -125,19 +126,15 @@ func TestNobleBurnToEthMint(t *testing.T) {
 	)
 
 	err = txBuilder.SetSignatures(sigV2)
-	if err != nil {
-		return nil, err
-	}
+	require.Nil(t, err)
 
 	// Generated Protobuf-encoded bytes.
 	txBytes, err := sdkContext.TxConfig.TxEncoder()(txBuilder.GetTx())
-	if err != nil {
-		return nil, err
-	}
+	require.Nil(t, err)
 
 	rpcResponse, err := rpcClient.BroadcastTxSync(context.Background(), txBytes)
-	
-	//fmt.Printf("Update pending: https://goerli.etherscan.io/tx/%s\n", tx.Hash().String())
+	require.Nil(t, err)
+	fmt.Printf("Update pending: https://testnet.mintscan.io/noble-testnet/txs/%s\n", rpcResponse.Hash.String())
 
 	fmt.Println("Checking eth wallet...")
 	for i := 0; i < 60; i++ {
