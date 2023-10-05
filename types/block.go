@@ -1,6 +1,16 @@
 package types
 
-type GetBlockResultsResponse struct {
+type BlockResponse struct {
+	Result struct {
+		Block struct {
+			Header struct {
+				Height string `json:"height"`
+			} `json:"header"`
+		} `json:"block"`
+	} `json:"result"`
+}
+
+type BlockResultsResponse struct {
 	Result struct {
 		Txs []Tx `json:"txs"`
 	} `json:"result"`

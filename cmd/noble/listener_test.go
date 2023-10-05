@@ -18,7 +18,7 @@ var processingQueue chan *types.MessageState
 func init() {
 	cfg = config.Parse("../../.ignore/unit_tests.yaml")
 
-	logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.ErrorLevel))
+	logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.DebugLevel))
 	processingQueue = make(chan *types.MessageState, 10000)
 }
 
@@ -27,7 +27,7 @@ func TestStartListener(t *testing.T) {
 	cfg.Networks.Source.Noble.LookbackPeriod = 0
 	go StartListener(cfg, logger, processingQueue)
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(30 * time.Second)
 
 	msg := <-processingQueue
 

@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/gin-gonic/gin"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -61,12 +63,13 @@ func init() {
 		}
 
 		// if Noble start block not set, default to latest
-		if Cfg.Networks.Source.Ethereum.StartBlock == 0 {
-			// TODO set to latest block
-			client, _ := ethclient.Dial(Cfg.Networks.Source.Ethereum.RPC)
-			defer client.Close()
-			header, _ := client.HeaderByNumber(context.Background(), nil)
-			Cfg.Networks.Source.Ethereum.StartBlock = header.Number.Uint64()
+		if Cfg.Networks.Source.Noble.StartBlock == 0 {
+			// todo refactor to use listener's function GetNobleChainTip
+			rawResponse, _ := http.Get(Cfg.Networks.Source.Noble.RPC + "/block")
+			body, _ := io.ReadAll(rawResponse.Body)
+			response := types.BlockResponse{}
+			_ = json.Unmarshal(body, &response)
+			Cfg.Networks.Source.Noble.StartBlock = uint64(response.Result.Block.Height)
 		}
 
 		// start api server
