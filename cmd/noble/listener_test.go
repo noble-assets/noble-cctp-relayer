@@ -20,6 +20,7 @@ func init() {
 
 	logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.DebugLevel))
 	processingQueue = make(chan *types.MessageState, 10000)
+	cfg.Networks.Source.Noble.Workers = 1
 }
 
 func TestStartListener(t *testing.T) {
@@ -27,7 +28,7 @@ func TestStartListener(t *testing.T) {
 	cfg.Networks.Source.Noble.LookbackPeriod = 0
 	go StartListener(cfg, logger, processingQueue)
 
-	time.Sleep(30 * time.Second)
+	time.Sleep(20 * time.Second)
 
 	msg := <-processingQueue
 

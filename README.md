@@ -45,6 +45,7 @@ localhost:8000/tx/<hash>?type=forward
 abigen --abi cmd/ethereum/abi/TokenMessenger.json --pkg cmd --type TokenMessenger --out cmd/TokenMessenger.go
 abigen --abi cmd/ethereum/abi/TokenMessengerWithMetadata.json --pkg cmd --type TokenMessengerWithMetadata --out cmd/TokenMessengerWithMetadata.go
 abigen --abi cmd/ethereum/abi/ERC20.json --pkg integration_testing --type ERC20 --out integration/ERC20.go
+abigen --abi cmd/ethereum/abi/MessageTransmitter.json --pkg cmd --type MessageTransmitter --out cmd/MessageTransmitter.go
 ```
 
 ### Useful links

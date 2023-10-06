@@ -28,7 +28,7 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 	currentBlock := cfg.Networks.Source.Noble.StartBlock
 	chainTip := GetNobleChainTip(cfg)
 	blockQueue := make(chan uint64, 1000000)
-	for i := currentBlock; i < chainTip; i++ {
+	for i := currentBlock; i <= chainTip; i++ {
 		blockQueue <- i
 	}
 	currentBlock = chainTip

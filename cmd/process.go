@@ -37,13 +37,23 @@ func Start(cmd *cobra.Command, args []string) {
 	// initialize minter account sequences
 	for key, _ := range Cfg.Networks.Minters {
 		switch key {
+		case 0:
+			ethNonce, err := ethereum.GetEthereumAccountNonce(
+				Cfg.Networks.Destination.Ethereum.RPC,
+				Cfg.Networks.Minters[0].MinterAddress)
+
+			if err != nil {
+				Logger.Error("Error retrieving Ethereum account nonce")
+				os.Exit(1)
+			}
+			sequenceMap.Put(key, ethNonce)
 		case 4:
 			_, nextMinterSequence, err := noble.GetNobleAccountNumberSequence(
 				Cfg.Networks.Destination.Noble.API,
 				Cfg.Networks.Minters[4].MinterAddress)
 
 			if err != nil {
-				Logger.Error("Error retrieving account sequence")
+				Logger.Error("Error retrieving Noble account sequence")
 				os.Exit(1)
 			}
 			sequenceMap.Put(key, nextMinterSequence)
@@ -122,10 +132,19 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 		// if the message is attested to, try to broadcast
 		if msg.Status == types.Attested {
 			switch msg.DestDomain {
+			case 0: // ethereum
+				response, err := ethereum.Broadcast(cfg, logger, msg, sequenceMap)
+				if err != nil {
+					logger.Error("unable to mint on Ethereum", "err", err)
+					processingQueue <- msg
+					continue
+				}
+				fmt.Println(response)
+				// TODO other error cases, set dest hash
 			case 4: // noble
 				response, err := noble.Broadcast(cfg, logger, msg, sequenceMap)
 				if err != nil {
-					logger.Error("unable to mint", "err", err)
+					logger.Error("unable to mint on Noble", "err", err)
 					processingQueue <- msg
 					continue
 				}

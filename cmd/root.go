@@ -64,12 +64,12 @@ func init() {
 
 		// if Noble start block not set, default to latest
 		if Cfg.Networks.Source.Noble.StartBlock == 0 {
-			// todo refactor to use listener's function GetNobleChainTip
 			rawResponse, _ := http.Get(Cfg.Networks.Source.Noble.RPC + "/block")
 			body, _ := io.ReadAll(rawResponse.Body)
 			response := types.BlockResponse{}
 			_ = json.Unmarshal(body, &response)
-			Cfg.Networks.Source.Noble.StartBlock = uint64(response.Result.Block.Height)
+			height, _ := strconv.ParseInt(response.Result.Block.Header.Height, 10, 0)
+			Cfg.Networks.Source.Noble.StartBlock = uint64(height)
 		}
 
 		// start api server
