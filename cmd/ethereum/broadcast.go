@@ -5,12 +5,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/cosmos/cosmos-sdk/types/bech32"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/strangelove-ventures/noble-cctp-relayer/cmd"
 	"github.com/strangelove-ventures/noble-cctp-relayer/config"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"math/big"
@@ -23,30 +21,23 @@ func Broadcast(
 	logger log.Logger,
 	msg *types.MessageState,
 	sequenceMap *types.SequenceMap,
-) (*types.Transaction, error) {
-	// build txn
-	attestationBytes, err := hex.DecodeString(msg.Attestation[2:])
-	if err != nil {
-		return nil, errors.New("unable to decode message attestation")
-	}
-
-	// get priv key
-	ethereumAddress := cfg.Networks.Minters[0].MinterAddress
-
-	// sign tx
-	addr, _ := bech32.ConvertAndEncode("noble", privKey.PubKey().Address())
-	if addr != ethereumAddress {
-		return nil, fmt.Errorf("private key (%s) does not match noble address (%s)", addr, ethereumAddress)
-	}
+) (*ethtypes.Transaction, error) {
 
 	// set up eth client
 	client, err := ethclient.Dial(cfg.Networks.Destination.Ethereum.RPC)
 	defer client.Close()
 
-	privateKey, err := crypto.HexToECDSA(cfg.Networks.Minters[0].MinterPrivateKey)
-	auth, err := bind.NewKeyedTransactorWithChainID(privateKey, big.NewInt(5))
+	privEcdsaKey, ethereumAddress, err := GetEcdsaKeyAddress(cfg.Networks.Minters[0].MinterPrivateKey)
+	if err != nil {
+		return nil, err
+	}
 
-	messageTransmitter, err := cmd.NewMessageTransmitter(common.HexToAddress("MessageTransmitterAddress"), client) // TODO address
+	auth, err := bind.NewKeyedTransactorWithChainID(privEcdsaKey, big.NewInt(cfg.Networks.Destination.Ethereum.ChainId))
+	messageTransmitter, err := NewMessageTransmitter(common.HexToAddress(cfg.Networks.Source.Ethereum.MessageTransmitter), client)
+	attestationBytes, err := hex.DecodeString(msg.Attestation[2:])
+	if err != nil {
+		return nil, errors.New("unable to decode message attestation")
+	}
 
 	for attempt := 0; attempt <= cfg.Networks.Destination.Ethereum.BroadcastRetries; attempt++ {
 		logger.Debug(fmt.Sprintf(
@@ -58,34 +49,41 @@ func Broadcast(
 
 		// TODO Account sequence lock is implemented but gets out of sync with remote.
 		// accountSequence := sequenceMap.Next(cfg.Networks.Destination.Noble.DomainId)
-		nonce, err := GetEthereumAccountNonce(cfg.Networks.Destination.Ethereum.RPC, ethereumAddress)
+		_, err := GetEthereumAccountNonce(cfg.Networks.Destination.Ethereum.RPC, ethereumAddress)
 		if err != nil {
 			logger.Error("unable to retrieve ethereum account nonce")
+			continue
 		}
+		//auth.Nonce = big.NewInt(nonce)
 
-		// broadcast txn
 		// broadcast txn
 		tx, err := messageTransmitter.ReceiveMessage(
 			auth,
-			[]byte{},
-			[]byte{},
+			msg.MsgSentBytes,
+			attestationBytes,
 		)
 		if err == nil {
 			msg.Status = types.Complete
 			return tx, nil
 		} else {
+
 			logger.Error(fmt.Sprintf("error during broadcast: %s", err.Error()))
-			logger.Info(fmt.Sprintf("Retrying in %d seconds", cfg.Networks.Destination.Ethereum.BroadcastRetryInterval))
-			time.Sleep(time.Duration(cfg.Networks.Destination.Ethereum.BroadcastRetryInterval) * time.Second)
+			if parsedErr, ok := err.(JsonError); ok {
+				if parsedErr.ErrorCode() == 3 && parsedErr.Error() == "execution reverted: Nonce already used" {
+					msg.Status = types.Failed
+					return nil, errors.New(fmt.Sprintf("Nonce already used"))
+				}
+			}
+
+			// if it's not the last attempt, retry
+			if attempt != cfg.Networks.Destination.Ethereum.BroadcastRetries {
+				logger.Info(fmt.Sprintf("Retrying in %d seconds", cfg.Networks.Destination.Ethereum.BroadcastRetryInterval))
+				time.Sleep(time.Duration(cfg.Networks.Destination.Ethereum.BroadcastRetryInterval) * time.Second)
+			}
 			continue
 		}
 	}
 	msg.Status = types.Failed
 
 	return nil, errors.New("reached max number of broadcast attempts")
-}
-
-// TODO
-func GetEthereumAccountNonce(urlBase string, address string) (int64, error) {
-	return 0, nil
 }

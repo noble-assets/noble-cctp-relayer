@@ -28,18 +28,24 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 	currentBlock := cfg.Networks.Source.Noble.StartBlock
 	chainTip := GetNobleChainTip(cfg)
 	blockQueue := make(chan uint64, 1000000)
-	for i := currentBlock; i <= chainTip; i++ {
-		blockQueue <- i
-	}
-	currentBlock = chainTip
 
+	// history
+	for currentBlock <= chainTip {
+		fmt.Println(fmt.Sprintf("1 added block to queue: %d", currentBlock))
+		blockQueue <- currentBlock
+		currentBlock++
+	}
+
+	// listen for new blocks
 	go func() {
 		for {
 			chainTip = GetNobleChainTip(cfg)
-			if chainTip > currentBlock {
-				for i := currentBlock + 1; i <= chainTip; i++ {
+			if chainTip >= currentBlock {
+				for i := currentBlock; i <= chainTip; i++ {
+					fmt.Println(fmt.Sprintf("2 added block to queue: %d", i))
 					blockQueue <- i
 				}
+				currentBlock = chainTip + 1
 			}
 			time.Sleep(6 * time.Second)
 		}
@@ -49,30 +55,30 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 	for i := 0; i < int(cfg.Networks.Source.Noble.Workers); i++ {
 		go func() {
 			for {
-				currentBlock := <-blockQueue
-				logger.Debug(fmt.Sprintf("Querying Noble block %d", currentBlock))
-				rawResponse, err := http.Get(fmt.Sprintf("https://rpc.testnet.noble.strange.love/tx_search?query=\"tx.height=%d\"", currentBlock))
+				block := <-blockQueue
+				logger.Debug(fmt.Sprintf("Querying Noble block %d", block))
+				rawResponse, err := http.Get(fmt.Sprintf("https://rpc.testnet.noble.strange.love/tx_search?query=\"tx.height=%d\"", block))
 				if err != nil {
-					logger.Debug(fmt.Sprintf("unable to query Noble block %d", currentBlock))
+					logger.Debug(fmt.Sprintf("unable to query Noble block %d", block))
 					continue
 				}
 				if rawResponse.StatusCode != http.StatusOK {
-					logger.Debug(fmt.Sprintf("non 200 response received for Noble block %d", currentBlock))
+					logger.Debug(fmt.Sprintf("non 200 response received for Noble block %d", block))
 					time.Sleep(5 * time.Second)
-					blockQueue <- currentBlock
+					blockQueue <- block
 					continue
 				}
 
 				body, err := io.ReadAll(rawResponse.Body)
 				if err != nil {
-					logger.Debug(fmt.Sprintf("unable to parse Noble block %d", currentBlock))
+					logger.Debug(fmt.Sprintf("unable to parse Noble block %d", block))
 					continue
 				}
 
 				response := types.BlockResultsResponse{}
 				err = json.Unmarshal(body, &response)
 				if err != nil {
-					logger.Debug(fmt.Sprintf("unable to unmarshal Noble block %d", currentBlock))
+					logger.Debug(fmt.Sprintf("unable to unmarshal Noble block %d", block))
 					continue
 				}
 

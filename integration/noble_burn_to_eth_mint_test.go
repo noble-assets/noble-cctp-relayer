@@ -41,6 +41,7 @@ import (
 // and broadcasts on Ethereum Goerli
 func TestNobleBurnToEthMint(t *testing.T) {
 	setupTest()
+	cfg.Networks.Source.Ethereum.Enabled = false
 
 	// start up relayer
 	cfg.Networks.Source.Noble.StartBlock = getNobleLatestBlockHeight()
@@ -52,13 +53,13 @@ func TestNobleBurnToEthMint(t *testing.T) {
 	go cmd.StartProcessor(cfg, logger, processingQueue, sequenceMap)
 
 	fmt.Println("Building Noble depositForBurn txn...")
-	ethAddress := "0x971c54a6Eb782fAccD00bc3Ed5E934Cc5bD8e3Ef"
-	fmt.Println("Minting on Ethereum to https://goerli.etherscan.io/address/" + ethAddress)
+	ethDestinationAddress := "0x971c54a6Eb782fAccD00bc3Ed5E934Cc5bD8e3Ef"
+	fmt.Println("Minting on Ethereum to https://goerli.etherscan.io/address/" + ethDestinationAddress)
 
 	// verify ethereum usdc amount
 	client, _ := ethclient.Dial(testCfg.Networks.Ethereum.RPC)
 	defer client.Close()
-	originalEthBalance := getEthBalance(client, ethAddress)
+	originalEthBalance := getEthBalance(client, ethDestinationAddress)
 
 	// deposit for burn
 
@@ -77,7 +78,7 @@ func TestNobleBurnToEthMint(t *testing.T) {
 	require.Nil(t, err)
 
 	mintRecipient := make([]byte, 32)
-	copy(mintRecipient[12:], common.FromHex(ethAddress))
+	copy(mintRecipient[12:], common.FromHex(ethDestinationAddress))
 	var burnAmount = math.NewInt(1)
 
 	// deposit for burn on noble
@@ -138,14 +139,14 @@ func TestNobleBurnToEthMint(t *testing.T) {
 
 	fmt.Println("Checking eth wallet...")
 	for i := 0; i < 60; i++ {
-		if originalEthBalance+burnAmount.Uint64() == getEthBalance(client, ethAddress) {
-			fmt.Println("Successfully minted at https://goerli.etherscan.io/address/" + ethAddress)
+		if originalEthBalance+burnAmount.Uint64() == getEthBalance(client, ethDestinationAddress) {
+			fmt.Println("Successfully minted at https://goerli.etherscan.io/address/" + ethDestinationAddress)
 			return
 		}
 		time.Sleep(1 * time.Second)
 	}
 	// verify eth balance
-	require.Equal(t, originalEthBalance+burnAmount.Uint64(), getEthBalance(client, ethAddress))
+	require.Equal(t, originalEthBalance+burnAmount.Uint64(), getEthBalance(client, ethDestinationAddress))
 }
 
 func getEthBalance(client *ethclient.Client, address string) uint64 {

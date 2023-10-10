@@ -104,13 +104,13 @@ func NobleLogToMessageState(tx Tx) (messageState *MessageState, err error) {
 						continue
 					}
 
+					hashed := crypto.Keccak256(rawMessageSentBytes)
+					hashedHexStr := hex.EncodeToString(hashed) // TODO is this right?
+
 					msg, err := new(types.Message).Parse(rawMessageSentBytes)
 					if err != nil {
 						continue
 					}
-
-					hashed := crypto.Keccak256(rawMessageSentBytes)
-					hashedHexStr := hex.EncodeToString(hashed) // TODO is this right?
 
 					messageState = &MessageState{
 						IrisLookupId:      hashedHexStr,

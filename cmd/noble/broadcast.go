@@ -53,7 +53,7 @@ func Broadcast(
 
 	// get priv key
 	nobleAddress := cfg.Networks.Minters[4].MinterAddress
-	keyBz, _ := hex.DecodeString(cfg.Networks.Minters[4].MinterPrivateKey)
+	keyBz, err := hex.DecodeString(cfg.Networks.Minters[4].MinterPrivateKey)
 	privKey := secp256k1.PrivKey{Key: keyBz}
 
 	if err != nil { // TODO

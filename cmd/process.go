@@ -139,8 +139,8 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 					processingQueue <- msg
 					continue
 				}
-				fmt.Println(response)
-				// TODO other error cases, set dest hash
+				msg.DestTxHash = response.To().Hex()
+				logger.Info(fmt.Sprintf("Successfully broadcast %s to Ethereum: %s", msg.SourceTxHash, msg.DestTxHash))
 			case 4: // noble
 				response, err := noble.Broadcast(cfg, logger, msg, sequenceMap)
 				if err != nil {

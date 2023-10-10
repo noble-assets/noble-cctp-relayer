@@ -31,6 +31,7 @@ type Config struct {
 		Destination struct {
 			Ethereum struct {
 				DomainId               uint32 `yaml:"domain-id"`
+				ChainId                int64  `yaml:"chain-id"`
 				RPC                    string `yaml:"rpc"`
 				BroadcastRetries       int    `yaml:"broadcast-retries"`
 				BroadcastRetryInterval int    `yaml:"broadcast-retry-interval"`
