@@ -68,6 +68,7 @@ func init() {
 					os.Exit(1)
 				}
 				minter.MinterAddress = address
+				Cfg.Networks.Minters[0] = minter
 			case 4:
 				keyBz, err := hex.DecodeString(minter.MinterPrivateKey)
 				if err != nil {
@@ -81,8 +82,8 @@ func init() {
 					os.Exit(1)
 				}
 				minter.MinterAddress = address
+				Cfg.Networks.Minters[4] = minter
 			}
-
 		}
 
 		// Set default listener blocks

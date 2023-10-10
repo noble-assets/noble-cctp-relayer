@@ -16,10 +16,7 @@ import (
 func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *types.MessageState) {
 	// set up client
 
-	logger.Info(fmt.Sprintf(
-		"Starting Noble listener at block %d looking back %d blocks",
-		cfg.Networks.Source.Noble.StartBlock,
-		cfg.Networks.Source.Noble.LookbackPeriod))
+	logger.Info(fmt.Sprintf("Starting Noble listener at block %d", cfg.Networks.Source.Noble.StartBlock))
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -31,7 +28,6 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 
 	// history
 	for currentBlock <= chainTip {
-		fmt.Println(fmt.Sprintf("1 added block to queue: %d", currentBlock))
 		blockQueue <- currentBlock
 		currentBlock++
 	}
@@ -42,7 +38,6 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 			chainTip = GetNobleChainTip(cfg)
 			if chainTip >= currentBlock {
 				for i := currentBlock; i <= chainTip; i++ {
-					fmt.Println(fmt.Sprintf("2 added block to queue: %d", i))
 					blockQueue <- i
 				}
 				currentBlock = chainTip + 1
@@ -85,9 +80,9 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 				for _, tx := range response.Result.Txs {
 					parsedMsg, err := types.NobleLogToMessageState(tx)
 					if err != nil {
-						logger.Debug("unable to parse Noble log into MessageState, skipping")
 						continue
 					}
+					logger.Info(fmt.Sprintf("New stream msg from %d with tx hash %s", parsedMsg.SourceDomain, parsedMsg.SourceTxHash))
 					processingQueue <- parsedMsg
 				}
 			}
