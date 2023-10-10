@@ -105,7 +105,7 @@ func NobleLogToMessageState(tx Tx) (messageState *MessageState, err error) {
 					}
 
 					hashed := crypto.Keccak256(rawMessageSentBytes)
-					hashedHexStr := hex.EncodeToString(hashed) // TODO is this right?
+					hashedHexStr := hex.EncodeToString(hashed)
 
 					msg, err := new(types.Message).Parse(rawMessageSentBytes)
 					if err != nil {

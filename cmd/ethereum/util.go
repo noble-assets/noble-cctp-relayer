@@ -32,7 +32,7 @@ func GetEthereumAccountNonce(endpoint string, address string) (int64, error) {
 	return nonce.Int64(), nil
 }
 
-// Return public ecdsa key and address given the private key
+// GetEcdsaKeyAddress returns the public ecdsa key and address given the private key
 func GetEcdsaKeyAddress(privateKey string) (*ecdsa.PrivateKey, string, error) {
 	privEcdsaKey, err := crypto.HexToECDSA(privateKey)
 	if err != nil {

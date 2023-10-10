@@ -1,7 +1,6 @@
 package integration_testing
 
 import (
-	"encoding/hex"
 	"fmt"
 	"github.com/cosmos/cosmos-sdk/testutil/testdata"
 	"github.com/cosmos/cosmos-sdk/types/bech32"
@@ -69,9 +68,6 @@ func TestEthBurnToNobleMintAndForward(t *testing.T) {
 	destinationRecipient := append([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, cosmosAddress2...)
 
 	var BurnAmount = big.NewInt(1)
-
-	f := hex.EncodeToString(mintRecipientPadded)
-	fmt.Println(f)
 
 	tx, err := tokenMessengerWithMetadata.DepositForBurn(
 		auth,

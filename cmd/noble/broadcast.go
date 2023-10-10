@@ -21,7 +21,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
-	"github.com/cosmos/cosmos-sdk/types/bech32"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	xauthsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	xauthtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
@@ -54,11 +53,10 @@ func Broadcast(
 	// get priv key
 	nobleAddress := cfg.Networks.Minters[4].MinterAddress
 	keyBz, err := hex.DecodeString(cfg.Networks.Minters[4].MinterPrivateKey)
-	privKey := secp256k1.PrivKey{Key: keyBz}
-
-	if err != nil { // TODO
-		return nil, errors.New("unable to convert priv key to noble address")
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("Unable to parse Noble private key"))
 	}
+	privKey := secp256k1.PrivKey{Key: keyBz}
 
 	receiveMsg := nobletypes.NewMsgReceiveMessage(
 		nobleAddress,
@@ -73,13 +71,7 @@ func Broadcast(
 	txBuilder.SetGasLimit(cfg.Networks.Destination.Noble.GasLimit)
 	txBuilder.SetMemo("Thank you for relaying with Strangelove")
 
-	// sign tx
-	addr, _ := bech32.ConvertAndEncode("noble", privKey.PubKey().Address())
-	if addr != nobleAddress {
-		return nil, fmt.Errorf("private key (%s) does not match noble address (%s)", addr, nobleAddress)
-	}
-
-	// broadcast txn
+	// sign and broadcast txn
 	rpcClient, err := NewRPCClient(cfg.Networks.Destination.Noble.RPC, 10*time.Second)
 	if err != nil {
 		return nil, errors.New("failed to set up rpc client")

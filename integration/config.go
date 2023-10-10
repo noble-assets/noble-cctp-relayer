@@ -38,6 +38,17 @@ func setupTest() func() {
 	sequenceMap = types.NewSequenceMap()
 	sequenceMap.Put(uint32(4), nextMinterSequence)
 
+	for i, minter := range cfg.Networks.Minters {
+		switch i {
+		case 0:
+			minter.MinterAddress = "0x971c54a6Eb782fAccD00bc3Ed5E934Cc5bD8e3Ef"
+			cfg.Networks.Minters[0] = minter
+		case 4:
+			minter.MinterAddress = "noble1ar2gaqww6aphxd9qve5qglj8kqq96je6a4yrhj"
+			cfg.Networks.Minters[4] = minter
+		}
+	}
+
 	return func() {
 		// teardown
 	}
