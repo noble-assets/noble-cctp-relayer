@@ -104,4 +104,4 @@ COPY --from=busybox-min --chown=100:1000 /home/strangelove /home/strangelove
 WORKDIR /home/strangelove
 USER strangelove
 
-ENTRYPOINT ["noble-cctp-relayer", "start", "--config", "./config/testnet.yaml"]
+ENTRYPOINT ["noble-cctp-relayer", "start", "--config", "./config/config.yaml", "-v"]
