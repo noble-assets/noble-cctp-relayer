@@ -58,6 +58,7 @@ func init() {
 		Cfg = config.Parse(cfgFile)
 		Logger.Info("successfully parsed config file", "location", cfgFile)
 
+		Logger.Info("rpc", Cfg.Networks.Source.Ethereum.RPC)
 		// Set minter addresses from priv keys
 		for i, minter := range Cfg.Networks.Minters {
 			switch i {
