@@ -26,7 +26,7 @@ var startCmd = &cobra.Command{
 // Store represents terminal states
 var State = types.NewStateMap()
 
-// SequenceMap maps the domain -> the equivalent minter address sequence/nonce
+// SequenceMap maps the domain -> the equivalent minter account sequence or nonce
 var sequenceMap = types.NewSequenceMap()
 
 func Start(cmd *cobra.Command, args []string) {

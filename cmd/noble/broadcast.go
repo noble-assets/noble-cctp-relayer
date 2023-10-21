@@ -78,7 +78,7 @@ func Broadcast(
 	}
 
 	for attempt := 0; attempt <= cfg.Networks.Destination.Noble.BroadcastRetries; attempt++ {
-		logger.Debug(fmt.Sprintf(
+		logger.Info(fmt.Sprintf(
 			"Broadcasting %s message from %d to %d: with source tx hash %s",
 			msg.Type,
 			msg.SourceDomain,
