@@ -19,7 +19,7 @@ func init() {
 }
 
 func TestGetEthereumAccountNonce(t *testing.T) {
-	_, err := ethereum.GetEthereumAccountNonce(cfg.Networks.Destination.Ethereum.RPC, cfg.Networks.Minters[0].MinterAddress)
+	_, err := ethereum.GetEthereumAccountNonce(cfg.Networks.Destination.Ethereum.RPC, "0x4996f29b254c77972fff8f25e6f7797b3c9a0eb6")
 	require.Nil(t, err)
 }
 
