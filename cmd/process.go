@@ -184,6 +184,8 @@ func filterInvalidDestinationCallers(cfg config.Config, logger log.Logger, msg *
 	if err != nil {
 		result = true
 	}
+
+	//transformedDestinationCaller :=
 	if !bytes.Equal(msg.DestinationCaller, zeroByteArr) &&
 		bech32DestinationCaller != cfg.Networks.Minters[msg.DestDomain].MinterAddress {
 		result = true

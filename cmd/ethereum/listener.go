@@ -96,9 +96,9 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 
 				processingQueue <- parsedMsg
 
-				// It's important to wait a small amount of time between sending messages into the processing queue
-				// so that nonces are set correctly
-				time.Sleep(10 * time.Millisecond)
+				// It might help to wait a small amount of time between sending messages into the processing queue
+				// so that account sequences / nonces are set correctly
+				// time.Sleep(10 * time.Millisecond)
 			}
 		}
 	}()
