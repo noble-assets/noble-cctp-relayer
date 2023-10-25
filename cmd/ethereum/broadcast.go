@@ -40,21 +40,15 @@ func Broadcast(
 	}
 
 	for attempt := 0; attempt <= cfg.Networks.Destination.Ethereum.BroadcastRetries; attempt++ {
-		logger.Debug(fmt.Sprintf(
+		logger.Info(fmt.Sprintf(
 			"Broadcasting %s message from %d to %d: with source tx hash %s",
 			msg.Type,
 			msg.SourceDomain,
 			msg.DestDomain,
 			msg.SourceTxHash))
 
-		// TODO Account sequence lock is implemented but gets out of sync with remote.
-		// accountSequence := sequenceMap.Next(cfg.Networks.Destination.Noble.DomainId)
-		_, err := GetEthereumAccountNonce(cfg.Networks.Destination.Ethereum.RPC, ethereumAddress)
-		if err != nil {
-			logger.Error("unable to retrieve ethereum account nonce")
-			continue
-		}
-		//auth.Nonce = big.NewInt(nonce)
+		nonce := sequenceMap.Next(cfg.Networks.Destination.Ethereum.DomainId)
+		auth.Nonce = big.NewInt(nonce)
 
 		// broadcast txn
 		tx, err := messageTransmitter.ReceiveMessage(
@@ -66,12 +60,16 @@ func Broadcast(
 			msg.Status = types.Complete
 			return tx, nil
 		} else {
-
 			logger.Error(fmt.Sprintf("error during broadcast: %s", err.Error()))
 			if parsedErr, ok := err.(JsonError); ok {
 				if parsedErr.ErrorCode() == 3 && parsedErr.Error() == "execution reverted: Nonce already used" {
-					msg.Status = types.Failed
-					return nil, errors.New(fmt.Sprintf("Nonce already used"))
+					nonce, err = GetEthereumAccountNonce(cfg.Networks.Destination.Ethereum.RPC, ethereumAddress)
+					if err != nil {
+						logger.Error("unable to retrieve account number")
+					}
+					logger.Debug(fmt.Sprintf("retrying with new nonce: %d", nonce))
+					sequenceMap.Put(cfg.Networks.Destination.Ethereum.DomainId, nonce)
+
 				}
 			}
 

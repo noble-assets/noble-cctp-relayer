@@ -4,7 +4,7 @@ import (
 	"sync"
 )
 
-// SequenceMap holds the account sequence to avoid account sequence mismatch errors
+// SequenceMap holds a minter account's txn count to avoid account sequence mismatch errors
 type SequenceMap struct {
 	mu sync.Mutex
 	// map destination domain -> minter account sequence

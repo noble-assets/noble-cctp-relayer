@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -78,16 +79,16 @@ func Broadcast(
 	}
 
 	for attempt := 0; attempt <= cfg.Networks.Destination.Noble.BroadcastRetries; attempt++ {
-		logger.Debug(fmt.Sprintf(
+		logger.Info(fmt.Sprintf(
 			"Broadcasting %s message from %d to %d: with source tx hash %s",
 			msg.Type,
 			msg.SourceDomain,
 			msg.DestDomain,
 			msg.SourceTxHash))
 
-		// TODO Account sequence lock is implemented but gets out of sync with remote.
-		// accountSequence := sequenceMap.Next(cfg.Networks.Destination.Noble.DomainId)
-		accountNumber, accountSequence, err := GetNobleAccountNumberSequence(cfg.Networks.Destination.Noble.API, nobleAddress)
+		accountSequence := sequenceMap.Next(cfg.Networks.Destination.Noble.DomainId)
+		accountNumber, _, err := GetNobleAccountNumberSequence(cfg.Networks.Destination.Noble.API, nobleAddress)
+
 		if err != nil {
 			logger.Error("unable to retrieve account number")
 		}
@@ -134,14 +135,38 @@ func Broadcast(
 			msg.Status = types.Complete
 			return rpcResponse, nil
 		}
+
+		// check tx response code
+		logger.Error(fmt.Sprintf("received non zero : %d - %s", rpcResponse.Code, rpcResponse.Log))
+
+		if err == nil && rpcResponse.Code == 32 {
+			// on account sequence mismatch, extract correct account sequence and retry
+			pattern := `expected (\d+), got (\d+)`
+			re := regexp.MustCompile(pattern)
+			match := re.FindStringSubmatch(rpcResponse.Log)
+
+			var newAccountSequence int64
+			if len(match) == 3 {
+				// Extract the numbers from the match.
+				newAccountSequence, _ = strconv.ParseInt(match[1], 10, 0)
+			} else {
+				// otherwise, just request the account sequence
+				_, newAccountSequence, err = GetNobleAccountNumberSequence(cfg.Networks.Destination.Noble.API, nobleAddress)
+				if err != nil {
+					logger.Error("unable to retrieve account number")
+				}
+			}
+			logger.Debug(fmt.Sprintf("error during broadcast: %s", rpcResponse.Log))
+			logger.Debug(fmt.Sprintf("retrying with new account sequence: %d", newAccountSequence))
+			sequenceMap.Put(cfg.Networks.Destination.Noble.DomainId, newAccountSequence)
+		}
 		if err != nil {
 			logger.Error(fmt.Sprintf("error during broadcast: %s", err.Error()))
 			logger.Info(fmt.Sprintf("Retrying in %d seconds", cfg.Networks.Destination.Noble.BroadcastRetryInterval))
 			time.Sleep(time.Duration(cfg.Networks.Destination.Noble.BroadcastRetryInterval) * time.Second)
 			continue
 		}
-		// check tx response code
-		logger.Error(fmt.Sprintf("received non zero : %d - %s", rpcResponse.Code, rpcResponse.Log))
+
 		logger.Info(fmt.Sprintf("Retrying in %d seconds", cfg.Networks.Destination.Noble.BroadcastRetryInterval))
 		time.Sleep(time.Duration(cfg.Networks.Destination.Noble.BroadcastRetryInterval) * time.Second)
 	}

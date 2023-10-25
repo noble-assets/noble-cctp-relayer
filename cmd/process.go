@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"cosmossdk.io/log"
+	"encoding/hex"
 	"fmt"
 	"github.com/spf13/cobra"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/circle"
@@ -11,6 +12,7 @@ import (
 	"github.com/strangelove-ventures/noble-cctp-relayer/config"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -26,7 +28,7 @@ var startCmd = &cobra.Command{
 // Store represents terminal states
 var State = types.NewStateMap()
 
-// SequenceMap maps the domain -> the equivalent minter address sequence/nonce
+// SequenceMap maps the domain -> the equivalent minter account sequence or nonce
 var sequenceMap = types.NewSequenceMap()
 
 func Start(cmd *cobra.Command, args []string) {
@@ -178,20 +180,35 @@ func filterDisabledCCTPRoutes(cfg config.Config, logger log.Logger, msg *types.M
 // filterInvalidDestinationCallers returns true if the minter is not the destination caller for the specified domain
 func filterInvalidDestinationCallers(cfg config.Config, logger log.Logger, msg *types.MessageState) bool {
 	zeroByteArr := make([]byte, 32)
-	bech32DestinationCaller, err := types.DecodeDestinationCaller(msg.DestinationCaller)
-
 	result := false
-	if err != nil {
-		result = true
-	}
-	if !bytes.Equal(msg.DestinationCaller, zeroByteArr) &&
-		bech32DestinationCaller != cfg.Networks.Minters[msg.DestDomain].MinterAddress {
-		result = true
-	}
 
-	if result {
-		logger.Info(fmt.Sprintf("Filtered tx %s because the destination caller %s is specified and it's not the minter %s",
-			msg.SourceTxHash, msg.DestinationCaller, cfg.Networks.Minters[msg.DestDomain].MinterAddress))
+	switch msg.DestDomain {
+	case 4:
+		bech32DestinationCaller, err := types.DecodeDestinationCaller(msg.DestinationCaller)
+		if err != nil {
+			result = true
+		}
+		if !bytes.Equal(msg.DestinationCaller, zeroByteArr) &&
+			bech32DestinationCaller != cfg.Networks.Minters[msg.DestDomain].MinterAddress {
+			result = true
+		}
+		if result {
+			logger.Info(fmt.Sprintf("Filtered tx %s because the destination caller %s is specified and it's not the minter %s",
+				msg.SourceTxHash, msg.DestinationCaller, cfg.Networks.Minters[msg.DestDomain].MinterAddress))
+		}
+
+	default: // minting to evm
+		decodedMinter, err := hex.DecodeString(strings.ReplaceAll(cfg.Networks.Minters[0].MinterAddress, "0x", ""))
+		if err != nil {
+			return !bytes.Equal(msg.DestinationCaller, zeroByteArr)
+		}
+
+		decodedMinterPadded := make([]byte, 32)
+		copy(decodedMinterPadded[12:], decodedMinter)
+
+		if !bytes.Equal(msg.DestinationCaller, zeroByteArr) && !bytes.Equal(msg.DestinationCaller, decodedMinterPadded) {
+			result = true
+		}
 	}
 
 	return result

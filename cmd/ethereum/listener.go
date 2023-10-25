@@ -72,6 +72,10 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 		logger.Info(fmt.Sprintf("New historical msg from source domain %d with tx hash %s", parsedMsg.SourceDomain, parsedMsg.SourceTxHash))
 
 		processingQueue <- parsedMsg
+
+		// It might help to wait a small amount of time between sending messages into the processing queue
+		// so that account sequences / nonces are set correctly
+		// time.Sleep(10 * time.Millisecond)
 	}
 
 	// consume stream
@@ -90,6 +94,10 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 				logger.Info(fmt.Sprintf("New stream msg from %d with tx hash %s", parsedMsg.SourceDomain, parsedMsg.SourceTxHash))
 
 				processingQueue <- parsedMsg
+
+				// It might help to wait a small amount of time between sending messages into the processing queue
+				// so that account sequences / nonces are set correctly
+				// time.Sleep(10 * time.Millisecond)
 			}
 		}
 	}()

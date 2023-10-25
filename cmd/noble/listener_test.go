@@ -1,8 +1,9 @@
-package noble
+package noble_test
 
 import (
 	"cosmossdk.io/log"
 	"github.com/rs/zerolog"
+	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/noble"
 	"github.com/strangelove-ventures/noble-cctp-relayer/config"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"github.com/stretchr/testify/require"
@@ -25,8 +26,7 @@ func init() {
 
 func TestStartListener(t *testing.T) {
 	cfg.Networks.Source.Noble.StartBlock = 3273557
-	cfg.Networks.Source.Noble.LookbackPeriod = 0
-	go StartListener(cfg, logger, processingQueue)
+	go noble.StartListener(cfg, logger, processingQueue)
 
 	time.Sleep(20 * time.Second)
 

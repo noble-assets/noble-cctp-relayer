@@ -38,6 +38,7 @@ func CheckAttestation(cfg config.Config, logger log.Logger, irisLookupId string)
 		logger.Debug("unable to unmarshal response")
 		return nil
 	}
+	logger.Info(fmt.Sprintf("Attestation found for %s%s%s", cfg.Circle.AttestationBaseUrl, "0x", irisLookupId))
 
 	return &response
 }
