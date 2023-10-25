@@ -156,11 +156,9 @@ func Broadcast(
 					logger.Error("unable to retrieve account number")
 				}
 			}
-
 			logger.Debug(fmt.Sprintf("error during broadcast: %s", rpcResponse.Log))
 			logger.Debug(fmt.Sprintf("retrying with new account sequence: %d", newAccountSequence))
-			sequenceMap.Put(4, newAccountSequence)
-
+			sequenceMap.Put(cfg.Networks.Destination.Noble.DomainId, newAccountSequence)
 		}
 		if err != nil {
 			logger.Error(fmt.Sprintf("error during broadcast: %s", err.Error()))

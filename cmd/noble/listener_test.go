@@ -26,7 +26,6 @@ func init() {
 
 func TestStartListener(t *testing.T) {
 	cfg.Networks.Source.Noble.StartBlock = 3273557
-	cfg.Networks.Source.Noble.LookbackPeriod = 0
 	go noble.StartListener(cfg, logger, processingQueue)
 
 	time.Sleep(20 * time.Second)

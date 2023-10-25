@@ -65,7 +65,7 @@ func TestNobleMultiSend(t *testing.T) {
 	cfg.Networks.Source.Ethereum.LookbackPeriod = 5
 	cfg.Networks.Destination.Noble.BroadcastRetries = 0 // don't rely on retries to broadcast txns
 
-	fmt.Println(fmt.Sprintf("Building %d Ethereum depositForBurnWithMetadata txns...", n))
+	fmt.Println(fmt.Sprintf("Building %d Ethereum depositForBurnWithCaller txns...", n))
 
 	_, _, cosmosAddress := testdata.KeyTestPubAddr()
 	nobleAddress, _ := bech32.ConvertAndEncode("noble", cosmosAddress)
@@ -135,4 +135,5 @@ func TestNobleMultiSend(t *testing.T) {
 		}
 		time.Sleep(1 * time.Second)
 	}
+	require.Equal(t, originalNobleBalance+burnAmount.Uint64()*uint64(n), getNobleBalance(nobleAddress))
 }

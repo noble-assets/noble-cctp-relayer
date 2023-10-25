@@ -45,7 +45,6 @@ func TestNobleBurnToEthMint(t *testing.T) {
 
 	// start up relayer
 	cfg.Networks.Source.Noble.StartBlock = getNobleLatestBlockHeight()
-	cfg.Networks.Source.Noble.LookbackPeriod = 0
 
 	fmt.Println("Starting relayer...")
 	processingQueue := make(chan *types.MessageState, 10)
