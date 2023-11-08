@@ -23,6 +23,7 @@ type Config struct {
 				RPC              string `yaml:"rpc"`
 				RequestQueueSize uint32 `yaml:"request-queue-size"`
 				StartBlock       uint64 `yaml:"start-block"`
+				LookbackPeriod   uint64 `yaml:"lookback-period"`
 				Workers          uint32 `yaml:"workers"`
 				Enabled          bool   `yaml:"enabled"`
 			} `yaml:"noble"`

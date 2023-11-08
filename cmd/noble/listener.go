@@ -1,32 +1,37 @@
 package noble
 
 import (
-	"cosmossdk.io/log"
 	"encoding/json"
 	"fmt"
-	"github.com/strangelove-ventures/noble-cctp-relayer/config"
-	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"io"
 	"net/http"
 	"strconv"
 	"sync"
 	"time"
+
+	"cosmossdk.io/log"
+	"github.com/strangelove-ventures/noble-cctp-relayer/config"
+	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
 func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *types.MessageState) {
 	// set up client
 
-	logger.Info(fmt.Sprintf("Starting Noble listener at block %d", cfg.Networks.Source.Noble.StartBlock))
+	logger.Info(fmt.Sprintf("Starting Noble listener at block %d looking back %d blocks",
+		cfg.Networks.Source.Noble.StartBlock,
+		cfg.Networks.Source.Noble.LookbackPeriod))
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 
 	// enqueue block heights
 	currentBlock := cfg.Networks.Source.Noble.StartBlock
+	lookback := cfg.Networks.Source.Noble.LookbackPeriod
 	chainTip := GetNobleChainTip(cfg)
 	blockQueue := make(chan uint64, 1000000)
 
 	// history
+	currentBlock = currentBlock - lookback
 	for currentBlock <= chainTip {
 		blockQueue <- currentBlock
 		currentBlock++
