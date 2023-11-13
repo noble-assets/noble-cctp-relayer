@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"time"
+
 	"github.com/circlefin/noble-cctp/x/cctp/types"
 	"github.com/cosmos/cosmos-sdk/types/bech32"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"strconv"
-	"time"
 )
 
 const (
@@ -47,7 +48,9 @@ type MessageState struct {
 func EvmLogToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log) (messageState *MessageState, err error) {
 
 	event := make(map[string]interface{})
-	_ = abi.UnpackIntoMap(event, messageSent.Name, log.Data)
+	if err = abi.UnpackIntoMap(event, messageSent.Name, log.Data); err != nil {
+		return nil, err
+	}
 
 	rawMessageSentBytes := event["message"].([]byte)
 	message, _ := new(types.Message).Parse(rawMessageSentBytes)
@@ -80,7 +83,7 @@ func EvmLogToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log)
 		return messageState, nil
 	}
 
-	return nil, errors.New(fmt.Sprintf("unable to parse txn into message.  tx hash %s", log.TxHash.Hex()))
+	return nil, fmt.Errorf("unable to parse txn into message.  tx hash %s", log.TxHash.Hex())
 }
 
 // NobleLogToMessageState transforms a Noble log into a messageState
@@ -131,7 +134,7 @@ func NobleLogToMessageState(tx Tx) (messageState *MessageState, err error) {
 		}
 	}
 
-	return nil, errors.New(fmt.Sprintf("unable to parse txn into message.  tx hash %s", tx.Hash))
+	return nil, fmt.Errorf("unable to parse txn into message.  tx hash %s", tx.Hash)
 }
 
 // DecodeDestinationCaller transforms an encoded Noble cctp address into a noble bech32 address

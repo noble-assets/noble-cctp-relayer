@@ -3,6 +3,10 @@ package types_test
 import (
 	"context"
 	"fmt"
+	"math/big"
+	"os"
+	"testing"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -12,9 +16,6 @@ import (
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"math/big"
-	"os"
-	"testing"
 )
 
 var cfg config.Config
@@ -36,6 +37,7 @@ func TestToMessageStateSuccess(t *testing.T) {
 	ethClient, err := ethclient.DialContext(context.Background(), cfg.Networks.Source.Ethereum.RPC)
 	require.Nil(t, err)
 
+	// this is circles message transmitter contract. We are listenting for messageSent events emitted from this contract address
 	messageTransmitterAddress := common.HexToAddress("0x26413e8157CD32011E726065a5462e97dD4d03D9")
 
 	query := ethereum.FilterQuery{
