@@ -3,9 +3,12 @@ package ethereum
 import (
 	"bytes"
 	"context"
-	"cosmossdk.io/log"
 	"embed"
 	"fmt"
+	"math/big"
+	"os"
+
+	"cosmossdk.io/log"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -13,8 +16,6 @@ import (
 	"github.com/pascaldekloe/etherstream"
 	"github.com/strangelove-ventures/noble-cctp-relayer/config"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
-	"math/big"
-	"os"
 )
 
 //go:embed abi/MessageTransmitter.json
@@ -66,7 +67,7 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 	for _, historicalLog := range history {
 		parsedMsg, err := types.EvmLogToMessageState(messageTransmitterABI, messageSent, &historicalLog)
 		if err != nil {
-			logger.Error("Unable to parse history log into MessageState, skipping")
+			logger.Error("Unable to parse history log into MessageState, skipping", "err", err)
 			continue
 		}
 		logger.Info(fmt.Sprintf("New historical msg from source domain %d with tx hash %s", parsedMsg.SourceDomain, parsedMsg.SourceTxHash))
