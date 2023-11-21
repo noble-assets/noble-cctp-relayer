@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -139,6 +140,8 @@ func Broadcast(
 				// Log retry information
 				logger.Info(fmt.Sprintf("Retrying in %d seconds", cfg.Networks.Destination.Noble.BroadcastRetryInterval))
 				time.Sleep(time.Duration(cfg.Networks.Destination.Noble.BroadcastRetryInterval) * time.Second)
+				// wait a random amount of time to lower probability of concurrent message nonce collision
+				time.Sleep(time.Duration(rand.Intn(5)) * time.Second)
 				continue
 			}
 
@@ -155,6 +158,8 @@ func Broadcast(
 			// Log retry information
 			logger.Info(fmt.Sprintf("Retrying in %d seconds", cfg.Networks.Destination.Noble.BroadcastRetryInterval))
 			time.Sleep(time.Duration(cfg.Networks.Destination.Noble.BroadcastRetryInterval) * time.Second)
+			// wait a random amount of time to lower probability of concurrent message nonce collision
+			time.Sleep(time.Duration(rand.Intn(5)) * time.Second)
 			continue
 		}
 
