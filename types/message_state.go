@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"time"
+
 	"github.com/circlefin/noble-cctp/x/cctp/types"
 	"github.com/cosmos/cosmos-sdk/types/bech32"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"strconv"
-	"time"
 )
 
 const (
@@ -45,7 +46,6 @@ type MessageState struct {
 
 // EvmLogToMessageState transforms an evm log into a messageState given an ABI
 func EvmLogToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log) (messageState *MessageState, err error) {
-
 	event := make(map[string]interface{})
 	_ = abi.UnpackIntoMap(event, messageSent.Name, log.Data)
 
@@ -80,7 +80,7 @@ func EvmLogToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log)
 		return messageState, nil
 	}
 
-	return nil, errors.New(fmt.Sprintf("unable to parse txn into message.  tx hash %s", log.TxHash.Hex()))
+	return nil, errors.New(fmt.Sprintf("unable to parse tx into message, tx hash %s", log.TxHash.Hex()))
 }
 
 // NobleLogToMessageState transforms a Noble log into a messageState

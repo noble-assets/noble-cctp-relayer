@@ -18,7 +18,7 @@ require (
 )
 
 require (
-	cosmossdk.io/math v1.0.0-beta.4
+	cosmossdk.io/math v1.1.2
 	github.com/circlefin/noble-cctp v0.0.0-20230911222715-829029fbba29
 	github.com/cometbft/cometbft v0.38.0
 	github.com/gin-gonic/gin v1.8.1
