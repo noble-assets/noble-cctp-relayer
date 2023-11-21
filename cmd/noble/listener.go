@@ -1,16 +1,17 @@
 package noble
 
 import (
-	"cosmossdk.io/log"
 	"encoding/json"
 	"fmt"
-	"github.com/strangelove-ventures/noble-cctp-relayer/config"
-	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"io"
 	"net/http"
 	"strconv"
 	"sync"
 	"time"
+
+	"cosmossdk.io/log"
+	"github.com/strangelove-ventures/noble-cctp-relayer/config"
+	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
 func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *types.MessageState) {

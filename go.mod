@@ -18,6 +18,7 @@ require (
 )
 
 require (
+	cosmossdk.io/math v1.1.2
 	github.com/circlefin/noble-cctp v0.0.0-20230911222715-829029fbba29
 	github.com/cometbft/cometbft v0.38.0
 	github.com/gin-gonic/gin v1.8.1
@@ -30,7 +31,6 @@ require (
 	cosmossdk.io/api v0.3.1 // indirect
 	cosmossdk.io/core v0.5.1 // indirect
 	cosmossdk.io/depinject v1.0.0-alpha.4 // indirect
-	cosmossdk.io/math v1.1.2 // indirect
 	filippo.io/edwards25519 v1.0.0 // indirect
 	github.com/4meepo/tagalign v1.3.2 // indirect
 	github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4 // indirect

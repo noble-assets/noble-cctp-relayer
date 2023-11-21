@@ -131,48 +131,72 @@ func Broadcast(
 		}
 
 		rpcResponse, err := rpcClient.BroadcastTxSync(context.Background(), txBytes)
-		if err == nil && rpcResponse.Code == 0 {
-			msg.Status = types.Complete
-			return rpcResponse, nil
-		}
+		if err != nil || (rpcResponse != nil && rpcResponse.Code != 0) {
+			// Log the error
+			logger.Error(fmt.Sprintf("error during broadcast: %s", getErrorString(err, rpcResponse)))
 
-		// check tx response code
-		logger.Error(fmt.Sprintf("received non zero : %d - %s", rpcResponse.Code, rpcResponse.Log))
-
-		if err == nil && rpcResponse.Code == 32 {
-			// on account sequence mismatch, extract correct account sequence and retry
-			pattern := `expected (\d+), got (\d+)`
-			re := regexp.MustCompile(pattern)
-			match := re.FindStringSubmatch(rpcResponse.Log)
-
-			var newAccountSequence int64
-			if len(match) == 3 {
-				// Extract the numbers from the match.
-				newAccountSequence, _ = strconv.ParseInt(match[1], 10, 0)
-			} else {
-				// otherwise, just request the account sequence
-				_, newAccountSequence, err = GetNobleAccountNumberSequence(cfg.Networks.Destination.Noble.API, nobleAddress)
-				if err != nil {
-					logger.Error("unable to retrieve account number")
-				}
+			if err != nil || rpcResponse == nil {
+				// Log retry information
+				logger.Info(fmt.Sprintf("Retrying in %d seconds", cfg.Networks.Destination.Noble.BroadcastRetryInterval))
+				time.Sleep(time.Duration(cfg.Networks.Destination.Noble.BroadcastRetryInterval) * time.Second)
+				continue
 			}
-			logger.Debug(fmt.Sprintf("error during broadcast: %s", rpcResponse.Log))
-			logger.Debug(fmt.Sprintf("retrying with new account sequence: %d", newAccountSequence))
-			sequenceMap.Put(cfg.Networks.Destination.Noble.DomainId, newAccountSequence)
-		}
-		if err != nil {
-			logger.Error(fmt.Sprintf("error during broadcast: %s", err.Error()))
+
+			// Log details for non-zero response code
+			logger.Error(fmt.Sprintf("received non-zero: %d - %s", rpcResponse.Code, rpcResponse.Log))
+
+			// Handle specific error code (32)
+			if rpcResponse.Code == 32 {
+				newAccountSequence := extractAccountSequence(logger, rpcResponse.Log, nobleAddress, cfg.Networks.Destination.Noble.API)
+				logger.Debug(fmt.Sprintf("retrying with new account sequence: %d", newAccountSequence))
+				sequenceMap.Put(cfg.Networks.Destination.Noble.DomainId, newAccountSequence)
+			}
+
+			// Log retry information
 			logger.Info(fmt.Sprintf("Retrying in %d seconds", cfg.Networks.Destination.Noble.BroadcastRetryInterval))
 			time.Sleep(time.Duration(cfg.Networks.Destination.Noble.BroadcastRetryInterval) * time.Second)
 			continue
 		}
 
-		logger.Info(fmt.Sprintf("Retrying in %d seconds", cfg.Networks.Destination.Noble.BroadcastRetryInterval))
-		time.Sleep(time.Duration(cfg.Networks.Destination.Noble.BroadcastRetryInterval) * time.Second)
+		// Tx was successfully broadcast
+		msg.Status = types.Complete
+		return rpcResponse, nil
 	}
+
 	msg.Status = types.Failed
 
 	return nil, errors.New("reached max number of broadcast attempts")
+}
+
+// getErrorString returns the appropriate value to log when tx broadcast errors are encountered.
+func getErrorString(err error, rpcResponse *ctypes.ResultBroadcastTx) string {
+	if rpcResponse != nil {
+		return rpcResponse.Log
+	}
+	return err.Error()
+}
+
+// extractAccountSequence attempts to extract the account sequence number from the RPC response logs when
+// account sequence mismatch errors are encountered. If the account sequence number cannot be extracted from the logs,
+// it is retrieved by making a request to the API endpoint.
+func extractAccountSequence(logger log.Logger, rpcResponseLog, nobleAddress, nobleAPI string) int64 {
+	pattern := `expected (\d+), got (\d+)`
+	re := regexp.MustCompile(pattern)
+	match := re.FindStringSubmatch(rpcResponseLog)
+
+	if len(match) == 3 {
+		// Extract the numbers from the match.
+		newAccountSequence, _ := strconv.ParseInt(match[1], 10, 0)
+		return newAccountSequence
+	}
+
+	// Otherwise, just request the account sequence
+	_, newAccountSequence, err := GetNobleAccountNumberSequence(nobleAPI, nobleAddress)
+	if err != nil {
+		logger.Error("unable to retrieve account number")
+	}
+
+	return newAccountSequence
 }
 
 // NewRPCClient initializes a new tendermint RPC client connected to the specified address.
