@@ -12,6 +12,8 @@ import (
 	"github.com/strangelove-ventures/noble-cctp-relayer/config"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"math/big"
+	"regexp"
+	"strconv"
 	"time"
 )
 
@@ -69,7 +71,19 @@ func Broadcast(
 					}
 					logger.Debug(fmt.Sprintf("retrying with new nonce: %d", nonce))
 					sequenceMap.Put(cfg.Networks.Destination.Ethereum.DomainId, nonce)
+				}
 
+				match, _ := regexp.MatchString("nonce too low: next nonce [0-9]+, tx nonce [0-9]+", parsedErr.Error())
+				if match {
+					numberRegex := regexp.MustCompile("[0-9]+")
+					nextNonce, err := strconv.ParseInt(numberRegex.FindAllString(parsedErr.Error(), 1)[0], 10, 0)
+					if err != nil {
+						nonce, err = GetEthereumAccountNonce(cfg.Networks.Destination.Ethereum.RPC, ethereumAddress)
+						if err != nil {
+							logger.Error("unable to retrieve account number")
+						}
+					}
+					sequenceMap.Put(cfg.Networks.Destination.Ethereum.DomainId, nextNonce)
 				}
 			}
 
