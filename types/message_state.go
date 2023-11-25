@@ -57,7 +57,6 @@ func EvmLogToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log)
 
 	messageState = &MessageState{
 		IrisLookupId:      hashedHexStr,
-		Type:              Mint,
 		Status:            Created,
 		SourceDomain:      message.SourceDomain,
 		DestDomain:        message.DestinationDomain,
