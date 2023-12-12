@@ -190,7 +190,8 @@ func TestProcessNonWhitelistedChannel(t *testing.T) {
 	p.Mu.RUnlock()
 }
 
-// created message -> nonwhitelisted channel -> filtered
+// test batch transactions where multiple messages can be sent with the same tx hash
+// MsgSentBytes defer between messages
 func TestBatchTx(t *testing.T) {
 	setupTest()
 
@@ -200,24 +201,24 @@ func TestBatchTx(t *testing.T) {
 
 	emptyBz := make([]byte, 32)
 	expectedState := &types.MessageState{
-		SourceTxHash:      "123",
+		SourceTxHash:      "123", // same source tx hash
 		IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
 		Status:            types.Created,
 		SourceDomain:      0,
 		DestDomain:        4,
 		DestinationCaller: emptyBz,
-		MsgSentBytes:      []byte("mock bytes 1"),
+		MsgSentBytes:      []byte("mock bytes 1"), // different message sent bytes
 	}
 	processingQueue <- expectedState
 
 	expectedState2 := &types.MessageState{
-		SourceTxHash:      "123",
+		SourceTxHash:      "123", // same source tx hash
 		IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
 		Status:            types.Created,
 		SourceDomain:      0,
 		DestDomain:        4,
 		DestinationCaller: emptyBz,
-		MsgSentBytes:      []byte("mock bytes 2"),
+		MsgSentBytes:      []byte("mock bytes 2"), // different message sent bytes
 	}
 
 	processingQueue <- expectedState2
