@@ -21,7 +21,7 @@ import (
 //go:embed abi/MessageTransmitter.json
 var content embed.FS
 
-func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *types.MessageState) {
+func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *types.TxState) {
 	// set up client
 	messageTransmitter, err := content.ReadFile("abi/MessageTransmitter.json")
 	if err != nil {
@@ -72,7 +72,7 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 		}
 		logger.Info(fmt.Sprintf("New historical msg from source domain %d with tx hash %s", parsedMsg.SourceDomain, parsedMsg.SourceTxHash))
 
-		processingQueue <- parsedMsg
+		processingQueue <- &types.TxState{TxHash: parsedMsg.SourceTxHash, Msgs: []*types.MessageState{parsedMsg}}
 
 		// It might help to wait a small amount of time between sending messages into the processing queue
 		// so that account sequences / nonces are set correctly
@@ -81,6 +81,7 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 
 	// consume stream
 	go func() {
+		var txState *types.TxState
 		for {
 			select {
 			case err := <-sub.Err():
@@ -93,12 +94,20 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 					continue
 				}
 				logger.Info(fmt.Sprintf("New stream msg from %d with tx hash %s", parsedMsg.SourceDomain, parsedMsg.SourceTxHash))
+				if txState == nil {
+					txState = &types.TxState{TxHash: parsedMsg.SourceTxHash, Msgs: []*types.MessageState{parsedMsg}}
+				} else if parsedMsg.SourceTxHash != txState.TxHash {
+					processingQueue <- txState
+					txState = &types.TxState{TxHash: parsedMsg.SourceTxHash, Msgs: []*types.MessageState{parsedMsg}}
+				} else {
+					txState.Msgs = append(txState.Msgs, parsedMsg)
 
-				processingQueue <- parsedMsg
-
-				// It might help to wait a small amount of time between sending messages into the processing queue
-				// so that account sequences / nonces are set correctly
-				// time.Sleep(10 * time.Millisecond)
+				}
+			default:
+				if txState != nil {
+					processingQueue <- txState
+					txState = nil
+				}
 			}
 		}
 	}()

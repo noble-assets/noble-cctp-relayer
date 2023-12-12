@@ -23,6 +23,8 @@ import (
 func TestEthBurnToNobleMint(t *testing.T) {
 	setupTest()
 
+	p := cmd.NewProcessor()
+
 	// start up relayer
 	cfg.Networks.Source.Ethereum.StartBlock = getEthereumLatestBlockHeight(t)
 	cfg.Networks.Source.Ethereum.LookbackPeriod = 0
@@ -30,7 +32,7 @@ func TestEthBurnToNobleMint(t *testing.T) {
 	fmt.Println("Starting relayer...")
 	processingQueue := make(chan *types.MessageState, 10)
 	go eth.StartListener(cfg, logger, processingQueue)
-	go cmd.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
+	go p.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
 
 	fmt.Println("Building Ethereum depositForBurnWithMetadata txn...")
 	_, _, cosmosAddress := testdata.KeyTestPubAddr()

@@ -1,28 +1,33 @@
 package types
 
 import (
-	"fmt"
 	"testing"
-)
 
-var stateMap StateMap
+	"github.com/stretchr/testify/require"
+)
 
 func TestX(t *testing.T) {
 	stateMap := NewStateMap()
-	msg := MessageState{IrisLookupId: "123", Status: Filtered}
-	stateMap.Store("123", &msg)
 
-	lMsg, _ := stateMap.Load("123")
-	fmt.Println(lMsg)
+	txHash := "123456789"
+	msg := MessageState{SourceTxHash: txHash, IrisLookupId: "123", Status: Filtered, MsgSentBytes: []byte("i like turtles")}
+	stateMap.Store(txHash, []*MessageState{&msg})
 
-	msg.Status = Complete
+	loadedMsg, _ := stateMap.Load(txHash)
+	require.True(t, msg.Equal(loadedMsg[0]))
 
-	f, _ := stateMap.Load("123")
+	loadedMsg[0].Status = Complete
 
-	lMsg.Status = Created
+	// Becasue it is a pointer, no need to re-store to state
+	// message status should be updated with out re-storing.
+	loadedMsg2, _ := stateMap.Load(txHash)
+	require.Equal(t, Complete, loadedMsg2[0].Status)
 
-	f, _ = stateMap.Load("123")
+	// even though loadedMsg is a pointer, if we add to the array, we need to re-store in cache.
+	msg2 := MessageState{SourceTxHash: txHash, IrisLookupId: "123", Status: Filtered, MsgSentBytes: []byte("mock bytes 2")}
+	loadedMsg = append(loadedMsg, &msg2)
+	stateMap.Store(txHash, loadedMsg)
 
-	fmt.Println(f)
-
+	loadedMsg3, _ := stateMap.Load(txHash)
+	require.Equal(t, 2, len(loadedMsg3))
 }

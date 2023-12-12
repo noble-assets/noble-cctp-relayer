@@ -246,7 +246,7 @@ func GetNobleAccountNumberSequence(urlBase string, address string) (int64, int64
 	var resp types.AccountResp
 	err = json.Unmarshal(body, &resp)
 	if err != nil {
-		return 0, 0, errors.New("unable to parse account number, sequence")
+		return 0, 0, fmt.Errorf("unable to parse account number, sequence. Raw HHTP Get response: %s", string(body))
 	}
 	accountNumber, _ := strconv.ParseInt(resp.AccountNumber, 10, 0)
 	accountSequence, _ := strconv.ParseInt(resp.Sequence, 10, 0)

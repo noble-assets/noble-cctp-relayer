@@ -25,9 +25,9 @@ func Broadcast(
 	ctx context.Context,
 	cfg config.Config,
 	logger log.Logger,
-	msg *types.MessageState,
+	msgs []*types.MessageState,
 	sequenceMap *types.SequenceMap,
-) (*ethtypes.Transaction, error) {
+) ([]*ethtypes.Transaction, error) {
 
 	// set up eth client
 	client, err := ethclient.Dial(cfg.Networks.Destination.Ethereum.RPC)
@@ -53,99 +53,105 @@ func Broadcast(
 		return nil, fmt.Errorf("unable to create message transmitter: %w", err)
 	}
 
-	attestationBytes, err := hex.DecodeString(msg.Attestation[2:])
-	if err != nil {
-		return nil, errors.New("unable to decode message attestation")
-	}
+	var broadcastErrors error
+	var txs []*ethtypes.Transaction
+	for _, msg := range msgs {
 
-	for attempt := 0; attempt <= cfg.Networks.Destination.Ethereum.BroadcastRetries; attempt++ {
-		logger.Info(fmt.Sprintf(
-			"Broadcasting %s message from %d to %d: with source tx hash %s",
-			msg.Type,
-			msg.SourceDomain,
-			msg.DestDomain,
-			msg.SourceTxHash))
-
-		nonce := sequenceMap.Next(cfg.Networks.Destination.Ethereum.DomainId)
-		auth.Nonce = big.NewInt(nonce)
-
-		// TODO remove
-		nextNonce, err := GetEthereumAccountNonce(cfg.Networks.Destination.Ethereum.RPC, ethereumAddress)
+		attestationBytes, err := hex.DecodeString(msg.Attestation[2:])
 		if err != nil {
-			logger.Error("unable to retrieve account number")
-		} else {
-			auth.Nonce = big.NewInt(nextNonce)
-		}
-		// TODO end remove
-
-		// check if nonce already used
-		co := &bind.CallOpts{
-			Pending: true,
-			Context: ctx,
+			return nil, errors.New("unable to decode message attestation")
 		}
 
-		logger.Debug("Checking if nonce was used for broadcast to Ethereum", "source_domain", msg.SourceDomain, "nonce", msg.Nonce)
+		for attempt := 0; attempt <= cfg.Networks.Destination.Ethereum.BroadcastRetries; attempt++ {
+			logger.Info(fmt.Sprintf(
+				"Broadcasting message from %d to %d: with source tx hash %s",
+				msg.SourceDomain,
+				msg.DestDomain,
+				msg.SourceTxHash))
 
-		key := append(
-			common.LeftPadBytes((big.NewInt(int64(msg.SourceDomain))).Bytes(), 4),
-			common.LeftPadBytes((big.NewInt(int64(msg.Nonce))).Bytes(), 8)...,
-		)
+			nonce := sequenceMap.Next(cfg.Networks.Destination.Ethereum.DomainId)
+			auth.Nonce = big.NewInt(nonce)
 
-		response, nonceErr := messageTransmitter.UsedNonces(co, [32]byte(crypto.Keccak256(key)))
-		if nonceErr != nil {
-			logger.Debug("Error querying whether nonce was used.   Continuing...")
-		} else {
-			fmt.Printf("received used nonce response: %d\n", response)
-			if response.Uint64() == uint64(1) {
-				// nonce has already been used, mark as complete
-				logger.Debug(fmt.Sprintf("This source domain/nonce has already been used: %d %d",
-					msg.SourceDomain, msg.Nonce))
-				msg.Status = types.Complete
-				return nil, errors.New("receive message was already broadcasted")
+			// TODO remove
+			nextNonce, err := GetEthereumAccountNonce(cfg.Networks.Destination.Ethereum.RPC, ethereumAddress)
+			if err != nil {
+				logger.Error("unable to retrieve account number")
+			} else {
+				auth.Nonce = big.NewInt(nextNonce)
 			}
-		}
+			// TODO end remove
 
-		// broadcast txn
-		tx, err := messageTransmitter.ReceiveMessage(
-			auth,
-			msg.MsgSentBytes,
-			attestationBytes,
-		)
-		if err == nil {
-			msg.Status = types.Complete
-			return tx, nil
-		} else {
-			logger.Error(fmt.Sprintf("error during broadcast: %s", err.Error()))
-			if parsedErr, ok := err.(JsonError); ok {
-				if parsedErr.ErrorCode() == 3 && parsedErr.Error() == "execution reverted: Nonce already used" {
+			// check if nonce already used
+			co := &bind.CallOpts{
+				Pending: true,
+				Context: ctx,
+			}
+
+			logger.Debug("Checking if nonce was used for broadcast to Ethereum", "source_domain", msg.SourceDomain, "nonce", msg.Nonce)
+
+			key := append(
+				common.LeftPadBytes((big.NewInt(int64(msg.SourceDomain))).Bytes(), 4),
+				common.LeftPadBytes((big.NewInt(int64(msg.Nonce))).Bytes(), 8)...,
+			)
+
+			response, nonceErr := messageTransmitter.UsedNonces(co, [32]byte(crypto.Keccak256(key)))
+			if nonceErr != nil {
+				logger.Debug("Error querying whether nonce was used.   Continuing...")
+			} else {
+				fmt.Printf("received used nonce response: %d\n", response)
+				if response.Uint64() == uint64(1) {
+					// nonce has already been used, mark as complete
+					logger.Debug(fmt.Sprintf("This source domain/nonce has already been used: %d %d",
+						msg.SourceDomain, msg.Nonce))
 					msg.Status = types.Complete
-					return nil, parsedErr
+					return nil, errors.New("receive message was already broadcasted")
 				}
+			}
 
-				match, _ := regexp.MatchString("nonce too low: next nonce [0-9]+, tx nonce [0-9]+", parsedErr.Error())
-				if match {
-					numberRegex := regexp.MustCompile("[0-9]+")
-					nextNonce, err := strconv.ParseInt(numberRegex.FindAllString(parsedErr.Error(), 1)[0], 10, 0)
-					if err != nil {
-						nextNonce, err = GetEthereumAccountNonce(cfg.Networks.Destination.Ethereum.RPC, ethereumAddress)
-						if err != nil {
-							logger.Error("unable to retrieve account number")
-						}
+			// broadcast txn
+			tx, err := messageTransmitter.ReceiveMessage(
+				auth,
+				msg.MsgSentBytes,
+				attestationBytes,
+			)
+			if err == nil {
+				msg.Status = types.Complete
+				txs = append(txs, tx)
+				continue
+			} else {
+				logger.Error(fmt.Sprintf("error during broadcast: %s", err.Error()))
+				if parsedErr, ok := err.(JsonError); ok {
+					if parsedErr.ErrorCode() == 3 && parsedErr.Error() == "execution reverted: Nonce already used" {
+						msg.Status = types.Complete
+						return nil, parsedErr
 					}
-					sequenceMap.Put(cfg.Networks.Destination.Ethereum.DomainId, nextNonce)
+
+					match, _ := regexp.MatchString("nonce too low: next nonce [0-9]+, tx nonce [0-9]+", parsedErr.Error())
+					if match {
+						numberRegex := regexp.MustCompile("[0-9]+")
+						nextNonce, err := strconv.ParseInt(numberRegex.FindAllString(parsedErr.Error(), 1)[0], 10, 0)
+						if err != nil {
+							nextNonce, err = GetEthereumAccountNonce(cfg.Networks.Destination.Ethereum.RPC, ethereumAddress)
+							if err != nil {
+								logger.Error("unable to retrieve account number")
+							}
+						}
+						sequenceMap.Put(cfg.Networks.Destination.Ethereum.DomainId, nextNonce)
+					}
 				}
-			}
 
-			// if it's not the last attempt, retry
-			// TODO increase the destination.ethereum.broadcast retries (3-5) and retry interval (15s).  By checking for used nonces, there is no gas cost for failed mints.
-			if attempt != cfg.Networks.Destination.Ethereum.BroadcastRetries {
-				logger.Info(fmt.Sprintf("Retrying in %d seconds", cfg.Networks.Destination.Ethereum.BroadcastRetryInterval))
-				time.Sleep(time.Duration(cfg.Networks.Destination.Ethereum.BroadcastRetryInterval) * time.Second)
+				// if it's not the last attempt, retry
+				// TODO increase the destination.ethereum.broadcast retries (3-5) and retry interval (15s).  By checking for used nonces, there is no gas cost for failed mints.
+				if attempt != cfg.Networks.Destination.Ethereum.BroadcastRetries {
+					logger.Info(fmt.Sprintf("Retrying in %d seconds", cfg.Networks.Destination.Ethereum.BroadcastRetryInterval))
+					time.Sleep(time.Duration(cfg.Networks.Destination.Ethereum.BroadcastRetryInterval) * time.Second)
+				}
+				continue
 			}
-			continue
 		}
-	}
-	msg.Status = types.Failed
+		msg.Status = types.Failed
 
-	return nil, errors.New("reached max number of broadcast attempts")
+		broadcastErrors = errors.Join(broadcastErrors, errors.New("reached max number of broadcast attempts"))
+	}
+	return nil, broadcastErrors
 }

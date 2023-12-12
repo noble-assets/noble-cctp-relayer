@@ -42,6 +42,8 @@ import (
 // and broadcasts on Ethereum Goerli
 func TestNobleBurnToEthMint(t *testing.T) {
 	setupTest()
+	p := cmd.NewProcessor()
+
 	cfg.Networks.Source.Ethereum.Enabled = false
 
 	// start up relayer
@@ -50,7 +52,7 @@ func TestNobleBurnToEthMint(t *testing.T) {
 	fmt.Println("Starting relayer...")
 	processingQueue := make(chan *types.MessageState, 10)
 	go noble.StartListener(cfg, logger, processingQueue)
-	go cmd.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
+	go p.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
 
 	fmt.Println("Building Noble depositForBurn txn...")
 	ethDestinationAddress := "0x971c54a6Eb782fAccD00bc3Ed5E934Cc5bD8e3Ef"

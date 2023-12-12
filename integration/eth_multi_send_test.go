@@ -176,8 +176,10 @@ func TestEthereumMultiSend(t *testing.T) {
 
 	processingQueue := make(chan *types.MessageState, 100)
 
+	p := cmd.NewProcessor()
+
 	go noble.StartListener(cfg, logger, processingQueue)
-	go cmd.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
+	go p.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
 
 	fmt.Println("Checking eth wallet...")
 	for i := 0; i < 60; i++ {

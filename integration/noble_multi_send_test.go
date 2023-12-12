@@ -126,8 +126,10 @@ func TestNobleMultiSend(t *testing.T) {
 	fmt.Println("Starting relayer...")
 	processingQueue := make(chan *types.MessageState, 100)
 
+	p := cmd.NewProcessor()
+
 	go eth.StartListener(cfg, logger, processingQueue)
-	go cmd.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
+	go p.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
 
 	fmt.Println("Checking noble wallet...")
 	for i := 0; i < 250; i++ {

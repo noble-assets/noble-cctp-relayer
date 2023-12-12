@@ -19,6 +19,14 @@ import (
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
+type Processor struct {
+	Mu sync.RWMutex
+}
+
+func NewProcessor() *Processor {
+	return &Processor{}
+}
+
 var startCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start relaying CCTP transactions from Ethereum to Noble",
@@ -34,6 +42,8 @@ var State = types.NewStateMap()
 var sequenceMap = types.NewSequenceMap()
 
 func Start(cmd *cobra.Command, args []string) {
+
+	p := NewProcessor()
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -71,7 +81,7 @@ func Start(cmd *cobra.Command, args []string) {
 
 	// spin up Processor worker pool
 	for i := 0; i < int(Cfg.ProcessorWorkerCount); i++ {
-		go StartProcessor(cmd.Context(), Cfg, Logger, processingQueue, sequenceMap)
+		go p.StartProcessor(cmd.Context(), Cfg, Logger, processingQueue, sequenceMap)
 	}
 
 	// listeners listen for events, parse them, and enqueue them to processingQueue
@@ -87,92 +97,111 @@ func Start(cmd *cobra.Command, args []string) {
 }
 
 // StartProcessor is the main processing pipeline.
-func StartProcessor(ctx context.Context, cfg config.Config, logger log.Logger, processingQueue chan *types.MessageState, sequenceMap *types.SequenceMap) {
+func (p *Processor) StartProcessor(ctx context.Context, cfg config.Config, logger log.Logger, processingQueue chan *types.TxState, sequenceMap *types.SequenceMap) {
 	for {
-		dequeuedMsg := <-processingQueue
+		dequeuedTx := <-processingQueue
+
 		// if this is the first time seeing this message, add it to the State
-		msg, ok := State.Load(LookupKey(dequeuedMsg.SourceTxHash, dequeuedMsg.Type))
+		tx, ok := State.Load(LookupKey(dequeuedTx.TxHash))
 		if !ok {
-			State.Store(LookupKey(dequeuedMsg.SourceTxHash, dequeuedMsg.Type), dequeuedMsg)
-			msg, _ = State.Load(LookupKey(dequeuedMsg.SourceTxHash, dequeuedMsg.Type))
-			msg.Status = types.Created
+			State.Store(LookupKey(dequeuedTx.TxHash), dequeuedTx)
+			tx, _ = State.Load(LookupKey(dequeuedTx.TxHash))
+			for _, msg := range tx.Msgs {
+				msg.Status = types.Created
+			}
 		}
 
-		// if a filter's condition is met, mark as filtered
-		if filterDisabledCCTPRoutes(cfg, logger, msg) ||
-			filterInvalidDestinationCallers(cfg, logger, msg) ||
-			filterNonWhitelistedChannels(cfg, logger, msg) ||
-			filterMessages(cfg, logger, msg) {
-			msg.Status = types.Filtered
-		}
+		var broadcastMsgs = make(map[uint32][]*types.MessageState)
+		var requeue bool
+		for _, msg := range tx.Msgs {
 
-		// if the message is burned or pending, check for an attestation
-		if msg.Status == types.Created || msg.Status == types.Pending {
-			response := circle.CheckAttestation(cfg, logger, msg.IrisLookupId, msg.SourceTxHash, msg.SourceDomain, msg.DestDomain)
-			if response != nil {
-				if msg.Status == types.Created && response.Status == "pending_confirmations" {
-					logger.Debug("Attestation is created but still pending confirmations for 0x" + msg.IrisLookupId + ".  Retrying...")
-					msg.Status = types.Pending
-					msg.Updated = time.Now()
+			// if a filter's condition is met, mark as filtered
+			if filterDisabledCCTPRoutes(cfg, logger, msg) ||
+				filterInvalidDestinationCallers(cfg, logger, msg) ||
+				filterNonWhitelistedChannels(cfg, logger, msg) ||
+				filterMessages(cfg, logger, msg) {
+				msg.Status = types.Filtered
+			}
+
+			// if the message is burned or pending, check for an attestation
+			if msg.Status == types.Created || msg.Status == types.Pending {
+				response := circle.CheckAttestation(cfg, logger, msg.IrisLookupId, msg.SourceTxHash, msg.SourceDomain, msg.DestDomain)
+				if response != nil {
+					if msg.Status == types.Created && response.Status == "pending_confirmations" {
+						logger.Debug("Attestation is created but still pending confirmations for 0x" + msg.IrisLookupId + ".  Retrying...")
+						msg.Status = types.Pending
+						msg.Updated = time.Now()
+						time.Sleep(10 * time.Second)
+						requeue = true
+						continue
+					} else if response.Status == "pending_confirmations" {
+						logger.Debug("Attestation is still pending for 0x" + msg.IrisLookupId + ".  Retrying...")
+						time.Sleep(10 * time.Second)
+						requeue = true
+						continue
+					} else if response.Status == "complete" {
+						logger.Debug("Attestation is complete for 0x" + msg.IrisLookupId + ".  Retrying...")
+						msg.Status = types.Attested
+						msg.Attestation = response.Attestation
+						msg.Updated = time.Now()
+						broadcastMsgs[msg.DestDomain] = append(broadcastMsgs[msg.DestDomain], msg)
+					}
+				} else {
+					// add attestation retry intervals per domain here
+					logger.Debug("Attestation is still processing for 0x" + msg.IrisLookupId + ".  Retrying...")
 					time.Sleep(10 * time.Second)
-					processingQueue <- msg
+					// retry
+					requeue = true
 					continue
-				} else if response.Status == "pending_confirmations" {
-					logger.Debug("Attestation is still pending for 0x" + msg.IrisLookupId + ".  Retrying...")
-					time.Sleep(10 * time.Second)
-					processingQueue <- msg
-					continue
-				} else if response.Status == "complete" {
-					logger.Debug("Attestation is complete for 0x" + msg.IrisLookupId + ".  Retrying...")
-					msg.Status = types.Attested
-					msg.Attestation = response.Attestation
-					msg.Updated = time.Now()
 				}
-			} else {
-				// add attestation retry intervals per domain here
-				logger.Debug("Attestation is still processing for 0x" + msg.IrisLookupId + ".  Retrying...")
-				time.Sleep(10 * time.Second)
-				// retry
-				processingQueue <- msg
-				continue
 			}
 		}
 		// if the message is attested to, try to broadcast
-		if msg.Status == types.Attested {
-			switch msg.DestDomain {
+		for domain, msgs := range broadcastMsgs {
+			switch domain {
 			case 0: // ethereum
-				response, err := ethereum.Broadcast(ctx, cfg, logger, msg, sequenceMap)
+				response, err := ethereum.Broadcast(ctx, cfg, logger, msgs, sequenceMap)
 				if err != nil {
 					logger.Error("unable to mint on Ethereum", "err", err)
-					processingQueue <- msg
+					requeue = true
 					continue
 				}
 				fullLog, err := response.MarshalJSON()
 				if err != nil {
 					logger.Error("error on marshall", err)
 				}
-				msg.DestTxHash = response.Hash().Hex()
-				logger.Info(fmt.Sprintf("Successfully broadcast %s to Ethereum.  Tx hash: %s, FULL LOG: %s", msg.SourceTxHash, msg.DestTxHash, string(fullLog)))
+				for _, msg := range msgs {
+					msg.DestTxHash = response.Hash().Hex()
+				}
+				logger.Info(fmt.Sprintf("Successfully broadcast %s to Ethereum.  Tx hash: %s, FULL LOG: %s", msgs[0].SourceTxHash, msgs[0].DestTxHash, string(fullLog)))
 			case 4: // noble
-				response, err := noble.Broadcast(ctx, cfg, logger, msg, sequenceMap)
+				response, err := noble.Broadcast(ctx, cfg, logger, msgs, sequenceMap)
 				if err != nil {
 					logger.Error("unable to mint on Noble", "err", err)
-					processingQueue <- msg
+					requeue = true
 					continue
 				}
 				if response.Code != 0 {
 					logger.Error("nonzero response code received", "err", err)
-					processingQueue <- msg
+					requeue = true
 					continue
 				}
 				// success!
-				msg.DestTxHash = response.Hash.String()
-				logger.Info(fmt.Sprintf("Successfully broadcast %s to Noble.  Tx hash: %s", msg.SourceTxHash, msg.DestTxHash))
+				for _, msg := range msgs {
+					msg.DestTxHash = response.Hash.String()
+				}
+				logger.Info(fmt.Sprintf("Successfully broadcast %s to Noble.  Tx hash: %s", msgs[0].SourceTxHash, msgs[0].DestTxHash))
 			}
 			// ...add minters for different domains here
 
-			msg.Status = types.Complete
-			msg.Updated = time.Now()
+			for _, msg := range msgs {
+				msg.Status = types.Complete
+				msg.Updated = time.Now()
+			}
+
+		}
+		if requeue {
+			processingQueue <- tx
 		}
 	}
 }
@@ -250,8 +279,10 @@ func filterMessages(_ config.Config, logger log.Logger, msg *types.MessageState)
 	return false
 }
 
-func LookupKey(sourceTxHash string, messageType string) string {
-	return fmt.Sprintf("%s-%s", sourceTxHash, messageType)
+func LookupKey(sourceTxHash string) string {
+	// return fmt.Sprintf("%s-%s", sourceTxHash, messageType)
+	return sourceTxHash
+
 }
 
 func init() {

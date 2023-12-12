@@ -5,16 +5,17 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"strconv"
+
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	"github.com/cosmos/cosmos-sdk/types/bech32"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/gin-gonic/gin"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
-	"io"
-	"net/http"
-	"os"
-	"strconv"
 
 	"cosmossdk.io/log"
 	"github.com/rs/zerolog"
@@ -139,18 +140,22 @@ func getTxByHash(c *gin.Context) {
 	var result []types.MessageState
 	msgType := c.Query("type") // mint or forward
 	if msgType == types.Mint || msgType == "" {
-		if message, ok := State.Load(LookupKey(txHash, types.Mint)); ok {
-			if domain == "" || (domain != "" && message.SourceDomain == uint32(domainInt)) {
-				result = append(result, *message)
-				found = true
+		if message, ok := State.Load(txHash); ok {
+			for _, msg := range message {
+				if msg.Type == types.Mint && domain == "" || (domain != "" && msg.SourceDomain == uint32(domainInt)) {
+					result = append(result, *msg)
+					found = true
+				}
 			}
 		}
 	}
 	if msgType == types.Forward || msgType == "" {
-		if message, ok := State.Load(LookupKey(txHash, types.Forward)); ok {
-			if domain == "" || (domain != "" && message.SourceDomain == uint32(domainInt)) {
-				result = append(result, *message)
-				found = true
+		if message, ok := State.Load(txHash); ok {
+			for _, msg := range message {
+				if msg.Type == types.Forward && domain == "" || (domain != "" && msg.SourceDomain == uint32(domainInt)) {
+					result = append(result, *msg)
+					found = true
+				}
 			}
 		}
 	}
