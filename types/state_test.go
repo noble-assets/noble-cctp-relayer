@@ -6,11 +6,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestX(t *testing.T) {
+func TestStateHandling(t *testing.T) {
 	stateMap := NewStateMap()
 
 	txHash := "123456789"
-	msg := MessageState{SourceTxHash: txHash, IrisLookupId: "123", Status: Filtered, MsgSentBytes: []byte("i like turtles")}
+	msg := MessageState{
+		SourceTxHash: txHash,
+		IrisLookupId: "123",
+		Status:       Filtered,
+		MsgSentBytes: []byte("i like turtles"),
+	}
+
 	stateMap.Store(txHash, []*MessageState{&msg})
 
 	loadedMsg, _ := stateMap.Load(txHash)
@@ -24,7 +30,13 @@ func TestX(t *testing.T) {
 	require.Equal(t, Complete, loadedMsg2[0].Status)
 
 	// even though loadedMsg is a pointer, if we add to the array, we need to re-store in cache.
-	msg2 := MessageState{SourceTxHash: txHash, IrisLookupId: "123", Status: Filtered, MsgSentBytes: []byte("mock bytes 2")}
+	msg2 := MessageState{
+		SourceTxHash: txHash,
+		IrisLookupId: "123",
+		Status:       Filtered,
+		MsgSentBytes: []byte("mock bytes 2"),
+	}
+
 	loadedMsg = append(loadedMsg, &msg2)
 	stateMap.Store(txHash, loadedMsg)
 
