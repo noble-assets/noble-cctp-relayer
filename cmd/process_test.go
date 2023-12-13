@@ -190,6 +190,37 @@ func TestProcessNonWhitelistedChannel(t *testing.T) {
 	p.Mu.RUnlock()
 }
 
+// created message -> not \ -> filtered
+func TestProcessNonBurnMessageWhenDisabled(t *testing.T) {
+	setupTest()
+
+	p := cmd.NewProcessor()
+
+	go p.StartProcessor(cfg, logger, processingQueue, sequenceMap)
+
+	emptyBz := make([]byte, 32)
+	expectedState := &types.MessageState{
+		SourceTxHash:      "123",
+		Type:              "",
+		IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
+		Status:            types.Created,
+		SourceDomain:      0,
+		DestDomain:        4,
+		DestinationCaller: emptyBz,
+	}
+
+	processingQueue <- expectedState
+
+	time.Sleep(2 * time.Second)
+
+	actualState, ok := cmd.State.Load(expectedState.SourceTxHash)
+	require.True(t, ok)
+	p.Mu.RLock()
+	require.Equal(t, types.Filtered, actualState[0].Status)
+	p.Mu.RUnlock()
+
+}
+
 // test batch transactions where multiple messages can be sent with the same tx hash
 // MsgSentBytes defer between messages
 func TestBatchTx(t *testing.T) {
@@ -229,33 +260,4 @@ func TestBatchTx(t *testing.T) {
 	p.Mu.RLock()
 	require.Equal(t, 2, len(actualState))
 	p.Mu.RUnlock()
-}
-
-// created message -> not \ -> filtered
-func TestProcessNonBurnMessageWhenDisabled(t *testing.T) {
-	setupTest()
-
-	p := cmd.NewProcessor()
-
-	go p.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
-
-	emptyBz := make([]byte, 32)
-	expectedState := &types.MessageState{
-		SourceTxHash:      "123",
-		Type:              "",
-		IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
-		Status:            types.Created,
-		SourceDomain:      0,
-		DestDomain:        4,
-		DestinationCaller: emptyBz,
-	}
-
-	processingQueue <- expectedState
-
-	time.Sleep(2 * time.Second)
-
-	actualState, ok := cmd.State.Load(cmd.LookupKey(expectedState.SourceTxHash, expectedState.Type))
-	require.True(t, ok)
-	require.Equal(t, types.Filtered, actualState[0].Status)
-
 }
