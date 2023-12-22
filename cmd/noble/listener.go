@@ -56,7 +56,7 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 		go func() {
 			for {
 				block := <-blockQueue
-				rawResponse, err := http.Get(fmt.Sprintf("https://rpc.testnet.noble.strange.love/tx_search?query=\"tx.height=%d\"", block))
+				rawResponse, err := http.Get(fmt.Sprintf("%s/tx_search?query=\"tx.height=%d\"", cfg.Networks.Source.Noble.RPC, block))
 				if err != nil {
 					logger.Debug(fmt.Sprintf("unable to query Noble block %d", block))
 					continue

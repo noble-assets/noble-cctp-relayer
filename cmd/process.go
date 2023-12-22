@@ -233,8 +233,11 @@ func filterNonWhitelistedChannels(cfg config.Config, logger log.Logger, msg *typ
 
 // filterMessages filters out non-burn messages.  It returns true if the message is not a burn.
 func filterMessages(_ config.Config, logger log.Logger, msg *types.MessageState) bool {
-	logger.Info(fmt.Sprintf("Filtered tx %s because it's a not a burn", msg.SourceTxHash))
-	return msg.Type != types.Mint
+	result := msg.Type != types.Mint
+	if result {
+		logger.Info(fmt.Sprintf("Filtered tx %s because it's a not a burn", msg.SourceTxHash))
+	}
+	return result
 }
 
 func LookupKey(sourceTxHash string, messageType string) string {
