@@ -5,16 +5,17 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"strconv"
+
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	"github.com/cosmos/cosmos-sdk/types/bech32"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/gin-gonic/gin"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
-	"io"
-	"net/http"
-	"os"
-	"strconv"
 
 	"cosmossdk.io/log"
 	"github.com/rs/zerolog"
@@ -46,7 +47,9 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "config.yaml", "")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "")
 
-	rootCmd.AddCommand(startCmd)
+	rootCmd.AddCommand(
+		startCmd,
+		versionCmd)
 
 	cobra.OnInitialize(func() {
 		if verbose {
