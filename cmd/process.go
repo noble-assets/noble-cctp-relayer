@@ -2,19 +2,20 @@ package cmd
 
 import (
 	"bytes"
-	"cosmossdk.io/log"
 	"encoding/hex"
 	"fmt"
+	"os"
+	"strings"
+	"sync"
+	"time"
+
+	"cosmossdk.io/log"
 	"github.com/spf13/cobra"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/circle"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/noble"
 	"github.com/strangelove-ventures/noble-cctp-relayer/config"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
-	"os"
-	"strings"
-	"sync"
-	"time"
 )
 
 var startCmd = &cobra.Command{
@@ -142,8 +143,12 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 					processingQueue <- msg
 					continue
 				}
+				fullLog, err := response.MarshalJSON()
+				if err != nil {
+					logger.Error("error on marshall", err)
+				}
 				msg.DestTxHash = response.Hash().Hex()
-				logger.Info(fmt.Sprintf("Successfully broadcast %s to Ethereum.  Tx hash: %s", msg.SourceTxHash, msg.DestTxHash))
+				logger.Info(fmt.Sprintf("Successfully broadcast %s to Ethereum.  Tx hash: %s, FULL LOG: %s", msg.SourceTxHash, msg.DestTxHash, string(fullLog)))
 			case 4: // noble
 				response, err := noble.Broadcast(cfg, logger, msg, sequenceMap)
 				if err != nil {
