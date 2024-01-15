@@ -82,12 +82,14 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 				}
 
 				for _, tx := range response.Result.Txs {
-					parsedMsg, err := types.NobleLogToMessageState(tx)
+					parsedMsgs, err := types.NobleLogToMessageState(tx)
 					if err != nil {
 						continue
 					}
-					logger.Info(fmt.Sprintf("New stream msg from %d with tx hash %s", parsedMsg.SourceDomain, parsedMsg.SourceTxHash))
-					processingQueue <- parsedMsg
+					for _, parsedMsg := range parsedMsgs {
+						logger.Info(fmt.Sprintf("New stream msg from %d with tx hash %s", parsedMsg.SourceDomain, parsedMsg.SourceTxHash))
+						processingQueue <- parsedMsg
+					}
 				}
 			}
 		}()

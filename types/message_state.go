@@ -79,12 +79,11 @@ func EvmLogToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log)
 		return messageState, nil
 	}
 
-	return nil, errors.New(fmt.Sprintf("unable to parse tx into message, tx hash %s", log.TxHash.Hex()))
+	return nil, fmt.Errorf("unable to parse tx into message, tx hash %s", log.TxHash.Hex())
 }
 
 // NobleLogToMessageState transforms a Noble log into a messageState
-func NobleLogToMessageState(tx Tx) (messageState *MessageState, err error) {
-
+func NobleLogToMessageState(tx Tx) (messageStates []*MessageState, err error) {
 	var eventsList []struct {
 		Events []Event `json:"events"`
 	}
@@ -93,44 +92,54 @@ func NobleLogToMessageState(tx Tx) (messageState *MessageState, err error) {
 		return nil, errors.New("unable to parse log events")
 	}
 
-	for _, event := range eventsList[0].Events {
-		if event.Type == "circle.cctp.v1.MessageSent" {
-			for _, attr := range event.Attributes {
-				if attr.Key == "message" {
-					encoded := attr.Value[1 : len(attr.Value)-1]
-					rawMessageSentBytes, err := base64.StdEncoding.DecodeString(encoded)
-					if err != nil {
-						continue
+	for _, log := range eventsList {
+		for _, event := range log.Events {
+			if event.Type == "circle.cctp.v1.MessageSent" {
+				var parsed bool
+				var parseErrs error
+				for _, attr := range event.Attributes {
+					if attr.Key == "message" {
+						encoded := attr.Value[1 : len(attr.Value)-1]
+						rawMessageSentBytes, err := base64.StdEncoding.DecodeString(encoded)
+						if err != nil {
+							parseErrs = errors.Join(parseErrs, fmt.Errorf("failed to decode message: %w", err))
+							continue
+						}
+
+						hashed := crypto.Keccak256(rawMessageSentBytes)
+						hashedHexStr := hex.EncodeToString(hashed)
+
+						msg, err := new(types.Message).Parse(rawMessageSentBytes)
+						if err != nil {
+							parseErrs = errors.Join(parseErrs, fmt.Errorf("failed to parse message: %w", err))
+							continue
+						}
+
+						messageState := &MessageState{
+							IrisLookupId:      hashedHexStr,
+							Type:              Mint,
+							Status:            Created,
+							SourceDomain:      msg.SourceDomain,
+							DestDomain:        msg.DestinationDomain,
+							SourceTxHash:      tx.Hash,
+							MsgSentBytes:      rawMessageSentBytes,
+							DestinationCaller: msg.DestinationCaller,
+							Created:           time.Now(),
+							Updated:           time.Now(),
+						}
+
+						messageStates = append(messageStates, messageState)
 					}
-
-					hashed := crypto.Keccak256(rawMessageSentBytes)
-					hashedHexStr := hex.EncodeToString(hashed)
-
-					msg, err := new(types.Message).Parse(rawMessageSentBytes)
-					if err != nil {
-						continue
-					}
-
-					messageState = &MessageState{
-						IrisLookupId:      hashedHexStr,
-						Type:              Mint,
-						Status:            Created,
-						SourceDomain:      msg.SourceDomain,
-						DestDomain:        msg.DestinationDomain,
-						SourceTxHash:      tx.Hash,
-						MsgSentBytes:      rawMessageSentBytes,
-						DestinationCaller: msg.DestinationCaller,
-						Created:           time.Now(),
-						Updated:           time.Now(),
-					}
-
-					return messageState, nil
+				}
+				if !parsed {
+					return nil, fmt.Errorf("unable to parse cctp message.  tx hash %s: %w", tx.Hash, parseErrs)
 				}
 			}
 		}
 	}
 
-	return nil, errors.New(fmt.Sprintf("unable to parse txn into message.  tx hash %s", tx.Hash))
+	return messageStates, nil
+
 }
 
 // DecodeDestinationCaller transforms an encoded Noble cctp address into a noble bech32 address
