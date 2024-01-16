@@ -87,6 +87,9 @@ func NobleLogToMessageState(tx Tx) ([]*MessageState, error) {
 	var eventsList []struct {
 		Events []Event `json:"events"`
 	}
+	if tx.TxResult.Log == "" {
+		return nil, nil
+	}
 	if err := json.Unmarshal([]byte(tx.TxResult.Log), &eventsList); err != nil {
 		return nil, errors.New("unable to parse log events")
 	}
@@ -117,6 +120,8 @@ func NobleLogToMessageState(tx Tx) ([]*MessageState, error) {
 							parseErrs = errors.Join(parseErrs, fmt.Errorf("failed to parse message: %w", err))
 							continue
 						}
+
+						parsed = true
 
 						messageState := &MessageState{
 							IrisLookupId:      hashedHexStr,

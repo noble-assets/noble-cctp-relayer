@@ -1,20 +1,21 @@
 package ethereum
 
 import (
-	"cosmossdk.io/log"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/big"
+	"regexp"
+	"strconv"
+	"time"
+
+	"cosmossdk.io/log"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/strangelove-ventures/noble-cctp-relayer/config"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
-	"math/big"
-	"regexp"
-	"strconv"
-	"time"
 )
 
 // Broadcast broadcasts a message to Ethereum
@@ -65,12 +66,7 @@ func Broadcast(
 			logger.Error(fmt.Sprintf("error during broadcast: %s", err.Error()))
 			if parsedErr, ok := err.(JsonError); ok {
 				if parsedErr.ErrorCode() == 3 && parsedErr.Error() == "execution reverted: Nonce already used" {
-					nonce, err = GetEthereumAccountNonce(cfg.Networks.Destination.Ethereum.RPC, ethereumAddress)
-					if err != nil {
-						logger.Error("unable to retrieve account number")
-					}
-					logger.Debug(fmt.Sprintf("retrying with new nonce: %d", nonce))
-					sequenceMap.Put(cfg.Networks.Destination.Ethereum.DomainId, nonce)
+					return nil, parsedErr
 				}
 
 				match, _ := regexp.MatchString("nonce too low: next nonce [0-9]+, tx nonce [0-9]+", parsedErr.Error())
@@ -78,7 +74,7 @@ func Broadcast(
 					numberRegex := regexp.MustCompile("[0-9]+")
 					nextNonce, err := strconv.ParseInt(numberRegex.FindAllString(parsedErr.Error(), 1)[0], 10, 0)
 					if err != nil {
-						nonce, err = GetEthereumAccountNonce(cfg.Networks.Destination.Ethereum.RPC, ethereumAddress)
+						nextNonce, err = GetEthereumAccountNonce(cfg.Networks.Destination.Ethereum.RPC, ethereumAddress)
 						if err != nil {
 							logger.Error("unable to retrieve account number")
 						}
