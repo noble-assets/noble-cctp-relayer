@@ -107,7 +107,7 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 
 		// if the message is burned or pending, check for an attestation
 		if msg.Status == types.Created || msg.Status == types.Pending {
-			response := circle.CheckAttestation(cfg, logger, msg.IrisLookupId)
+			response := circle.CheckAttestation(cfg, logger, msg.IrisLookupId, msg.SourceTxHash, msg.SourceDomain, msg.DestDomain)
 			if response != nil {
 				if msg.Status == types.Created && response.Status == "pending_confirmations" {
 					logger.Debug("Attestation is created but still pending confirmations for 0x" + msg.IrisLookupId + ".  Retrying...")

@@ -84,6 +84,7 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 				for _, tx := range response.Result.Txs {
 					parsedMsgs, err := types.NobleLogToMessageState(tx)
 					if err != nil {
+						logger.Error("unable to parse Noble log to message state", "err", err.Error())
 						continue
 					}
 					for _, parsedMsg := range parsedMsgs {

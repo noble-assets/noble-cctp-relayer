@@ -1,19 +1,20 @@
 package circle
 
 import (
-	"cosmossdk.io/log"
 	"encoding/json"
 	"fmt"
-	"github.com/strangelove-ventures/noble-cctp-relayer/config"
-	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"io"
 	"net/http"
 	"time"
+
+	"cosmossdk.io/log"
+	"github.com/strangelove-ventures/noble-cctp-relayer/config"
+	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
 // CheckAttestation checks the iris api for attestation status and returns true if attestation is complete
-func CheckAttestation(cfg config.Config, logger log.Logger, irisLookupId string) *types.AttestationResponse {
-	logger.Debug(fmt.Sprintf("Checking attestation for %s%s%s", cfg.Circle.AttestationBaseUrl, "0x", irisLookupId))
+func CheckAttestation(cfg config.Config, logger log.Logger, irisLookupId string, txHash string, sourceDomain, destDomain uint32) *types.AttestationResponse {
+	logger.Debug(fmt.Sprintf("Checking attestation for %s%s%s for source tx %s from %d to %d", cfg.Circle.AttestationBaseUrl, "0x", irisLookupId, txHash, sourceDomain, destDomain))
 
 	client := http.Client{Timeout: 2 * time.Second}
 

@@ -83,22 +83,25 @@ func EvmLogToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log)
 }
 
 // NobleLogToMessageState transforms a Noble log into a messageState
-func NobleLogToMessageState(tx Tx) (messageStates []*MessageState, err error) {
+func NobleLogToMessageState(tx Tx) ([]*MessageState, error) {
 	var eventsList []struct {
 		Events []Event `json:"events"`
 	}
-	err = json.Unmarshal([]byte(tx.TxResult.Log), &eventsList)
-	if err != nil {
+	if err := json.Unmarshal([]byte(tx.TxResult.Log), &eventsList); err != nil {
 		return nil, errors.New("unable to parse log events")
 	}
 
-	for _, log := range eventsList {
-		for _, event := range log.Events {
+	var messageStates []*MessageState
+
+	for i, log := range eventsList {
+		for j, event := range log.Events {
 			if event.Type == "circle.cctp.v1.MessageSent" {
+				fmt.Printf("Saw cctp message %s - %d:%d\n", tx.Hash, i, j)
 				var parsed bool
 				var parseErrs error
 				for _, attr := range event.Attributes {
 					if attr.Key == "message" {
+						fmt.Printf("Saw message attribute %s - %d:%d\n", tx.Hash, i, j)
 						encoded := attr.Value[1 : len(attr.Value)-1]
 						rawMessageSentBytes, err := base64.StdEncoding.DecodeString(encoded)
 						if err != nil {
@@ -129,6 +132,8 @@ func NobleLogToMessageState(tx Tx) (messageStates []*MessageState, err error) {
 						}
 
 						messageStates = append(messageStates, messageState)
+
+						fmt.Printf("Appended transfer from 4 to %d\n", msg.DestinationDomain)
 					}
 				}
 				if !parsed {
