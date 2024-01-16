@@ -141,7 +141,7 @@ func StartProcessor(ctx context.Context, cfg config.Config, logger log.Logger, p
 		if msg.Status == types.Attested {
 			switch msg.DestDomain {
 			case 0: // ethereum
-				response, err := ethereum.Broadcast(cfg, logger, msg, sequenceMap)
+				response, err := ethereum.Broadcast(ctx, cfg, logger, msg, sequenceMap)
 				if err != nil {
 					logger.Error("unable to mint on Ethereum", "err", err)
 					processingQueue <- msg
@@ -158,10 +158,6 @@ func StartProcessor(ctx context.Context, cfg config.Config, logger log.Logger, p
 				if err != nil {
 					logger.Error("unable to mint on Noble", "err", err)
 					processingQueue <- msg
-					continue
-				}
-				if response == nil {
-					// nothing to do
 					continue
 				}
 				if response.Code != 0 {

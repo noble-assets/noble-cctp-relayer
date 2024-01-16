@@ -22,6 +22,7 @@ import (
 
 // Broadcast broadcasts a message to Ethereum
 func Broadcast(
+	ctx context.Context,
 	cfg config.Config,
 	logger log.Logger,
 	msg *types.MessageState,
@@ -30,6 +31,9 @@ func Broadcast(
 
 	// set up eth client
 	client, err := ethclient.Dial(cfg.Networks.Destination.Ethereum.RPC)
+	if err != nil {
+		return nil, fmt.Errorf("unable to dial ethereum client: %w", err)
+	}
 	defer client.Close()
 
 	privEcdsaKey, ethereumAddress, err := GetEcdsaKeyAddress(cfg.Networks.Minters[0].MinterPrivateKey)
@@ -38,7 +42,15 @@ func Broadcast(
 	}
 
 	auth, err := bind.NewKeyedTransactorWithChainID(privEcdsaKey, big.NewInt(cfg.Networks.Destination.Ethereum.ChainId))
+	if err != nil {
+		return nil, fmt.Errorf("unable to create auth: %w", err)
+	}
+
 	messageTransmitter, err := NewMessageTransmitter(common.HexToAddress(cfg.Networks.Source.Ethereum.MessageTransmitter), client)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create message transmitter: %w", err)
+	}
+
 	attestationBytes, err := hex.DecodeString(msg.Attestation[2:])
 	if err != nil {
 		return nil, errors.New("unable to decode message attestation")
@@ -58,8 +70,9 @@ func Broadcast(
 		// check if nonce already used
 		co := &bind.CallOpts{
 			Pending: true,
-			Context: context.Background(),
+			Context: ctx,
 		}
+
 		key := append(
 			common.LeftPadBytes((big.NewInt(int64(msg.SourceDomain))).Bytes(), 4),
 			common.LeftPadBytes((big.NewInt(int64(msg.Nonce))).Bytes(), 8)...,
@@ -69,6 +82,7 @@ func Broadcast(
 		if nonceErr != nil {
 			logger.Debug("Error querying whether nonce was used.   Continuing...")
 		} else {
+			fmt.Printf("received used nonce response: %d\n", response)
 			if response.Uint64() == uint64(1) {
 				// nonce has already been used, mark as complete
 				logger.Debug(fmt.Sprintf("This source domain/nonce has already been used: %d %d",

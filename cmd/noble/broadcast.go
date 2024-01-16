@@ -39,22 +39,6 @@ func Broadcast(
 	msg *types.MessageState,
 	sequenceMap *types.SequenceMap,
 ) (*ctypes.ResultBroadcastTx, error) {
-	cc, err := cosmos.NewProvider(cfg.Networks.Source.Noble.RPC)
-	if err != nil {
-		return nil, fmt.Errorf("unable to build cosmos provider for noble: %w", err)
-	}
-
-	used, err := cc.QueryUsedNonce(ctx, msg.SourceDomain, msg.Nonce)
-	if err != nil {
-		return nil, fmt.Errorf("unable to query used nonce: %w", err)
-	}
-
-	if used {
-		msg.Status = types.Complete
-		logger.Info(fmt.Sprintf("Noble CCTP minter nonce %d already used", msg.Nonce))
-		return nil, nil
-	}
-
 	// set up sdk context
 	interfaceRegistry := codectypes.NewInterfaceRegistry()
 	nobletypes.RegisterInterfaces(interfaceRegistry)
@@ -97,7 +81,22 @@ func Broadcast(
 		return nil, errors.New("failed to set up rpc client")
 	}
 
+	cc, err := cosmos.NewProvider(cfg.Networks.Source.Noble.RPC)
+	if err != nil {
+		return nil, fmt.Errorf("unable to build cosmos provider for noble: %w", err)
+	}
+
 	for attempt := 0; attempt <= cfg.Networks.Destination.Noble.BroadcastRetries; attempt++ {
+		used, err := cc.QueryUsedNonce(ctx, msg.SourceDomain, msg.Nonce)
+		if err != nil {
+			return nil, fmt.Errorf("unable to query used nonce: %w", err)
+		}
+
+		if used {
+			msg.Status = types.Complete
+			return nil, fmt.Errorf("noble cctp minter nonce %d already used", msg.Nonce)
+		}
+
 		logger.Info(fmt.Sprintf(
 			"Broadcasting %s message from %d to %d: with source tx hash %s",
 			msg.Type,
