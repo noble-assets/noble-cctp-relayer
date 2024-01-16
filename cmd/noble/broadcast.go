@@ -26,17 +26,35 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	xauthsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	xauthtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
+	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/noble/cosmos"
 	"github.com/strangelove-ventures/noble-cctp-relayer/config"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
 // Broadcast broadcasts a message to Noble
 func Broadcast(
+	ctx context.Context,
 	cfg config.Config,
 	logger log.Logger,
 	msg *types.MessageState,
 	sequenceMap *types.SequenceMap,
 ) (*ctypes.ResultBroadcastTx, error) {
+	cc, err := cosmos.NewProvider(cfg.Networks.Source.Noble.RPC)
+	if err != nil {
+		return nil, fmt.Errorf("unable to build cosmos provider for noble: %w", err)
+	}
+
+	used, err := cc.QueryUsedNonce(ctx, msg.SourceDomain, msg.Nonce)
+	if err != nil {
+		return nil, fmt.Errorf("unable to query used nonce: %w", err)
+	}
+
+	if used {
+		msg.Status = types.Complete
+		logger.Info(fmt.Sprintf("Noble CCTP minter nonce %d already used", msg.Nonce))
+		return nil, nil
+	}
+
 	// set up sdk context
 	interfaceRegistry := codectypes.NewInterfaceRegistry()
 	nobletypes.RegisterInterfaces(interfaceRegistry)
@@ -49,14 +67,14 @@ func Broadcast(
 	txBuilder := sdkContext.TxConfig.NewTxBuilder()
 	attestationBytes, err := hex.DecodeString(msg.Attestation[2:])
 	if err != nil {
-		return nil, errors.New("unable to decode message attestation")
+		return nil, fmt.Errorf("unable to decode message attestation")
 	}
 
 	// get priv key
 	nobleAddress := cfg.Networks.Minters[4].MinterAddress
 	keyBz, err := hex.DecodeString(cfg.Networks.Minters[4].MinterPrivateKey)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Unable to parse Noble private key"))
+		return nil, fmt.Errorf("unable to parse Noble private key")
 	}
 	privKey := secp256k1.PrivKey{Key: keyBz}
 

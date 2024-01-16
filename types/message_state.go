@@ -89,11 +89,11 @@ func NobleLogToMessageState(tx Tx) ([]*MessageState, error) {
 	var eventsList []struct {
 		Events []Event `json:"events"`
 	}
-	if tx.TxResult.Log == "" {
+	if tx.TxResult.Code != 0 {
 		return nil, nil
 	}
 	if err := json.Unmarshal([]byte(tx.TxResult.Log), &eventsList); err != nil {
-		return nil, errors.New("unable to parse log events")
+		return nil, fmt.Errorf("unable to parse log events: %s", tx.TxResult.Log)
 	}
 
 	var messageStates []*MessageState

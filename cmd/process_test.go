@@ -1,6 +1,11 @@
 package cmd_test
 
 import (
+	"context"
+	"os"
+	"testing"
+	"time"
+
 	"cosmossdk.io/log"
 	"github.com/rs/zerolog"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd"
@@ -8,9 +13,6 @@ import (
 	"github.com/strangelove-ventures/noble-cctp-relayer/config"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"github.com/stretchr/testify/require"
-	"os"
-	"testing"
-	"time"
 )
 
 var cfg config.Config
@@ -40,7 +42,7 @@ func setupTest() {
 func TestProcessNewLog(t *testing.T) {
 	setupTest()
 
-	go cmd.StartProcessor(cfg, logger, processingQueue, sequenceMap)
+	go cmd.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
 
 	emptyBz := make([]byte, 32)
 	expectedState := &types.MessageState{
@@ -66,7 +68,7 @@ func TestProcessCreatedLog(t *testing.T) {
 	setupTest()
 	cfg.Networks.EnabledRoutes[0] = 5 // skip mint
 
-	go cmd.StartProcessor(cfg, logger, processingQueue, sequenceMap)
+	go cmd.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
 
 	emptyBz := make([]byte, 32)
 	expectedState := &types.MessageState{
@@ -95,7 +97,7 @@ func TestProcessDisabledCctpRoute(t *testing.T) {
 
 	delete(cfg.Networks.EnabledRoutes, 0)
 
-	go cmd.StartProcessor(cfg, logger, processingQueue, sequenceMap)
+	go cmd.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
 
 	emptyBz := make([]byte, 32)
 	expectedState := &types.MessageState{
@@ -121,7 +123,7 @@ func TestProcessDisabledCctpRoute(t *testing.T) {
 func TestProcessInvalidDestinationCaller(t *testing.T) {
 	setupTest()
 
-	go cmd.StartProcessor(cfg, logger, processingQueue, sequenceMap)
+	go cmd.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
 
 	nonEmptyBytes := make([]byte, 31)
 	nonEmptyBytes = append(nonEmptyBytes, 0x1)
@@ -150,7 +152,7 @@ func TestProcessNonWhitelistedChannel(t *testing.T) {
 	setupTest()
 	cfg.Networks.Destination.Noble.FilterForwardsByIbcChannel = true
 
-	go cmd.StartProcessor(cfg, logger, processingQueue, sequenceMap)
+	go cmd.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
 
 	emptyBz := make([]byte, 32)
 	expectedState := &types.MessageState{
@@ -176,7 +178,7 @@ func TestProcessNonWhitelistedChannel(t *testing.T) {
 func TestProcessNonBurnMessageWhenDisabled(t *testing.T) {
 	setupTest()
 
-	go cmd.StartProcessor(cfg, logger, processingQueue, sequenceMap)
+	go cmd.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
 
 	emptyBz := make([]byte, 32)
 	expectedState := &types.MessageState{

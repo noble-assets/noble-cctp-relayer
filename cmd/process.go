@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -38,7 +39,7 @@ func Start(cmd *cobra.Command, args []string) {
 	wg.Add(1)
 
 	// initialize minter account sequences
-	for key, _ := range Cfg.Networks.Minters {
+	for key := range Cfg.Networks.Minters {
 		switch key {
 		case 0:
 			ethNonce, err := ethereum.GetEthereumAccountNonce(
@@ -70,7 +71,7 @@ func Start(cmd *cobra.Command, args []string) {
 
 	// spin up Processor worker pool
 	for i := 0; i < int(Cfg.ProcessorWorkerCount); i++ {
-		go StartProcessor(Cfg, Logger, processingQueue, sequenceMap)
+		go StartProcessor(cmd.Context(), Cfg, Logger, processingQueue, sequenceMap)
 	}
 
 	// listeners listen for events, parse them, and enqueue them to processingQueue
@@ -86,7 +87,7 @@ func Start(cmd *cobra.Command, args []string) {
 }
 
 // StartProcessor is the main processing pipeline.
-func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *types.MessageState, sequenceMap *types.SequenceMap) {
+func StartProcessor(ctx context.Context, cfg config.Config, logger log.Logger, processingQueue chan *types.MessageState, sequenceMap *types.SequenceMap) {
 	for {
 		dequeuedMsg := <-processingQueue
 		// if this is the first time seeing this message, add it to the State
@@ -153,10 +154,14 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 				msg.DestTxHash = response.Hash().Hex()
 				logger.Info(fmt.Sprintf("Successfully broadcast %s to Ethereum.  Tx hash: %s, FULL LOG: %s", msg.SourceTxHash, msg.DestTxHash, string(fullLog)))
 			case 4: // noble
-				response, err := noble.Broadcast(cfg, logger, msg, sequenceMap)
+				response, err := noble.Broadcast(ctx, cfg, logger, msg, sequenceMap)
 				if err != nil {
 					logger.Error("unable to mint on Noble", "err", err)
 					processingQueue <- msg
+					continue
+				}
+				if response == nil {
+					// nothing to do
 					continue
 				}
 				if response.Code != 0 {

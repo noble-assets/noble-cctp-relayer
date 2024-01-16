@@ -2,11 +2,20 @@ package integration_testing
 
 import (
 	"context"
-	"cosmossdk.io/math"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"log"
+	"math/big"
+	"net/http"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"cosmossdk.io/math"
 	nobletypes "github.com/circlefin/noble-cctp/x/cctp/types"
 	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
 	libclient "github.com/cometbft/cometbft/rpc/jsonrpc/client"
@@ -27,14 +36,6 @@ import (
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/noble"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"github.com/stretchr/testify/require"
-	"io"
-	"log"
-	"math/big"
-	"net/http"
-	"strconv"
-	"strings"
-	"testing"
-	"time"
 )
 
 // TestNobleBurnToEthMint generates and broadcasts a depositForBurn on Noble
@@ -49,7 +50,7 @@ func TestNobleBurnToEthMint(t *testing.T) {
 	fmt.Println("Starting relayer...")
 	processingQueue := make(chan *types.MessageState, 10)
 	go noble.StartListener(cfg, logger, processingQueue)
-	go cmd.StartProcessor(cfg, logger, processingQueue, sequenceMap)
+	go cmd.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
 
 	fmt.Println("Building Noble depositForBurn txn...")
 	ethDestinationAddress := "0x971c54a6Eb782fAccD00bc3Ed5E934Cc5bD8e3Ef"

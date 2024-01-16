@@ -91,6 +91,7 @@ func Broadcast(
 			logger.Error(fmt.Sprintf("error during broadcast: %s", err.Error()))
 			if parsedErr, ok := err.(JsonError); ok {
 				if parsedErr.ErrorCode() == 3 && parsedErr.Error() == "execution reverted: Nonce already used" {
+					msg.Status = types.Complete
 					return nil, parsedErr
 				}
 
