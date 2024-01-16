@@ -1,6 +1,7 @@
 package ethereum
 
 import (
+	"context"
 	"cosmossdk.io/log"
 	"encoding/hex"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/strangelove-ventures/noble-cctp-relayer/config"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
@@ -52,6 +54,29 @@ func Broadcast(
 		nonce := sequenceMap.Next(cfg.Networks.Destination.Ethereum.DomainId)
 		auth.Nonce = big.NewInt(nonce)
 
+		// check if nonce already used
+		co := &bind.CallOpts{
+			Pending: true,
+			Context: context.Background(),
+		}
+		key := append(
+			common.LeftPadBytes((big.NewInt(int64(msg.SourceDomain))).Bytes(), 4),
+			common.LeftPadBytes((big.NewInt(int64(msg.Nonce))).Bytes(), 8)...,
+		)
+
+		response, nonceErr := messageTransmitter.UsedNonces(co, [32]byte(crypto.Keccak256(key)))
+		if nonceErr != nil {
+			logger.Debug("Error querying whether nonce was used.   Continuing...")
+		} else {
+			if response.Uint64() == uint64(1) {
+				// nonce has already been used, mark as complete
+				logger.Debug(fmt.Sprintf("This source domain/nonce has already been used: %d %d",
+					msg.SourceDomain, msg.Nonce))
+				msg.Status = types.Complete
+				return nil, errors.New("receive message was already broadcasted")
+			}
+		}
+
 		// broadcast txn
 		tx, err := messageTransmitter.ReceiveMessage(
 			auth,
@@ -88,6 +113,7 @@ func Broadcast(
 			}
 
 			// if it's not the last attempt, retry
+			// TODO increase the destination.ethereum.broadcast retries (3-5) and retry interval (15s).  By checking for used nonces, there is no gas cost for failed mints.
 			if attempt != cfg.Networks.Destination.Ethereum.BroadcastRetries {
 				logger.Info(fmt.Sprintf("Retrying in %d seconds", cfg.Networks.Destination.Ethereum.BroadcastRetryInterval))
 				time.Sleep(time.Duration(cfg.Networks.Destination.Ethereum.BroadcastRetryInterval) * time.Second)

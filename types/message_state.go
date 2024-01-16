@@ -42,6 +42,7 @@ type MessageState struct {
 	Channel           string // "channel-%d" if a forward, empty if not a forward
 	Created           time.Time
 	Updated           time.Time
+	Nonce             uint64
 }
 
 // EvmLogToMessageState transforms an evm log into a messageState given an ABI
@@ -63,6 +64,7 @@ func EvmLogToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log)
 		SourceTxHash:      log.TxHash.Hex(),
 		MsgSentBytes:      rawMessageSentBytes,
 		DestinationCaller: message.DestinationCaller,
+		Nonce:             message.Nonce,
 		Created:           time.Now(),
 		Updated:           time.Now(),
 	}
@@ -120,6 +122,7 @@ func NobleLogToMessageState(tx Tx) (messageState *MessageState, err error) {
 						SourceTxHash:      tx.Hash,
 						MsgSentBytes:      rawMessageSentBytes,
 						DestinationCaller: msg.DestinationCaller,
+						Nonce:             msg.Nonce,
 						Created:           time.Now(),
 						Updated:           time.Now(),
 					}
