@@ -110,16 +110,19 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 			response := circle.CheckAttestation(cfg, logger, msg.IrisLookupId)
 			if response != nil {
 				if msg.Status == types.Created && response.Status == "pending_confirmations" {
+					logger.Debug("Attestation is created but still pending confirmations for 0x" + msg.IrisLookupId + ".  Retrying...")
 					msg.Status = types.Pending
 					msg.Updated = time.Now()
 					time.Sleep(10 * time.Second)
 					processingQueue <- msg
 					continue
 				} else if response.Status == "pending_confirmations" {
+					logger.Debug("Attestation is still pending for 0x" + msg.IrisLookupId + ".  Retrying...")
 					time.Sleep(10 * time.Second)
 					processingQueue <- msg
 					continue
 				} else if response.Status == "complete" {
+					logger.Debug("Attestation is complete for 0x" + msg.IrisLookupId + ".  Retrying...")
 					msg.Status = types.Attested
 					msg.Attestation = response.Attestation
 					msg.Updated = time.Now()
