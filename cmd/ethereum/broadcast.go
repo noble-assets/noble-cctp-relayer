@@ -73,6 +73,8 @@ func Broadcast(
 			Context: ctx,
 		}
 
+		logger.Debug("Checking if nonce was used for broadcast to Ethereum", "source_domain", msg.SourceDomain, "nonce", msg.Nonce)
+
 		key := append(
 			common.LeftPadBytes((big.NewInt(int64(msg.SourceDomain))).Bytes(), 4),
 			common.LeftPadBytes((big.NewInt(int64(msg.Nonce))).Bytes(), 8)...,
