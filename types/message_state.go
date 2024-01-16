@@ -131,6 +131,7 @@ func NobleLogToMessageState(tx Tx) ([]*MessageState, error) {
 							Status:            Created,
 							SourceDomain:      msg.SourceDomain,
 							DestDomain:        msg.DestinationDomain,
+							Nonce:             msg.Nonce,
 							SourceTxHash:      tx.Hash,
 							MsgSentBytes:      rawMessageSentBytes,
 							DestinationCaller: msg.DestinationCaller,
