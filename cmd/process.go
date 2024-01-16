@@ -163,6 +163,7 @@ func StartProcessor(cfg config.Config, logger log.Logger, processingQueue chan *
 				}
 				// success!
 				msg.DestTxHash = response.Hash.String()
+				logger.Info(fmt.Sprintf("Successfully broadcast %s to Noble.  Tx hash: %s", msg.SourceTxHash, msg.DestTxHash))
 			}
 			// ...add minters for different domains here
 

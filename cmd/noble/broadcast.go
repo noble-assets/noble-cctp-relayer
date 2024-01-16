@@ -91,7 +91,7 @@ func Broadcast(
 		accountNumber, _, err := GetNobleAccountNumberSequence(cfg.Networks.Destination.Noble.API, nobleAddress)
 
 		if err != nil {
-			logger.Error("unable to retrieve account number")
+			return nil, fmt.Errorf("failed to retrieve account number and sequence: %w", err)
 		}
 
 		sigV2 := signing.SignatureV2{
@@ -119,16 +119,18 @@ func Broadcast(
 			sdkContext.TxConfig,
 			uint64(accountSequence),
 		)
-
-		err = txBuilder.SetSignatures(sigV2)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to sign tx: %w", err)
+		}
+
+		if err := txBuilder.SetSignatures(sigV2); err != nil {
+			return nil, fmt.Errorf("failed to set signatures: %w", err)
 		}
 
 		// Generated Protobuf-encoded bytes.
 		txBytes, err := sdkContext.TxConfig.TxEncoder()(txBuilder.GetTx())
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to proto encode tx: %w", err)
 		}
 
 		rpcResponse, err := rpcClient.BroadcastTxSync(context.Background(), txBytes)
