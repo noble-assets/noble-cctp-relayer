@@ -96,6 +96,22 @@ func Broadcast(
 			}
 		}
 
+		gasPrice, err := client.SuggestGasPrice(ctx)
+		if err != nil {
+			logger.Error("Unable to get suggested gas price, falling back to gas oracle", "error", err.Error())
+			gasPrice = nil
+		}
+		auth.GasPrice = gasPrice
+
+		gasTipCap, err := client.SuggestGasTipCap(ctx)
+		if err != nil {
+			logger.Error("Unable to get gas tip cap, falling back to gas oracle", "error", err.Error())
+			gasTipCap = nil
+		}
+		auth.GasTipCap = gasTipCap
+
+		auth.GasLimit = 200000
+
 		// broadcast txn
 		tx, err := messageTransmitter.ReceiveMessage(
 			auth,
