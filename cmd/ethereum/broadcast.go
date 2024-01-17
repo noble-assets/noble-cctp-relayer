@@ -36,6 +36,8 @@ func Broadcast(
 	}
 	defer client.Close()
 
+	backend := NewContractBackendWrapper(client)
+
 	privEcdsaKey, ethereumAddress, err := GetEcdsaKeyAddress(cfg.Networks.Minters[0].MinterPrivateKey)
 	if err != nil {
 		return nil, err
@@ -46,7 +48,7 @@ func Broadcast(
 		return nil, fmt.Errorf("unable to create auth: %w", err)
 	}
 
-	messageTransmitter, err := NewMessageTransmitter(common.HexToAddress(cfg.Networks.Source.Ethereum.MessageTransmitter), client)
+	messageTransmitter, err := NewMessageTransmitter(common.HexToAddress(cfg.Networks.Source.Ethereum.MessageTransmitter), backend)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create message transmitter: %w", err)
 	}
