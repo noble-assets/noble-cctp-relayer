@@ -69,6 +69,15 @@ func Broadcast(
 		nonce := sequenceMap.Next(cfg.Networks.Destination.Ethereum.DomainId)
 		auth.Nonce = big.NewInt(nonce)
 
+		// TODO remove
+		nextNonce, err := GetEthereumAccountNonce(cfg.Networks.Destination.Ethereum.RPC, ethereumAddress)
+		if err != nil {
+			logger.Error("unable to retrieve account number")
+		} else {
+			auth.Nonce = big.NewInt(nextNonce)
+		}
+		// TODO end remove
+
 		// check if nonce already used
 		co := &bind.CallOpts{
 			Pending: true,
@@ -95,22 +104,6 @@ func Broadcast(
 				return nil, errors.New("receive message was already broadcasted")
 			}
 		}
-
-		gasPrice, err := client.SuggestGasPrice(ctx)
-		if err != nil {
-			logger.Error("Unable to get suggested gas price, falling back to gas oracle", "error", err.Error())
-			gasPrice = nil
-		}
-		auth.GasPrice = gasPrice
-
-		gasTipCap, err := client.SuggestGasTipCap(ctx)
-		if err != nil {
-			logger.Error("Unable to get gas tip cap, falling back to gas oracle", "error", err.Error())
-			gasTipCap = nil
-		}
-		auth.GasTipCap = gasTipCap
-
-		auth.GasLimit = 200000
 
 		// broadcast txn
 		tx, err := messageTransmitter.ReceiveMessage(
