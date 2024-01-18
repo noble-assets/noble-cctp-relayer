@@ -14,7 +14,7 @@ import (
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
-func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *types.MessageState) {
+func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *types.TxState) {
 	// set up client
 
 	logger.Info(fmt.Sprintf("Starting Noble listener at block %d looking back %d blocks",
@@ -88,9 +88,9 @@ func StartListener(cfg config.Config, logger log.Logger, processingQueue chan *t
 						continue
 					}
 					for _, parsedMsg := range parsedMsgs {
-						logger.Info(fmt.Sprintf("New stream msg from %d with tx hash %s", parsedMsg.SourceDomain, parsedMsg.SourceTxHash))
-						processingQueue <- parsedMsg
+						logger.Info(fmt.Sprintf("New stream msg with nonce %d from %d with tx hash %s", parsedMsg.Nonce, parsedMsg.SourceDomain, parsedMsg.SourceTxHash))
 					}
+					processingQueue <- &types.TxState{TxHash: tx.Hash, Msgs: parsedMsgs}
 				}
 			}
 		}()

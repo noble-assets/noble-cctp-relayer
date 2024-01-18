@@ -23,6 +23,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	xauthsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	xauthtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
@@ -36,9 +37,9 @@ func Broadcast(
 	ctx context.Context,
 	cfg config.Config,
 	logger log.Logger,
-	msg *types.MessageState,
+	msgs []*types.MessageState,
 	sequenceMap *types.SequenceMap,
-) (*ctypes.ResultBroadcastTx, error) {
+) error {
 	// set up sdk context
 	interfaceRegistry := codectypes.NewInterfaceRegistry()
 	nobletypes.RegisterInterfaces(interfaceRegistry)
@@ -49,66 +50,75 @@ func Broadcast(
 
 	// build txn
 	txBuilder := sdkContext.TxConfig.NewTxBuilder()
-	attestationBytes, err := hex.DecodeString(msg.Attestation[2:])
-	if err != nil {
-		return nil, fmt.Errorf("unable to decode message attestation")
-	}
 
 	// get priv key
 	nobleAddress := cfg.Networks.Minters[4].MinterAddress
 	keyBz, err := hex.DecodeString(cfg.Networks.Minters[4].MinterPrivateKey)
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse Noble private key")
+		return fmt.Errorf("unable to parse Noble private key")
 	}
 	privKey := secp256k1.PrivKey{Key: keyBz}
 
-	receiveMsg := nobletypes.NewMsgReceiveMessage(
-		nobleAddress,
-		msg.MsgSentBytes,
-		attestationBytes,
-	)
-	err = txBuilder.SetMsgs(receiveMsg)
-	if err != nil {
-		return nil, err
-	}
-
-	txBuilder.SetGasLimit(cfg.Networks.Destination.Noble.GasLimit)
-	txBuilder.SetMemo("Thank you for relaying with Strangelove")
-
-	// sign and broadcast txn
 	rpcClient, err := NewRPCClient(cfg.Networks.Destination.Noble.RPC, 10*time.Second)
 	if err != nil {
-		return nil, errors.New("failed to set up rpc client")
+		return errors.New("failed to set up rpc client")
 	}
 
 	cc, err := cosmos.NewProvider(cfg.Networks.Source.Noble.RPC)
 	if err != nil {
-		return nil, fmt.Errorf("unable to build cosmos provider for noble: %w", err)
+		return fmt.Errorf("unable to build cosmos provider for noble: %w", err)
 	}
 
+	// sign and broadcast txn
 	for attempt := 0; attempt <= cfg.Networks.Destination.Noble.BroadcastRetries; attempt++ {
-		used, err := cc.QueryUsedNonce(ctx, msg.SourceDomain, msg.Nonce)
+
+		var receiveMsgs []sdk.Msg
+		for _, msg := range msgs {
+
+			used, err := cc.QueryUsedNonce(ctx, types.Domain(msg.SourceDomain), msg.Nonce)
+			if err != nil {
+				return fmt.Errorf("unable to query used nonce: %w", err)
+			}
+
+			if used {
+				msg.Status = types.Complete
+				logger.Info(fmt.Sprintf("Noble cctp minter nonce %d already used", msg.Nonce))
+				continue
+			}
+
+			attestationBytes, err := hex.DecodeString(msg.Attestation[2:])
+			if err != nil {
+				return fmt.Errorf("unable to decode message attestation")
+			}
+
+			receiveMsgs = append(receiveMsgs, nobletypes.NewMsgReceiveMessage(
+				nobleAddress,
+				msg.MsgSentBytes,
+				attestationBytes,
+			))
+
+			logger.Info(fmt.Sprintf(
+				"Broadcasting message from %d to %d: with source tx hash %s",
+				msg.SourceDomain,
+				msg.DestDomain,
+				msg.SourceTxHash))
+		}
+
+		err = txBuilder.SetMsgs(receiveMsgs...)
 		if err != nil {
-			return nil, fmt.Errorf("unable to query used nonce: %w", err)
+			return fmt.Errorf("failed to set messages on tx: %w", err)
 		}
 
-		if used {
-			msg.Status = types.Complete
-			return nil, fmt.Errorf("noble cctp minter nonce %d already used", msg.Nonce)
-		}
-
-		logger.Info(fmt.Sprintf(
-			"Broadcasting %s message from %d to %d: with source tx hash %s",
-			msg.Type,
-			msg.SourceDomain,
-			msg.DestDomain,
-			msg.SourceTxHash))
+		txBuilder.SetGasLimit(cfg.Networks.Destination.Noble.GasLimit)
+		// TODO: make configurable
+		txBuilder.SetMemo("Thank you for relaying with Strangelove")
 
 		accountSequence := sequenceMap.Next(cfg.Networks.Destination.Noble.DomainId)
+		//TODO: don't need to fetch this everytime
 		accountNumber, _, err := GetNobleAccountNumberSequence(cfg.Networks.Destination.Noble.API, nobleAddress)
 
 		if err != nil {
-			return nil, fmt.Errorf("failed to retrieve account number and sequence: %w", err)
+			return fmt.Errorf("failed to retrieve account number and sequence: %w", err)
 		}
 
 		sigV2 := signing.SignatureV2{
@@ -137,17 +147,17 @@ func Broadcast(
 			uint64(accountSequence),
 		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to sign tx: %w", err)
+			return fmt.Errorf("failed to sign tx: %w", err)
 		}
 
 		if err := txBuilder.SetSignatures(sigV2); err != nil {
-			return nil, fmt.Errorf("failed to set signatures: %w", err)
+			return fmt.Errorf("failed to set signatures: %w", err)
 		}
 
 		// Generated Protobuf-encoded bytes.
 		txBytes, err := sdkContext.TxConfig.TxEncoder()(txBuilder.GetTx())
 		if err != nil {
-			return nil, fmt.Errorf("failed to proto encode tx: %w", err)
+			return fmt.Errorf("failed to proto encode tx: %w", err)
 		}
 
 		rpcResponse, err := rpcClient.BroadcastTxSync(context.Background(), txBytes)
@@ -183,13 +193,22 @@ func Broadcast(
 		}
 
 		// Tx was successfully broadcast
-		msg.Status = types.Complete
-		return rpcResponse, nil
+		for _, msg := range msgs {
+			msg.DestTxHash = rpcResponse.Hash.String()
+			msg.Status = types.Complete
+		}
+		logger.Info(fmt.Sprintf("Successfully broadcast %s to Noble.  Tx hash: %s", msgs[0].SourceTxHash, msgs[0].DestTxHash))
+
+		return nil
 	}
 
-	msg.Status = types.Failed
+	for _, msg := range msgs {
+		if msg.Status != types.Complete {
+			msg.Status = types.Failed
+		}
+	}
 
-	return nil, errors.New("reached max number of broadcast attempts")
+	return errors.New("reached max number of broadcast attempts")
 }
 
 // getErrorString returns the appropriate value to log when tx broadcast errors are encountered.

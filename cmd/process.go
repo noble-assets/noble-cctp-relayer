@@ -77,7 +77,7 @@ func Start(cmd *cobra.Command, args []string) {
 	}
 
 	// messageState processing queue
-	var processingQueue = make(chan *types.MessageState, 10000)
+	var processingQueue = make(chan *types.TxState, 10000)
 
 	// spin up Processor worker pool
 	for i := 0; i < int(Cfg.ProcessorWorkerCount); i++ {
@@ -111,15 +111,13 @@ func (p *Processor) StartProcessor(ctx context.Context, cfg config.Config, logge
 			}
 		}
 
-		var broadcastMsgs = make(map[uint32][]*types.MessageState)
+		var broadcastMsgs = make(map[types.Domain][]*types.MessageState)
 		var requeue bool
 		for _, msg := range tx.Msgs {
 
 			// if a filter's condition is met, mark as filtered
 			if filterDisabledCCTPRoutes(cfg, logger, msg) ||
-				filterInvalidDestinationCallers(cfg, logger, msg) ||
-				filterNonWhitelistedChannels(cfg, logger, msg) ||
-				filterMessages(cfg, logger, msg) {
+				filterInvalidDestinationCallers(cfg, logger, msg) {
 				msg.Status = types.Filtered
 			}
 
@@ -158,39 +156,19 @@ func (p *Processor) StartProcessor(ctx context.Context, cfg config.Config, logge
 		}
 		// if the message is attested to, try to broadcast
 		for domain, msgs := range broadcastMsgs {
+			var err error
 			switch domain {
 			case 0: // ethereum
-				response, err := ethereum.Broadcast(ctx, cfg, logger, msgs, sequenceMap)
-				if err != nil {
-					logger.Error("unable to mint on Ethereum", "err", err)
-					requeue = true
-					continue
-				}
-				fullLog, err := response.MarshalJSON()
-				if err != nil {
-					logger.Error("error on marshall", err)
-				}
-				for _, msg := range msgs {
-					msg.DestTxHash = response.Hash().Hex()
-				}
-				logger.Info(fmt.Sprintf("Successfully broadcast %s to Ethereum.  Tx hash: %s, FULL LOG: %s", msgs[0].SourceTxHash, msgs[0].DestTxHash, string(fullLog)))
+				err = ethereum.Broadcast(ctx, cfg, logger, msgs, sequenceMap)
 			case 4: // noble
-				response, err := noble.Broadcast(ctx, cfg, logger, msgs, sequenceMap)
-				if err != nil {
-					logger.Error("unable to mint on Noble", "err", err)
-					requeue = true
-					continue
-				}
-				if response.Code != 0 {
-					logger.Error("nonzero response code received", "err", err)
-					requeue = true
-					continue
-				}
-				// success!
-				for _, msg := range msgs {
-					msg.DestTxHash = response.Hash.String()
-				}
-				logger.Info(fmt.Sprintf("Successfully broadcast %s to Noble.  Tx hash: %s", msgs[0].SourceTxHash, msgs[0].DestTxHash))
+				err = noble.Broadcast(ctx, cfg, logger, msgs, sequenceMap)
+			}
+
+			if err != nil {
+				// TODO: add dest domain to error log
+				logger.Error("unable to mint one or more transfers", "error(s)", err, "total_transfers", len(msgs))
+				requeue = true
+				continue
 			}
 			// ...add minters for different domains here
 
@@ -254,35 +232,9 @@ func filterInvalidDestinationCallers(cfg config.Config, logger log.Logger, msg *
 	return result
 }
 
-// filterNonWhitelistedChannels is a Noble specific filter that returns true
-// if the channel is not in the forwarding_channel_whitelist
-func filterNonWhitelistedChannels(cfg config.Config, logger log.Logger, msg *types.MessageState) bool {
-	if !cfg.Networks.Destination.Noble.FilterForwardsByIbcChannel {
-		return false
-	}
-	for _, channel := range cfg.Networks.Destination.Noble.ForwardingChannelWhitelist {
-		if msg.Channel == channel {
-			return false
-		}
-	}
-	logger.Info(fmt.Sprintf("Filtered tx %s because channel whitelisting is enabled and the tx's channel is not in the whitelist: %s",
-		msg.SourceTxHash, msg.Channel))
-	return true
-}
-
-// filterMessages filters out non-burn messages.  It returns true if the message is not a burn.
-func filterMessages(_ config.Config, logger log.Logger, msg *types.MessageState) bool {
-	if msg.Type != types.Mint {
-		logger.Info(fmt.Sprintf("Filtered tx %s because it's a not a burn", msg.SourceTxHash))
-		return true
-	}
-	return false
-}
-
 func LookupKey(sourceTxHash string) string {
 	// return fmt.Sprintf("%s-%s", sourceTxHash, messageType)
 	return sourceTxHash
-
 }
 
 func init() {

@@ -136,33 +136,10 @@ func getTxByHash(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "unable to parse domain"})
 	}
 
-	found := false
-	var result []types.MessageState
-	msgType := c.Query("type") // mint or forward
-	if msgType == types.Mint || msgType == "" {
-		if message, ok := State.Load(txHash); ok {
-			for _, msg := range message {
-				if msg.Type == types.Mint && domain == "" || (domain != "" && msg.SourceDomain == uint32(domainInt)) {
-					result = append(result, *msg)
-					found = true
-				}
-			}
-		}
-	}
-	if msgType == types.Forward || msgType == "" {
-		if message, ok := State.Load(txHash); ok {
-			for _, msg := range message {
-				if msg.Type == types.Forward && domain == "" || (domain != "" && msg.SourceDomain == uint32(domainInt)) {
-					result = append(result, *msg)
-					found = true
-				}
-			}
-		}
+	if tx, ok := State.Load(txHash); ok && domain == "" || (domain != "" && tx.Msgs[0].SourceDomain == types.Domain(domainInt)) {
+		c.JSON(http.StatusOK, tx.Msgs)
+		return
 	}
 
-	if found {
-		c.JSON(http.StatusOK, result)
-	} else {
-		c.JSON(http.StatusNotFound, gin.H{"message": "message not found"})
-	}
+	c.JSON(http.StatusNotFound, gin.H{"message": "message not found"})
 }

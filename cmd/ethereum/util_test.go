@@ -1,21 +1,22 @@
 package ethereum_test
 
 import (
+	"os"
+	"testing"
+
 	"cosmossdk.io/log"
 	"github.com/rs/zerolog"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/config"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"github.com/stretchr/testify/require"
-	"os"
-	"testing"
 )
 
 func init() {
 	cfg = config.Parse("../../.ignore/unit_tests.yaml")
 
 	logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.ErrorLevel))
-	processingQueue = make(chan *types.MessageState, 10000)
+	processingQueue = make(chan *types.TxState, 10000)
 }
 
 func TestGetEthereumAccountNonce(t *testing.T) {

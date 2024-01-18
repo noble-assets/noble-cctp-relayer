@@ -13,7 +13,6 @@ import (
 	"cosmossdk.io/log"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/strangelove-ventures/noble-cctp-relayer/config"
@@ -27,12 +26,12 @@ func Broadcast(
 	logger log.Logger,
 	msgs []*types.MessageState,
 	sequenceMap *types.SequenceMap,
-) ([]*ethtypes.Transaction, error) {
+) error {
 
 	// set up eth client
 	client, err := ethclient.Dial(cfg.Networks.Destination.Ethereum.RPC)
 	if err != nil {
-		return nil, fmt.Errorf("unable to dial ethereum client: %w", err)
+		return fmt.Errorf("unable to dial ethereum client: %w", err)
 	}
 	defer client.Close()
 
@@ -40,26 +39,29 @@ func Broadcast(
 
 	privEcdsaKey, ethereumAddress, err := GetEcdsaKeyAddress(cfg.Networks.Minters[0].MinterPrivateKey)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	auth, err := bind.NewKeyedTransactorWithChainID(privEcdsaKey, big.NewInt(cfg.Networks.Destination.Ethereum.ChainId))
 	if err != nil {
-		return nil, fmt.Errorf("unable to create auth: %w", err)
+		return fmt.Errorf("unable to create auth: %w", err)
 	}
 
 	messageTransmitter, err := NewMessageTransmitter(common.HexToAddress(cfg.Networks.Source.Ethereum.MessageTransmitter), backend)
 	if err != nil {
-		return nil, fmt.Errorf("unable to create message transmitter: %w", err)
+		return fmt.Errorf("unable to create message transmitter: %w", err)
 	}
 
 	var broadcastErrors error
-	var txs []*ethtypes.Transaction
 	for _, msg := range msgs {
+
+		if msg.Status == types.Complete {
+			continue
+		}
 
 		attestationBytes, err := hex.DecodeString(msg.Attestation[2:])
 		if err != nil {
-			return nil, errors.New("unable to decode message attestation")
+			return errors.New("unable to decode message attestation")
 		}
 
 		for attempt := 0; attempt <= cfg.Networks.Destination.Ethereum.BroadcastRetries; attempt++ {
@@ -104,7 +106,7 @@ func Broadcast(
 					logger.Debug(fmt.Sprintf("This source domain/nonce has already been used: %d %d",
 						msg.SourceDomain, msg.Nonce))
 					msg.Status = types.Complete
-					return nil, errors.New("receive message was already broadcasted")
+					return errors.New("receive message was already broadcasted")
 				}
 			}
 
@@ -116,14 +118,22 @@ func Broadcast(
 			)
 			if err == nil {
 				msg.Status = types.Complete
-				txs = append(txs, tx)
+
+				fullLog, err := tx.MarshalJSON()
+				if err != nil {
+					logger.Error("error marshalling eth tx log", err)
+				}
+
+				msg.DestTxHash = tx.Hash().Hex()
+
+				logger.Info(fmt.Sprintf("Successfully broadcast %s to Ethereum.  Tx hash: %s, FULL LOG: %s", msg.SourceTxHash, msg.DestTxHash, string(fullLog)))
 				continue
 			} else {
 				logger.Error(fmt.Sprintf("error during broadcast: %s", err.Error()))
 				if parsedErr, ok := err.(JsonError); ok {
 					if parsedErr.ErrorCode() == 3 && parsedErr.Error() == "execution reverted: Nonce already used" {
 						msg.Status = types.Complete
-						return nil, parsedErr
+						return parsedErr
 					}
 
 					match, _ := regexp.MatchString("nonce too low: next nonce [0-9]+, tx nonce [0-9]+", parsedErr.Error())
@@ -149,9 +159,9 @@ func Broadcast(
 				continue
 			}
 		}
+		// retried max times with failure
 		msg.Status = types.Failed
-
 		broadcastErrors = errors.Join(broadcastErrors, errors.New("reached max number of broadcast attempts"))
 	}
-	return nil, broadcastErrors
+	return broadcastErrors
 }

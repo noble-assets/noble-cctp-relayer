@@ -17,13 +17,13 @@ import (
 
 var cfg config.Config
 var logger log.Logger
-var processingQueue chan *types.MessageState
+var processingQueue chan *types.TxState
 var sequenceMap *types.SequenceMap
 
 func setupTest() {
 	cfg = config.Parse("../.ignore/unit_tests.yaml")
 	logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.DebugLevel))
-	processingQueue = make(chan *types.MessageState, 10000)
+	processingQueue = make(chan *types.TxState, 10000)
 
 	_, nextMinterSequence, err := noble.GetNobleAccountNumberSequence(
 		cfg.Networks.Destination.Noble.API,
@@ -34,7 +34,7 @@ func setupTest() {
 		os.Exit(1)
 	}
 	sequenceMap = types.NewSequenceMap()
-	sequenceMap.Put(uint32(4), nextMinterSequence)
+	sequenceMap.Put(types.Domain(4), nextMinterSequence)
 
 }
 
@@ -47,22 +47,26 @@ func TestProcessNewLog(t *testing.T) {
 	go p.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
 
 	emptyBz := make([]byte, 32)
-	expectedState := &types.MessageState{
-		SourceTxHash:      "1",
-		Type:              types.Mint,
-		SourceDomain:      0,
-		DestDomain:        4,
-		DestinationCaller: emptyBz,
+	expectedState := &types.TxState{
+		TxHash: "1",
+		Msgs: []*types.MessageState{
+			&types.MessageState{
+				SourceTxHash:      "1",
+				SourceDomain:      0,
+				DestDomain:        4,
+				DestinationCaller: emptyBz,
+			},
+		},
 	}
 
 	processingQueue <- expectedState
 
 	time.Sleep(5 * time.Second)
 
-	actualState, _ := cmd.State.Load(expectedState.SourceTxHash)
+	actualState, _ := cmd.State.Load(expectedState.TxHash)
 
 	p.Mu.RLock()
-	require.Equal(t, types.Created, actualState[0].Status)
+	require.Equal(t, types.Created, actualState.Msgs[0].Status)
 	p.Mu.RUnlock()
 
 }
@@ -77,24 +81,29 @@ func TestProcessCreatedLog(t *testing.T) {
 	go p.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
 
 	emptyBz := make([]byte, 32)
-	expectedState := &types.MessageState{
-		SourceTxHash:      "123",
-		Type:              types.Mint,
-		IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
-		Status:            types.Created,
-		SourceDomain:      0,
-		DestDomain:        5,
-		DestinationCaller: emptyBz,
+
+	expectedState := &types.TxState{
+		TxHash: "123",
+		Msgs: []*types.MessageState{
+			&types.MessageState{
+				SourceTxHash:      "123",
+				IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
+				Status:            types.Created,
+				SourceDomain:      0,
+				DestDomain:        5,
+				DestinationCaller: emptyBz,
+			},
+		},
 	}
 
 	processingQueue <- expectedState
 
 	time.Sleep(2 * time.Second)
 
-	actualState, ok := cmd.State.Load(expectedState.SourceTxHash)
+	actualState, ok := cmd.State.Load(expectedState.TxHash)
 	require.True(t, ok)
 	p.Mu.RLock()
-	require.Equal(t, types.Complete, actualState[0].Status)
+	require.Equal(t, types.Complete, actualState.Msgs[0].Status)
 	p.Mu.RUnlock()
 }
 
@@ -109,23 +118,28 @@ func TestProcessDisabledCctpRoute(t *testing.T) {
 	go p.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
 
 	emptyBz := make([]byte, 32)
-	expectedState := &types.MessageState{
-		SourceTxHash:      "123",
-		IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
-		Status:            types.Created,
-		SourceDomain:      0,
-		DestDomain:        5,
-		DestinationCaller: emptyBz,
+	expectedState := &types.TxState{
+		TxHash: "123",
+		Msgs: []*types.MessageState{
+			&types.MessageState{
+				SourceTxHash:      "123",
+				IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
+				Status:            types.Created,
+				SourceDomain:      0,
+				DestDomain:        5,
+				DestinationCaller: emptyBz,
+			},
+		},
 	}
 
 	processingQueue <- expectedState
 
 	time.Sleep(2 * time.Second)
 
-	actualState, ok := cmd.State.Load(expectedState.SourceTxHash)
+	actualState, ok := cmd.State.Load(expectedState.TxHash)
 	require.True(t, ok)
 	p.Mu.RLock()
-	require.Equal(t, types.Filtered, actualState[0].Status)
+	require.Equal(t, types.Filtered, actualState.Msgs[0].Status)
 	p.Mu.RUnlock()
 }
 
@@ -140,53 +154,28 @@ func TestProcessInvalidDestinationCaller(t *testing.T) {
 	nonEmptyBytes := make([]byte, 31)
 	nonEmptyBytes = append(nonEmptyBytes, 0x1)
 
-	expectedState := &types.MessageState{
-		SourceTxHash:      "123",
-		IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
-		Status:            types.Created,
-		SourceDomain:      0,
-		DestDomain:        4,
-		DestinationCaller: nonEmptyBytes,
+	expectedState := &types.TxState{
+		TxHash: "123",
+		Msgs: []*types.MessageState{
+			&types.MessageState{
+				SourceTxHash:      "123",
+				IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
+				Status:            types.Created,
+				SourceDomain:      0,
+				DestDomain:        4,
+				DestinationCaller: nonEmptyBytes,
+			},
+		},
 	}
 
 	processingQueue <- expectedState
 
 	time.Sleep(2 * time.Second)
 
-	actualState, ok := cmd.State.Load(expectedState.SourceTxHash)
+	actualState, ok := cmd.State.Load(expectedState.TxHash)
 	require.True(t, ok)
 	p.Mu.RLock()
-	require.Equal(t, types.Filtered, actualState[0].Status)
-	p.Mu.RUnlock()
-}
-
-// created message -> nonwhitelisted channel -> filtered
-func TestProcessNonWhitelistedChannel(t *testing.T) {
-	setupTest()
-	cfg.Networks.Destination.Noble.FilterForwardsByIbcChannel = true
-
-	p := cmd.NewProcessor()
-
-	go p.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
-
-	emptyBz := make([]byte, 32)
-	expectedState := &types.MessageState{
-		SourceTxHash:      "123",
-		IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
-		Status:            types.Created,
-		SourceDomain:      0,
-		DestDomain:        4,
-		DestinationCaller: emptyBz,
-	}
-
-	processingQueue <- expectedState
-
-	time.Sleep(2 * time.Second)
-
-	actualState, ok := cmd.State.Load(expectedState.SourceTxHash)
-	require.True(t, ok)
-	p.Mu.RLock()
-	require.Equal(t, types.Filtered, actualState[0].Status)
+	require.Equal(t, types.Filtered, actualState.Msgs[0].Status)
 	p.Mu.RUnlock()
 }
 
@@ -196,27 +185,31 @@ func TestProcessNonBurnMessageWhenDisabled(t *testing.T) {
 
 	p := cmd.NewProcessor()
 
-	go p.StartProcessor(cfg, logger, processingQueue, sequenceMap)
+	go p.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
 
 	emptyBz := make([]byte, 32)
-	expectedState := &types.MessageState{
-		SourceTxHash:      "123",
-		Type:              "",
-		IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
-		Status:            types.Created,
-		SourceDomain:      0,
-		DestDomain:        4,
-		DestinationCaller: emptyBz,
+	expectedState := &types.TxState{
+		TxHash: "123",
+		Msgs: []*types.MessageState{
+			&types.MessageState{
+				SourceTxHash:      "123",
+				IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
+				Status:            types.Created,
+				SourceDomain:      0,
+				DestDomain:        4,
+				DestinationCaller: emptyBz,
+			},
+		},
 	}
 
 	processingQueue <- expectedState
 
 	time.Sleep(2 * time.Second)
 
-	actualState, ok := cmd.State.Load(expectedState.SourceTxHash)
+	actualState, ok := cmd.State.Load(expectedState.TxHash)
 	require.True(t, ok)
 	p.Mu.RLock()
-	require.Equal(t, types.Filtered, actualState[0].Status)
+	require.Equal(t, types.Filtered, actualState.Msgs[0].Status)
 	p.Mu.RUnlock()
 
 }
@@ -231,33 +224,34 @@ func TestBatchTx(t *testing.T) {
 	go p.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
 
 	emptyBz := make([]byte, 32)
-	expectedState := &types.MessageState{
-		SourceTxHash:      "123", // same source tx hash
-		IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
-		Status:            types.Created,
-		SourceDomain:      0,
-		DestDomain:        4,
-		DestinationCaller: emptyBz,
-		MsgSentBytes:      []byte("mock bytes 1"), // different message sent bytes
+	expectedState := &types.TxState{
+		TxHash: "123",
+		Msgs: []*types.MessageState{
+			&types.MessageState{
+				SourceTxHash: "123",
+				IrisLookupId: "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
+				Status:       types.Created,
+				SourceDomain: 0,
+				DestDomain:   4,
+				MsgSentBytes: []byte("mock bytes 1"), // different message sent bytes
+			},
+			&types.MessageState{
+				SourceTxHash:      "123", // same source tx hash
+				IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
+				Status:            types.Created,
+				SourceDomain:      0,
+				DestDomain:        4,
+				DestinationCaller: emptyBz,
+				MsgSentBytes:      []byte("mock bytes 2"), // different message sent bytes
+			},
+		},
 	}
+
 	processingQueue <- expectedState
 
-	expectedState2 := &types.MessageState{
-		SourceTxHash:      "123", // same source tx hash
-		IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
-		Status:            types.Created,
-		SourceDomain:      0,
-		DestDomain:        4,
-		DestinationCaller: emptyBz,
-		MsgSentBytes:      []byte("mock bytes 2"), // different message sent bytes
-	}
-
-	processingQueue <- expectedState2
-	time.Sleep(6 * time.Second)
-
-	actualState, ok := cmd.State.Load(expectedState.SourceTxHash)
+	actualState, ok := cmd.State.Load(expectedState.TxHash)
 	require.True(t, ok)
 	p.Mu.RLock()
-	require.Equal(t, 2, len(actualState))
+	require.Equal(t, 2, len(actualState.Msgs))
 	p.Mu.RUnlock()
 }

@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/circlefin/noble-cctp/x/cctp/types"
 	cctptypes "github.com/circlefin/noble-cctp/x/cctp/types"
 	abci "github.com/cometbft/cometbft/abci/types"
 	rpcclient "github.com/cometbft/cometbft/rpc/client"
 	coretypes "github.com/cometbft/cometbft/rpc/core/types"
+	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
 // func defaultPageRequest() *querytypes.PageRequest {
@@ -38,11 +38,11 @@ func (cc *CosmosProvider) QueryABCI(ctx context.Context, req abci.RequestQuery) 
 	return result.Response, nil
 }
 
-func (cc *CosmosProvider) QueryUsedNonce(ctx context.Context, sourceDomain uint32, nonce uint64) (bool, error) {
+func (cc *CosmosProvider) QueryUsedNonce(ctx context.Context, sourceDomain types.Domain, nonce uint64) (bool, error) {
 	qc := cctptypes.NewQueryClient(cc)
 
-	params := &types.QueryGetUsedNonceRequest{
-		SourceDomain: sourceDomain,
+	params := &cctptypes.QueryGetUsedNonceRequest{
+		SourceDomain: uint32(sourceDomain),
 		Nonce:        nonce,
 	}
 

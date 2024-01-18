@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/circlefin/noble-cctp/x/cctp/types"
@@ -29,6 +28,8 @@ const (
 	Forward string = "forward"
 )
 
+type Domain uint32
+
 type TxState struct {
 	TxHash string
 	Msgs   []*MessageState
@@ -39,8 +40,8 @@ type MessageState struct {
 	// Type         string // 'mint' or 'forward'
 	Status            string // created, pending, attested, complete, failed, filtered
 	Attestation       string // hex encoded attestation
-	SourceDomain      uint32 // source domain id
-	DestDomain        uint32 // destination domain id
+	SourceDomain      Domain // uint32 source domain id
+	DestDomain        Domain // uint32 destination domain id
 	SourceTxHash      string
 	DestTxHash        string
 	MsgSentBytes      []byte // bytes of the MessageSent message transmitter event
@@ -65,8 +66,8 @@ func EvmLogToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log)
 	messageState = &MessageState{
 		IrisLookupId:      hashedHexStr,
 		Status:            Created,
-		SourceDomain:      message.SourceDomain,
-		DestDomain:        message.DestinationDomain,
+		SourceDomain:      Domain(message.SourceDomain),
+		DestDomain:        Domain(message.DestinationDomain),
 		SourceTxHash:      log.TxHash.Hex(),
 		MsgSentBytes:      rawMessageSentBytes,
 		DestinationCaller: message.DestinationCaller,
@@ -76,14 +77,6 @@ func EvmLogToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log)
 	}
 
 	if _, err := new(BurnMessage).Parse(message.MessageBody); err == nil {
-		messageState.Type = Mint
-		return messageState, nil
-	}
-
-	if forward, err := new(MetadataMessage).Parse(message.MessageBody); err == nil {
-		messageState.Type = Forward
-		// add forward channel to object so we can filter later
-		messageState.Channel = "channel-" + strconv.Itoa(int(forward.Channel))
 		return messageState, nil
 	}
 
@@ -133,10 +126,9 @@ func NobleLogToMessageState(tx Tx) ([]*MessageState, error) {
 
 						messageState := &MessageState{
 							IrisLookupId:      hashedHexStr,
-							Type:              Mint,
 							Status:            Created,
-							SourceDomain:      msg.SourceDomain,
-							DestDomain:        msg.DestinationDomain,
+							SourceDomain:      Domain(msg.SourceDomain),
+							DestDomain:        Domain(msg.DestinationDomain),
 							Nonce:             msg.Nonce,
 							SourceTxHash:      tx.Hash,
 							MsgSentBytes:      rawMessageSentBytes,
@@ -177,7 +169,6 @@ func DecodeDestinationCaller(input []byte) (string, error) {
 // Equal checks if two MessageState instances are equal
 func (m *MessageState) Equal(other *MessageState) bool {
 	return (m.IrisLookupId == other.IrisLookupId &&
-		m.Type == other.Type &&
 		m.Status == other.Status &&
 		m.Attestation == other.Attestation &&
 		m.SourceDomain == other.SourceDomain &&
