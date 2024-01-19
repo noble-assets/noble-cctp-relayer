@@ -12,15 +12,19 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/pascaldekloe/etherstream"
-	"github.com/strangelove-ventures/noble-cctp-relayer/config"
+	ethinternal "github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"github.com/stretchr/testify/require"
 )
 
-var cfg config.Config
+var cfg types.Config
 
 func init() {
-	cfg = config.Parse("../.ignore/unit_tests.yaml")
+	var err error
+	cfg, err = types.Parse("../../.ignore/unit_tests.yaml")
+	if err != nil {
+		panic(err)
+	}
 }
 
 func TestToMessageStateSuccess(t *testing.T) {
@@ -33,7 +37,7 @@ func TestToMessageStateSuccess(t *testing.T) {
 
 	messageSent := messageTransmitterABI.Events["MessageSent"]
 
-	ethClient, err := ethclient.DialContext(context.Background(), cfg.Networks.Source.Ethereum.RPC)
+	ethClient, err := ethclient.DialContext(context.Background(), cfg.Chains["ethereum"].(*ethinternal.ChainConfig).RPC)
 	require.Nil(t, err)
 
 	// changed to mainnet address
@@ -53,6 +57,7 @@ func TestToMessageStateSuccess(t *testing.T) {
 	require.Nil(t, err)
 
 	messageState, err := types.EvmLogToMessageState(messageTransmitterABI, messageSent, &history[0])
+	require.NoError(t, err)
 
 	fmt.Println(messageState)
 

@@ -1,24 +1,28 @@
 package ethereum_test
 
 import (
+	"context"
 	"os"
 	"testing"
 	"time"
 
 	"cosmossdk.io/log"
 	"github.com/rs/zerolog"
-	eth "github.com/strangelove-ventures/noble-cctp-relayer/cmd/ethereum"
-	"github.com/strangelove-ventures/noble-cctp-relayer/config"
+	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"github.com/stretchr/testify/require"
 )
 
-var cfg config.Config
+var cfg types.Config
 var logger log.Logger
 var processingQueue chan *types.TxState
 
 func init() {
-	cfg = config.Parse("../../.ignore/unit_tests.yaml")
+	var err error
+	cfg, err = types.Parse("../../.ignore/unit_tests.yaml")
+	if err != nil {
+		panic(err)
+	}
 
 	logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.ErrorLevel))
 	processingQueue = make(chan *types.TxState, 10000)
@@ -26,10 +30,14 @@ func init() {
 
 // tests for a historical log
 func TestStartListener(t *testing.T) {
+	ethCfg := ethereum.ChainConfig{
+		StartBlock:     9702735,
+		LookbackPeriod: 0,
+	}
+	eth, err := ethCfg.Chain("ethereum")
+	require.NoError(t, err)
 
-	cfg.Networks.Source.Ethereum.StartBlock = 9702735
-	cfg.Networks.Source.Ethereum.LookbackPeriod = 0
-	go eth.StartListener(cfg, logger, processingQueue)
+	go eth.StartListener(context.TODO(), logger, processingQueue, nil)
 
 	time.Sleep(5 * time.Second)
 

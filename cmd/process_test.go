@@ -9,42 +9,50 @@ import (
 	"cosmossdk.io/log"
 	"github.com/rs/zerolog"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd"
-	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/noble"
-	"github.com/strangelove-ventures/noble-cctp-relayer/config"
+	"github.com/strangelove-ventures/noble-cctp-relayer/noble"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"github.com/stretchr/testify/require"
 )
 
-var cfg config.Config
+var cfg types.Config
 var logger log.Logger
 var processingQueue chan *types.TxState
 var sequenceMap *types.SequenceMap
 
-func setupTest() {
-	cfg = config.Parse("../.ignore/unit_tests.yaml")
+func setupTest(t *testing.T) map[types.Domain]types.Chain {
+	var err error
+	cfg, err = types.Parse("../.ignore/unit_tests.yaml")
+	require.NoError(t, err, "Error parsing config")
+
 	logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.DebugLevel))
 	processingQueue = make(chan *types.TxState, 10000)
 
-	_, nextMinterSequence, err := noble.GetNobleAccountNumberSequence(
-		cfg.Networks.Destination.Noble.API,
-		cfg.Networks.Minters[4].MinterAddress)
+	n, err := cfg.Chains["noble"].(*noble.ChainConfig).Chain("noble")
+	require.NoError(t, err, "Error creating noble chain")
 
-	if err != nil {
-		logger.Error("Error retrieving account sequence", "err: ", err)
-		os.Exit(1)
-	}
+	_, nextMinterSequence, err := n.(*noble.Noble).AccountInfo(context.TODO())
+	require.NoError(t, err, "Error retrieving account sequence")
+
 	sequenceMap = types.NewSequenceMap()
 	sequenceMap.Put(types.Domain(4), nextMinterSequence)
+
+	registeredDomains := make(map[types.Domain]types.Chain)
+	for name, cfgg := range cfg.Chains {
+		c, err := cfgg.Chain(name)
+		require.NoError(t, err, "Error creating chain")
+
+		registeredDomains[c.Domain()] = c
+	}
+
+	return registeredDomains
 
 }
 
 // new log -> create state entry
 func TestProcessNewLog(t *testing.T) {
-	setupTest()
+	registeredDomains := setupTest(t)
 
-	p := cmd.Processor{}
-
-	go p.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
+	go cmd.StartProcessor(context.TODO(), cfg, logger, registeredDomains, processingQueue, sequenceMap)
 
 	emptyBz := make([]byte, 32)
 	expectedState := &types.TxState{
@@ -65,20 +73,15 @@ func TestProcessNewLog(t *testing.T) {
 
 	actualState, _ := cmd.State.Load(expectedState.TxHash)
 
-	p.Mu.RLock()
 	require.Equal(t, types.Created, actualState.Msgs[0].Status)
-	p.Mu.RUnlock()
-
 }
 
 // created message -> check attestation -> mark as attested -> mark as complete -> remove from state
 func TestProcessCreatedLog(t *testing.T) {
-	setupTest()
-	cfg.Networks.EnabledRoutes[0] = 5 // skip mint
+	registeredDomains := setupTest(t)
+	cfg.EnabledRoutes[0] = 5 // skip mint
 
-	p := cmd.NewProcessor()
-
-	go p.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
+	go cmd.StartProcessor(context.TODO(), cfg, logger, registeredDomains, processingQueue, sequenceMap)
 
 	emptyBz := make([]byte, 32)
 
@@ -102,20 +105,16 @@ func TestProcessCreatedLog(t *testing.T) {
 
 	actualState, ok := cmd.State.Load(expectedState.TxHash)
 	require.True(t, ok)
-	p.Mu.RLock()
 	require.Equal(t, types.Complete, actualState.Msgs[0].Status)
-	p.Mu.RUnlock()
 }
 
 // created message -> disabled cctp route -> filtered
 func TestProcessDisabledCctpRoute(t *testing.T) {
-	setupTest()
+	registeredDomains := setupTest(t)
 
-	delete(cfg.Networks.EnabledRoutes, 0)
+	delete(cfg.EnabledRoutes, 0)
 
-	p := cmd.NewProcessor()
-
-	go p.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
+	go cmd.StartProcessor(context.TODO(), cfg, logger, registeredDomains, processingQueue, sequenceMap)
 
 	emptyBz := make([]byte, 32)
 	expectedState := &types.TxState{
@@ -138,18 +137,14 @@ func TestProcessDisabledCctpRoute(t *testing.T) {
 
 	actualState, ok := cmd.State.Load(expectedState.TxHash)
 	require.True(t, ok)
-	p.Mu.RLock()
 	require.Equal(t, types.Filtered, actualState.Msgs[0].Status)
-	p.Mu.RUnlock()
 }
 
 // created message -> different destination caller -> filtered
 func TestProcessInvalidDestinationCaller(t *testing.T) {
-	setupTest()
+	registeredDomains := setupTest(t)
 
-	p := cmd.NewProcessor()
-
-	go p.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
+	go cmd.StartProcessor(context.TODO(), cfg, logger, registeredDomains, processingQueue, sequenceMap)
 
 	nonEmptyBytes := make([]byte, 31)
 	nonEmptyBytes = append(nonEmptyBytes, 0x1)
@@ -174,18 +169,14 @@ func TestProcessInvalidDestinationCaller(t *testing.T) {
 
 	actualState, ok := cmd.State.Load(expectedState.TxHash)
 	require.True(t, ok)
-	p.Mu.RLock()
 	require.Equal(t, types.Filtered, actualState.Msgs[0].Status)
-	p.Mu.RUnlock()
 }
 
 // created message -> not \ -> filtered
 func TestProcessNonBurnMessageWhenDisabled(t *testing.T) {
-	setupTest()
+	registeredDomains := setupTest(t)
 
-	p := cmd.NewProcessor()
-
-	go p.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
+	go cmd.StartProcessor(context.TODO(), cfg, logger, registeredDomains, processingQueue, sequenceMap)
 
 	emptyBz := make([]byte, 32)
 	expectedState := &types.TxState{
@@ -208,20 +199,15 @@ func TestProcessNonBurnMessageWhenDisabled(t *testing.T) {
 
 	actualState, ok := cmd.State.Load(expectedState.TxHash)
 	require.True(t, ok)
-	p.Mu.RLock()
 	require.Equal(t, types.Filtered, actualState.Msgs[0].Status)
-	p.Mu.RUnlock()
-
 }
 
 // test batch transactions where multiple messages can be sent with the same tx hash
 // MsgSentBytes defer between messages
 func TestBatchTx(t *testing.T) {
-	setupTest()
+	registeredDomains := setupTest(t)
 
-	p := cmd.NewProcessor()
-
-	go p.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
+	go cmd.StartProcessor(context.TODO(), cfg, logger, registeredDomains, processingQueue, sequenceMap)
 
 	emptyBz := make([]byte, 32)
 	expectedState := &types.TxState{
@@ -251,7 +237,5 @@ func TestBatchTx(t *testing.T) {
 
 	actualState, ok := cmd.State.Load(expectedState.TxHash)
 	require.True(t, ok)
-	p.Mu.RLock()
 	require.Equal(t, 2, len(actualState.Msgs))
-	p.Mu.RUnlock()
 }

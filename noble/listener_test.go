@@ -1,33 +1,40 @@
 package noble_test
 
 import (
+	"context"
 	"os"
 	"testing"
 	"time"
 
 	"cosmossdk.io/log"
 	"github.com/rs/zerolog"
-	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/noble"
-	"github.com/strangelove-ventures/noble-cctp-relayer/config"
+	"github.com/strangelove-ventures/noble-cctp-relayer/noble"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"github.com/stretchr/testify/require"
 )
 
-var cfg config.Config
+var cfg types.Config
 var logger log.Logger
 var processingQueue chan *types.TxState
 
 func init() {
-	cfg = config.Parse("../../.ignore/unit_tests.yaml")
+	var err error
+	cfg, err = types.Parse("../../.ignore/unit_tests.yaml")
+	if err != nil {
+		panic(err)
+	}
 
 	logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.DebugLevel))
 	processingQueue = make(chan *types.TxState, 10000)
-	cfg.Networks.Source.Noble.Workers = 1
+	cfg.Chains["noble"].(*noble.ChainConfig).Workers = 1
 }
 
 func TestStartListener(t *testing.T) {
-	cfg.Networks.Source.Noble.StartBlock = 3273557
-	go noble.StartListener(cfg, logger, processingQueue)
+	cfg.Chains["noble"].(*noble.ChainConfig).StartBlock = 3273557
+	n, err := cfg.Chains["noble"].(*noble.ChainConfig).Chain("noble")
+	require.NoError(t, err)
+
+	go n.StartListener(context.TODO(), logger, processingQueue, nil)
 
 	time.Sleep(20 * time.Second)
 

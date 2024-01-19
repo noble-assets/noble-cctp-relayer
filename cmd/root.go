@@ -1,30 +1,20 @@
 package cmd
 
 import (
-	"context"
-	"encoding/hex"
-	"encoding/json"
-	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strconv"
 
-	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
-	"github.com/cosmos/cosmos-sdk/types/bech32"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/gin-gonic/gin"
-	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 
 	"cosmossdk.io/log"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
-	"github.com/strangelove-ventures/noble-cctp-relayer/config"
 )
 
 var (
-	Cfg     config.Config
+	Cfg     types.Config
 	cfgFile string
 	verbose bool
 
@@ -56,57 +46,13 @@ func init() {
 			Logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.InfoLevel))
 		}
 
-		Cfg = config.Parse(cfgFile)
+		var err error
+		Cfg, err = types.Parse(cfgFile)
+		if err != nil {
+			Logger.Error("unable to parse config file", "location", cfgFile, "err", err)
+			os.Exit(1)
+		}
 		Logger.Info("successfully parsed config file", "location", cfgFile)
-
-		Logger.Info(Cfg.Networks.Source.Ethereum.RPC)
-		// Set minter addresses from priv keys
-		for i, minter := range Cfg.Networks.Minters {
-			switch i {
-			case 0:
-				_, address, err := ethereum.GetEcdsaKeyAddress(minter.MinterPrivateKey)
-				if err != nil {
-					Logger.Error(fmt.Sprintf("Unable to parse ecdsa key from source %d", i))
-					os.Exit(1)
-				}
-				minter.MinterAddress = address
-				Cfg.Networks.Minters[0] = minter
-			case 4:
-				keyBz, err := hex.DecodeString(minter.MinterPrivateKey)
-				if err != nil {
-					Logger.Error(fmt.Sprintf("Unable to parse key from source %d", i))
-					os.Exit(1)
-				}
-				privKey := secp256k1.PrivKey{Key: keyBz}
-				address, err := bech32.ConvertAndEncode("noble", privKey.PubKey().Address())
-				if err != nil {
-					Logger.Error(fmt.Sprintf("Unable to parse ecdsa key from source %d", i))
-					os.Exit(1)
-				}
-				minter.MinterAddress = address
-				Cfg.Networks.Minters[4] = minter
-			}
-		}
-
-		// Set default listener blocks
-
-		// if Ethereum start block not set, default to latest
-		if Cfg.Networks.Source.Ethereum.Enabled && Cfg.Networks.Source.Ethereum.StartBlock == 0 {
-			client, _ := ethclient.Dial(Cfg.Networks.Source.Ethereum.RPC)
-			defer client.Close()
-			header, _ := client.HeaderByNumber(context.Background(), nil)
-			Cfg.Networks.Source.Ethereum.StartBlock = header.Number.Uint64()
-		}
-
-		// if Noble start block not set, default to latest
-		if Cfg.Networks.Source.Noble.Enabled && Cfg.Networks.Source.Noble.StartBlock == 0 {
-			rawResponse, _ := http.Get(Cfg.Networks.Source.Noble.RPC + "/block")
-			body, _ := io.ReadAll(rawResponse.Body)
-			response := types.BlockResponse{}
-			_ = json.Unmarshal(body, &response)
-			height, _ := strconv.ParseInt(response.Result.Block.Header.Height, 10, 0)
-			Cfg.Networks.Source.Noble.StartBlock = uint64(height)
-		}
 
 		// start api server
 		go startApi()
