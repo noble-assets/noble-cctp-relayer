@@ -12,16 +12,17 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/pascaldekloe/etherstream"
+	"github.com/strangelove-ventures/noble-cctp-relayer/cmd"
 	ethinternal "github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"github.com/stretchr/testify/require"
 )
 
-var cfg types.Config
+var cfg *types.Config
 
 func init() {
 	var err error
-	cfg, err = types.Parse("../../.ignore/unit_tests.yaml")
+	cfg, err = cmd.Parse("../.ignore/unit_tests.yaml")
 	if err != nil {
 		panic(err)
 	}
@@ -29,7 +30,7 @@ func init() {
 
 func TestToMessageStateSuccess(t *testing.T) {
 
-	messageTransmitter, err := os.Open("../cmd/ethereum/abi/MessageTransmitter.json")
+	messageTransmitter, err := os.Open("../ethereum/abi/MessageTransmitter.json")
 	require.Nil(t, err)
 
 	messageTransmitterABI, err := abi.JSON(messageTransmitter)

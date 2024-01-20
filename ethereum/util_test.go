@@ -6,6 +6,7 @@ import (
 
 	"cosmossdk.io/log"
 	"github.com/rs/zerolog"
+	"github.com/strangelove-ventures/noble-cctp-relayer/cmd"
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"github.com/stretchr/testify/require"
@@ -13,7 +14,7 @@ import (
 
 func init() {
 	var err error
-	cfg, err = types.Parse("../../.ignore/unit_tests.yaml")
+	cfg, err = cmd.Parse("../.ignore/unit_tests.yaml")
 	if err != nil {
 		panic(err)
 	}

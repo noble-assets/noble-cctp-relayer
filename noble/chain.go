@@ -286,6 +286,9 @@ func (n *Noble) Broadcast(
 	// sign and broadcast txn
 	for attempt := 0; attempt <= n.maxRetries; attempt++ {
 
+		//TODO: MOVE EVERYTHING IN FOR LOOP TO FUNCTION. Same for ETH.
+		// see todo below.
+
 		var receiveMsgs []sdk.Msg
 		for _, msg := range msgs {
 
@@ -327,6 +330,8 @@ func (n *Noble) Broadcast(
 		txBuilder.SetMemo(n.txMemo)
 
 		n.mu.Lock()
+		// TODO: uncomment this & remove all remainin n.mu.Unlock() 's after moving loop body to its own function
+		// defer n.mu.Unlock()
 
 		accountSequence := sequenceMap.Next(n.Domain())
 

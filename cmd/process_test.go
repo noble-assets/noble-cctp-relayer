@@ -14,14 +14,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var cfg types.Config
+var cfg *types.Config
 var logger log.Logger
 var processingQueue chan *types.TxState
 var sequenceMap *types.SequenceMap
 
 func setupTest(t *testing.T) map[types.Domain]types.Chain {
 	var err error
-	cfg, err = types.Parse("../.ignore/unit_tests.yaml")
+	cfg, err = cmd.Parse("../.ignore/unit_tests.yaml")
 	require.NoError(t, err, "Error parsing config")
 
 	logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.DebugLevel))

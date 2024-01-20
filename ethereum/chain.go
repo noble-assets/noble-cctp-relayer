@@ -53,7 +53,6 @@ type Ethereum struct {
 func NewChain(
 	name string,
 	chainID int64,
-	domain types.Domain,
 	rpcURL string,
 	wsURL string,
 	messageTransmitterAddress string,
@@ -70,7 +69,6 @@ func NewChain(
 	return &Ethereum{
 		name:                      name,
 		chainID:                   chainID,
-		domain:                    domain,
 		rpcURL:                    rpcURL,
 		wsURL:                     wsURL,
 		messageTransmitterAddress: messageTransmitterAddress,

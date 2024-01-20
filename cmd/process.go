@@ -70,7 +70,7 @@ func Start(cmd *cobra.Command, args []string) {
 // StartProcessor is the main processing pipeline.
 func StartProcessor(
 	ctx context.Context,
-	cfg types.Config,
+	cfg *types.Config,
 	logger log.Logger,
 	registeredDomains map[types.Domain]types.Chain,
 	processingQueue chan *types.TxState,
@@ -159,7 +159,7 @@ func StartProcessor(
 }
 
 // filterDisabledCCTPRoutes returns true if we haven't enabled relaying from a source domain to a destination domain
-func filterDisabledCCTPRoutes(cfg types.Config, logger log.Logger, msg *types.MessageState) bool {
+func filterDisabledCCTPRoutes(cfg *types.Config, logger log.Logger, msg *types.MessageState) bool {
 	val, ok := cfg.EnabledRoutes[msg.SourceDomain]
 	result := !(ok && val == msg.DestDomain)
 	if result {

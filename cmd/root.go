@@ -1,12 +1,16 @@
 package cmd
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
+	"github.com/strangelove-ventures/noble-cctp-relayer/noble"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
+	"gopkg.in/yaml.v2"
 
 	"cosmossdk.io/log"
 	"github.com/rs/zerolog"
@@ -14,7 +18,7 @@ import (
 )
 
 var (
-	Cfg     types.Config
+	Cfg     *types.Config
 	cfgFile string
 	verbose bool
 
@@ -47,7 +51,7 @@ func init() {
 		}
 
 		var err error
-		Cfg, err = types.Parse(cfgFile)
+		Cfg, err = Parse(cfgFile)
 		if err != nil {
 			Logger.Error("unable to parse config file", "location", cfgFile, "err", err)
 			os.Exit(1)
@@ -88,4 +92,47 @@ func getTxByHash(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusNotFound, gin.H{"message": "message not found"})
+}
+
+func Parse(file string) (*types.Config, error) {
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file %w", err)
+	}
+
+	var cfg types.ConfigWrapper
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("error unmarshalling config: %w", err)
+	}
+
+	c := types.Config{
+		EnabledRoutes:        cfg.EnabledRoutes,
+		Circle:               cfg.Circle,
+		ProcessorWorkerCount: cfg.ProcessorWorkerCount,
+		Api:                  cfg.Api,
+		Chains:               make(map[string]types.ChainConfig),
+	}
+
+	for name, chain := range cfg.Chains {
+		yamlbz, err := yaml.Marshal(chain)
+		if err != nil {
+			return nil, err
+		}
+
+		switch name {
+		case "noble":
+			var cc noble.ChainConfig
+			if err := yaml.Unmarshal(yamlbz, &cc); err != nil {
+				return nil, err
+			}
+			c.Chains[name] = &cc
+		default:
+			var cc ethereum.ChainConfig
+			if err := yaml.Unmarshal(yamlbz, &cc); err != nil {
+				return nil, err
+			}
+			c.Chains[name] = &cc
+		}
+	}
+	return &c, err
 }
