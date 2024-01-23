@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"os"
 	"regexp"
 	"strconv"
 	"sync"
@@ -166,7 +165,6 @@ func (n *Noble) StartListener(
 	ctx context.Context,
 	logger log.Logger,
 	processingQueue chan *types.TxState,
-	quit chan os.Signal,
 ) {
 	logger = logger.With("chain", n.Name(), "chain_id", n.chainID, "domain", n.Domain())
 
@@ -205,11 +203,13 @@ func (n *Noble) StartListener(
 
 	// listen for new blocks
 	go func() {
+		first := make(chan struct{}, 1)
+		first <- struct{}{}
 		for {
+			timer := time.NewTimer(6 * time.Second)
 			select {
-			case <-quit:
-				return
-			default:
+			case <-first:
+				timer.Stop()
 				chainTip, err = n.chainTip(ctx)
 				if err == nil {
 					if chainTip >= currentBlock {
@@ -219,7 +219,19 @@ func (n *Noble) StartListener(
 						currentBlock = chainTip + 1
 					}
 				}
-				time.Sleep(6 * time.Second)
+			case <-timer.C:
+				chainTip, err = n.chainTip(ctx)
+				if err == nil {
+					if chainTip >= currentBlock {
+						for i := currentBlock; i <= chainTip; i++ {
+							blockQueue <- i
+						}
+						currentBlock = chainTip + 1
+					}
+				}
+			case <-ctx.Done():
+				timer.Stop()
+				return
 			}
 		}
 	}()
@@ -229,7 +241,7 @@ func (n *Noble) StartListener(
 		go func() {
 			for {
 				select {
-				case <-quit:
+				case <-ctx.Done():
 					return
 				default:
 					block := <-blockQueue
@@ -255,7 +267,7 @@ func (n *Noble) StartListener(
 		}()
 	}
 
-	<-quit
+	<-ctx.Done()
 }
 
 func (n *Noble) chainTip(ctx context.Context) (uint64, error) {

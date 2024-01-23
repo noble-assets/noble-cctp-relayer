@@ -20,7 +20,7 @@ var processingQueue chan *types.TxState
 
 func init() {
 	var err error
-	cfg, err = cmd.Parse("../../.ignore/unit_tests.yaml")
+	cfg, err = cmd.Parse("../.ignore/testnet.yaml")
 	if err != nil {
 		panic(err)
 	}
@@ -35,7 +35,10 @@ func TestStartListener(t *testing.T) {
 	n, err := cfg.Chains["noble"].(*noble.ChainConfig).Chain("noble")
 	require.NoError(t, err)
 
-	go n.StartListener(context.TODO(), logger, processingQueue, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go n.StartListener(ctx, logger, processingQueue)
 
 	time.Sleep(20 * time.Second)
 

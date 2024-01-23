@@ -38,7 +38,10 @@ func TestStartListener(t *testing.T) {
 	eth, err := ethCfg.Chain("ethereum")
 	require.NoError(t, err)
 
-	go eth.StartListener(context.TODO(), logger, processingQueue, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go eth.StartListener(ctx, logger, processingQueue)
 
 	time.Sleep(5 * time.Second)
 

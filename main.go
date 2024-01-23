@@ -1,7 +1,15 @@
 package main
 
-import "github.com/strangelove-ventures/noble-cctp-relayer/cmd"
+import (
+	"context"
+	"os"
+	"os/signal"
+
+	"github.com/strangelove-ventures/noble-cctp-relayer/cmd"
+)
 
 func main() {
-	cmd.Execute()
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+	cmd.Execute(ctx)
 }

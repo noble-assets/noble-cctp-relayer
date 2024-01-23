@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -30,8 +31,8 @@ var rootCmd = &cobra.Command{
 	Short: "A CLI tool for relaying CCTP messages",
 }
 
-func Execute() {
-	if err := rootCmd.Execute(); err != nil {
+func Execute(ctx context.Context) {
+	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		Logger.Error(err.Error())
 		os.Exit(1)
 	}

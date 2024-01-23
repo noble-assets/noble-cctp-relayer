@@ -121,7 +121,6 @@ func (e *Ethereum) StartListener(
 	ctx context.Context,
 	logger log.Logger,
 	processingQueue chan *types.TxState,
-	quit chan os.Signal,
 ) {
 	logger = logger.With("chain", e.name, "chain_id", e.chainID, "domain", e.domain)
 
@@ -138,19 +137,19 @@ func (e *Ethereum) StartListener(
 
 	messageSent := messageTransmitterABI.Events["MessageSent"]
 
-	ethClient, err := ethclient.DialContext(context.Background(), e.wsURL)
+	ethClient, err := ethclient.DialContext(ctx, e.wsURL)
 	if err != nil {
 		logger.Error("unable to initialize ethereum client", "err", err)
 		os.Exit(1)
 	}
 
-	defer ethClient.Close()
+	// defer ethClient.Close()
 
 	messageTransmitterAddress := common.HexToAddress(e.messageTransmitterAddress)
 	etherReader := etherstream.Reader{Backend: ethClient}
 
 	if e.startBlock == 0 {
-		header, err := ethClient.HeaderByNumber(context.Background(), nil)
+		header, err := ethClient.HeaderByNumber(ctx, nil)
 		if err != nil {
 			logger.Error("unable to retrieve latest eth block header", "err", err)
 			os.Exit(1)
@@ -172,7 +171,7 @@ func (e *Ethereum) StartListener(
 
 	// websockets do not query history
 	// https://github.com/ethereum/go-ethereum/issues/15063
-	stream, sub, history, err := etherReader.QueryWithHistory(context.Background(), &query)
+	stream, sub, history, err := etherReader.QueryWithHistory(ctx, &query)
 	if err != nil {
 		logger.Error("unable to subscribe to logs", "err", err)
 		os.Exit(1)
@@ -199,10 +198,12 @@ func (e *Ethereum) StartListener(
 		var txState *types.TxState
 		for {
 			select {
-			case <-quit:
+			case <-ctx.Done():
+				ethClient.Close()
 				return
 			case err := <-sub.Err():
 				logger.Error("connection closed", "err", err)
+				ethClient.Close()
 				os.Exit(1)
 			case streamLog := <-stream:
 				parsedMsg, err := types.EvmLogToMessageState(messageTransmitterABI, messageSent, &streamLog)

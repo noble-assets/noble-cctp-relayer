@@ -2,7 +2,6 @@ package types
 
 import (
 	"context"
-	"os"
 
 	"cosmossdk.io/log"
 )
@@ -30,7 +29,6 @@ type Chain interface {
 		ctx context.Context,
 		logger log.Logger,
 		processingQueue chan *TxState,
-		quit chan os.Signal,
 	)
 
 	// Broadcast broadcasts CCTP mint messages to the chain.

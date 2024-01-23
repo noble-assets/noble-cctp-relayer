@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"cosmossdk.io/log"
@@ -29,10 +27,9 @@ var State = types.NewStateMap()
 var sequenceMap = types.NewSequenceMap()
 
 func Start(cmd *cobra.Command, args []string) {
+
 	// messageState processing queue
 	var processingQueue = make(chan *types.TxState, 10000)
-
-	sigTerm := make(chan os.Signal, 1)
 
 	registeredDomains := make(map[types.Domain]types.Chain)
 
@@ -48,7 +45,7 @@ func Start(cmd *cobra.Command, args []string) {
 			os.Exit(1)
 		}
 
-		go c.StartListener(cmd.Context(), Logger, processingQueue, sigTerm)
+		go c.StartListener(cmd.Context(), Logger, processingQueue)
 
 		if _, ok := registeredDomains[c.Domain()]; ok {
 			Logger.Error("Duplicate domain found", "domain", c.Domain())
@@ -63,8 +60,7 @@ func Start(cmd *cobra.Command, args []string) {
 		go StartProcessor(cmd.Context(), Cfg, Logger, registeredDomains, processingQueue, sequenceMap)
 	}
 
-	signal.Notify(sigTerm, os.Interrupt, syscall.SIGTERM)
-	<-sigTerm
+	<-cmd.Context().Done()
 }
 
 // StartProcessor is the main processing pipeline.
