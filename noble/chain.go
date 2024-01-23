@@ -389,7 +389,7 @@ func (n *Noble) Broadcast(
 			return fmt.Errorf("failed to proto encode tx: %w", err)
 		}
 
-		rpcResponse, err := n.cc.RPCClient.BroadcastTxSync(context.Background(), txBytes)
+		rpcResponse, err := n.cc.RPCClient.BroadcastTxSync(ctx, txBytes)
 		if err != nil || (rpcResponse != nil && rpcResponse.Code != 0) {
 			// Log the error
 			logger.Error(fmt.Sprintf("error during broadcast: %s", getErrorString(err, rpcResponse)))
