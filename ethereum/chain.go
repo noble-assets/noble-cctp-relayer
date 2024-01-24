@@ -52,6 +52,7 @@ type Ethereum struct {
 
 func NewChain(
 	name string,
+	domain types.Domain,
 	chainID int64,
 	rpcURL string,
 	wsURL string,

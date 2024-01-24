@@ -9,6 +9,7 @@ var _ types.ChainConfig = (*ChainConfig)(nil)
 type ChainConfig struct {
 	RPC                string `yaml:"rpc"`
 	WS                 string `yaml:"ws"`
+	domain             types.Domain
 	ChainID            int64  `yaml:"chain-id"`
 	MessageTransmitter string `yaml:"message-transmitter"`
 
@@ -25,6 +26,7 @@ type ChainConfig struct {
 func (c *ChainConfig) Chain(name string) (types.Chain, error) {
 	return NewChain(
 		name,
+		c.domain,
 		c.ChainID,
 		c.RPC,
 		c.WS,
