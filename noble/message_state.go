@@ -20,16 +20,26 @@ func txToMessageState(tx *ctypes.ResultTx) ([]*types.MessageState, error) {
 
 	var messageStates []*types.MessageState
 
-	for i, event := range tx.TxResult.Events {
+	for _, event := range tx.TxResult.Events {
 		if event.Type == "circle.cctp.v1.MessageSent" {
 			//fmt.Printf("Saw cctp message %s - %d:%d\n", tx., i, j)
 			var parsed bool
 			var parseErrs error
 			for _, attr := range event.Attributes {
-				if attr.Key == "message" {
-					fmt.Printf("Saw message attribute %s - %d\n", tx.Hash, i)
-					encoded := attr.Value[1 : len(attr.Value)-1]
-					rawMessageSentBytes, err := base64.StdEncoding.DecodeString(encoded)
+				decodedKey, err := base64.StdEncoding.DecodeString(attr.Key)
+				if err != nil {
+					parseErrs = errors.Join(parseErrs, fmt.Errorf("failed to decode attribue key: %w", err))
+				}
+				if string(decodedKey) == "message" {
+					// fmt.Printf("Saw message attribute %s - %d\n", tx.Hash, i)
+					decodedValue, err := base64.StdEncoding.DecodeString(attr.Value)
+					if err != nil {
+						parseErrs = errors.Join(parseErrs, fmt.Errorf("error decoding attr.value: %w", err))
+						continue
+					}
+					encoded := decodedValue[1 : len(decodedValue)-1]
+					// Because we are using cometBFT v0.38, we need to decode the value twice.
+					rawMessageSentBytes, err := base64.StdEncoding.DecodeString(string(encoded))
 					if err != nil {
 						parseErrs = errors.Join(parseErrs, fmt.Errorf("failed to decode message: %w", err))
 						continue
