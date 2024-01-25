@@ -23,7 +23,7 @@ func CheckAttestation(attestationURL string, logger log.Logger, irisLookupId str
 		return nil
 	}
 	if rawResponse.StatusCode != http.StatusOK {
-		logger.Debug("non 200 response received")
+		logger.Debug("non 200 response received from Circles attestation API")
 		return nil
 	}
 	body, err := io.ReadAll(rawResponse.Body)

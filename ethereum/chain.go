@@ -263,7 +263,7 @@ MsgLoop:
 	for _, msg := range msgs {
 
 		if msg.Status == types.Complete {
-			continue
+			continue MsgLoop
 		}
 
 		attestationBytes, err := hex.DecodeString(msg.Attestation[2:])
