@@ -1,0 +1,43 @@
+chains:
+  ethereum:
+    chain-id: 5
+    domain: 0
+    rpc: # Ethereum RPC
+    ws: # Ethereum Websocket
+    message-transmitter: "0x26413e8157CD32011E726065a5462e97dD4d03D9"
+
+    start-block: 0 # set to 0 to default to latest block
+    lookback-period: 5 # historical blocks to look back on launch
+
+    broadcast-retries: 5 # number of times to attempt the broadcast
+    broadcast-retry-interval: 10 # time between retries in seconds
+
+    minter-private-key: # private key
+
+
+  noble:
+    rpc: #noble RPC; for stability, use a reliable private node 
+    chain-id: "grand-1"
+
+    start-block: 0 # set to 0 to default to latest block
+    lookback-period: 5 # historical blocks to look back on launch
+    workers: 8
+
+    tx-memo: "Relayed by Strangelove"
+    gas-limit: 200000
+    broadcast-retries: 5 # number of times to attempt the broadcast
+    broadcast-retry-interval: 5 # time between retries in seconds
+
+    minter-private-key: # hex encoded privateKey
+
+# source domain id -> destination domain id
+enabled-routes:
+  0: 4 # ethereum to noble
+  4: 0 # noble to ethereum
+
+circle:
+  attestation-base-url: "https://iris-api-sandbox.circle.com/attestations/"
+  fetch-retries: 0 # additional times to fetch an attestation
+  fetch-retry-interval: 3 # time between retries in seconds
+
+processor-worker-count: 16

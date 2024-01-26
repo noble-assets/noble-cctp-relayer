@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/noble/cosmos"
+	"github.com/strangelove-ventures/noble-cctp-relayer/cosmos"
 	"github.com/stretchr/testify/require"
 )
 
