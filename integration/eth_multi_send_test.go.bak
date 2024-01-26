@@ -2,10 +2,13 @@ package integration_testing
 
 import (
 	"context"
-	"cosmossdk.io/math"
 	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
+	"testing"
+	"time"
+
+	"cosmossdk.io/math"
 	nobletypes "github.com/circlefin/noble-cctp/x/cctp/types"
 	sdkClient "github.com/cosmos/cosmos-sdk/client"
 	clientTx "github.com/cosmos/cosmos-sdk/client/tx"
@@ -24,8 +27,6 @@ import (
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/noble"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
 // TestEthereumMultiSend broadcasts N depositForBurnWithCaller messages on Noble, and then tries to receive them all at once on Ethereum.
@@ -175,8 +176,10 @@ func TestEthereumMultiSend(t *testing.T) {
 
 	processingQueue := make(chan *types.MessageState, 100)
 
+	p := cmd.NewProcessor()
+
 	go noble.StartListener(cfg, logger, processingQueue)
-	go cmd.StartProcessor(cfg, logger, processingQueue, sequenceMap)
+	go p.StartProcessor(context.TODO(), cfg, logger, processingQueue, sequenceMap)
 
 	fmt.Println("Checking eth wallet...")
 	for i := 0; i < 60; i++ {

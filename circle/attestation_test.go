@@ -1,16 +1,17 @@
 package circle_test
 
 import (
-	"cosmossdk.io/log"
-	"github.com/rs/zerolog"
-	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/circle"
-	"github.com/strangelove-ventures/noble-cctp-relayer/config"
-	"github.com/stretchr/testify/require"
 	"os"
 	"testing"
+
+	"cosmossdk.io/log"
+	"github.com/rs/zerolog"
+	"github.com/strangelove-ventures/noble-cctp-relayer/circle"
+	"github.com/strangelove-ventures/noble-cctp-relayer/types"
+	"github.com/stretchr/testify/require"
 )
 
-var cfg config.Config
+var cfg types.Config
 var logger log.Logger
 
 func init() {
@@ -19,12 +20,12 @@ func init() {
 }
 
 func TestAttestationIsReady(t *testing.T) {
-	resp := circle.CheckAttestation(cfg, logger, "85bbf7e65a5992e6317a61f005e06d9972a033d71b514be183b179e1b47723fe")
+	resp := circle.CheckAttestation(cfg.Circle.AttestationBaseUrl, logger, "85bbf7e65a5992e6317a61f005e06d9972a033d71b514be183b179e1b47723fe", "", 0, 4)
 	require.NotNil(t, resp)
 	require.Equal(t, "complete", resp.Status)
 }
 
 func TestAttestationNotFound(t *testing.T) {
-	resp := circle.CheckAttestation(cfg, logger, "not an attestation")
+	resp := circle.CheckAttestation(cfg.Circle.AttestationBaseUrl, logger, "not an attestation", "", 0, 4)
 	require.Nil(t, resp)
 }
