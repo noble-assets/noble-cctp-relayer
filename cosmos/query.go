@@ -46,7 +46,7 @@ func (cc *CosmosProvider) QueryUsedNonce(ctx context.Context, sourceDomain types
 		Nonce:        nonce,
 	}
 
-	_, err := qc.UsedNonce(context.Background(), params)
+	_, err := qc.UsedNonce(ctx, params)
 	if err != nil {
 		if err.Error() == "rpc error: code = NotFound desc = rpc error: code = NotFound desc = not found: key not found" {
 			return false, nil

@@ -8,22 +8,22 @@ import (
 type SequenceMap struct {
 	mu sync.Mutex
 	// map destination domain -> minter account sequence
-	sequenceMap map[Domain]int64
+	sequenceMap map[Domain]uint64
 }
 
 func NewSequenceMap() *SequenceMap {
 	return &SequenceMap{
-		sequenceMap: map[Domain]int64{},
+		sequenceMap: map[Domain]uint64{},
 	}
 }
 
-func (m *SequenceMap) Put(destDomain Domain, val int64) {
+func (m *SequenceMap) Put(destDomain Domain, val uint64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.sequenceMap[destDomain] = val
 }
 
-func (m *SequenceMap) Next(destDomain Domain) int64 {
+func (m *SequenceMap) Next(destDomain Domain) uint64 {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	result := m.sequenceMap[destDomain]

@@ -1,5 +1,12 @@
+# This file is for integration testing. 
+# These extra wallets keep the relayer wallet separate from the wallet used to send test transactions
+
 networks:
   ethereum:
-    rpc: "https://goerli.infura.io/v3/<key>"
-    address: "noble1...."
-    private_key: "..." # hex encoded, no 0x prefix
+  # Sepolia
+    address: 
+    private_key:
+
+  noble:
+    address: 
+    private_key:

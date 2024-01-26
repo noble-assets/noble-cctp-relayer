@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/strangelove-ventures/noble-cctp-relayer/cmd/ethereum"
+	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum/contracts"
 	"github.com/stretchr/testify/require"
 )
 
@@ -28,7 +28,7 @@ func TestEthUsedNonce(t *testing.T) {
 	require.NoError(t, err)
 	defer client.Close()
 
-	messageTransmitter, err := ethereum.NewMessageTransmitter(common.HexToAddress("0x0a992d191deec32afe36203ad87d7d289a738f81"), client)
+	messageTransmitter, err := contracts.NewMessageTransmitter(common.HexToAddress("0x0a992d191deec32afe36203ad87d7d289a738f81"), client)
 	require.NoError(t, err)
 
 	co := &bind.CallOpts{
