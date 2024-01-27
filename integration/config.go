@@ -49,7 +49,7 @@ func setupTestIntegration() func() {
 	}
 
 	nobleCfg = cfg.Chains["noble"].(*noble.ChainConfig)
-	ethCfg = cfg.Chains["ethereum"].(*ethereum.ChainConfig)
+	ethCfg = cfg.Chains["sepolia"].(*ethereum.ChainConfig)
 
 	sequenceMap = types.NewSequenceMap()
 
