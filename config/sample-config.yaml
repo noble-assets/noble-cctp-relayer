@@ -32,8 +32,8 @@ chains:
 
 # source domain id -> destination domain id
 enabled-routes:
-  0: 4 # ethereum to noble
-  4: 0 # noble to ethereum
+  0: [4] # ethereum to noble
+  4: [0] # noble to ethereum
 
 circle:
   attestation-base-url: "https://iris-api-sandbox.circle.com/attestations/"

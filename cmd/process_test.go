@@ -21,7 +21,7 @@ var sequenceMap *types.SequenceMap
 
 func setupTest(t *testing.T) map[types.Domain]types.Chain {
 	var err error
-	cfg, err = cmd.Parse("../.ignore/unit_tests.yaml")
+	cfg, err = cmd.Parse("../.ignore/testnet.yaml")
 	require.NoError(t, err, "Error parsing config")
 
 	logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.DebugLevel))
@@ -79,7 +79,7 @@ func TestProcessNewLog(t *testing.T) {
 // created message -> check attestation -> mark as attested -> mark as complete -> remove from state
 func TestProcessCreatedLog(t *testing.T) {
 	registeredDomains := setupTest(t)
-	cfg.EnabledRoutes[0] = 5 // skip mint
+	cfg.EnabledRoutes[0] = []types.Domain{5} // skip mint
 
 	go cmd.StartProcessor(context.TODO(), cfg, logger, registeredDomains, processingQueue, sequenceMap)
 
@@ -120,7 +120,7 @@ func TestProcessDisabledCctpRoute(t *testing.T) {
 	expectedState := &types.TxState{
 		TxHash: "123",
 		Msgs: []*types.MessageState{
-			&types.MessageState{
+			{
 				SourceTxHash:      "123",
 				IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
 				Status:            types.Created,
@@ -152,7 +152,7 @@ func TestProcessInvalidDestinationCaller(t *testing.T) {
 	expectedState := &types.TxState{
 		TxHash: "123",
 		Msgs: []*types.MessageState{
-			&types.MessageState{
+			{
 				SourceTxHash:      "123",
 				IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
 				Status:            types.Created,
@@ -182,7 +182,7 @@ func TestProcessNonBurnMessageWhenDisabled(t *testing.T) {
 	expectedState := &types.TxState{
 		TxHash: "123",
 		Msgs: []*types.MessageState{
-			&types.MessageState{
+			{
 				SourceTxHash:      "123",
 				IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
 				Status:            types.Created,
@@ -213,7 +213,7 @@ func TestBatchTx(t *testing.T) {
 	expectedState := &types.TxState{
 		TxHash: "123",
 		Msgs: []*types.MessageState{
-			&types.MessageState{
+			{
 				SourceTxHash: "123",
 				IrisLookupId: "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
 				Status:       types.Created,
@@ -221,7 +221,7 @@ func TestBatchTx(t *testing.T) {
 				DestDomain:   4,
 				MsgSentBytes: []byte("mock bytes 1"), // different message sent bytes
 			},
-			&types.MessageState{
+			{
 				SourceTxHash:      "123", // same source tx hash
 				IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
 				Status:            types.Created,
@@ -238,4 +238,43 @@ func TestBatchTx(t *testing.T) {
 	actualState, ok := cmd.State.Load(expectedState.TxHash)
 	require.True(t, ok)
 	require.Equal(t, 2, len(actualState.Msgs))
+}
+
+// we want to filter out the transaction if the route is not enalbed
+func TestFilterDisabledCCTPRoutes(t *testing.T) {
+
+	logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.DebugLevel))
+
+	var msgState types.MessageState
+
+	cfg := types.Config{
+		EnabledRoutes: map[types.Domain][]types.Domain{
+			0: {1, 2},
+		},
+	}
+
+	// test enabled dest domain
+	msgState = types.MessageState{
+		SourceDomain: types.Domain(0),
+		DestDomain:   types.Domain(1),
+	}
+	filterTx := cmd.FilterDisabledCCTPRoutes(&cfg, logger, &msgState)
+	require.False(t, filterTx)
+
+	// test NOT enabled dest domain
+	msgState = types.MessageState{
+		SourceDomain: types.Domain(0),
+		DestDomain:   types.Domain(3),
+	}
+	filterTx = cmd.FilterDisabledCCTPRoutes(&cfg, logger, &msgState)
+	require.True(t, filterTx)
+
+	// test NOT enabled source domain
+	msgState = types.MessageState{
+		SourceDomain: types.Domain(3),
+		DestDomain:   types.Domain(1),
+	}
+	filterTx = cmd.FilterDisabledCCTPRoutes(&cfg, logger, &msgState)
+	require.True(t, filterTx)
+
 }

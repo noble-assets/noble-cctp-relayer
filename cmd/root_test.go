@@ -10,7 +10,7 @@ import (
 )
 
 func TestConfig(t *testing.T) {
-	file, err := cmd.Parse("../config/sample.yaml")
+	file, err := cmd.Parse("../config/sample-config.yaml")
 	require.NoError(t, err, "Error parsing config")
 
 	// assert noble chainConfig correctly parsed

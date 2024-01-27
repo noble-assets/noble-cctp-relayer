@@ -48,7 +48,7 @@ func Start(cmd *cobra.Command, args []string) {
 		go c.StartListener(cmd.Context(), Logger, processingQueue)
 
 		if _, ok := registeredDomains[c.Domain()]; ok {
-			Logger.Error("Duplicate domain found", "domain", c.Domain())
+			Logger.Error("Duplicate domain found", "domain", c.Domain(), "name:", c.Name())
 			os.Exit(1)
 		}
 
@@ -90,7 +90,7 @@ func StartProcessor(
 		for _, msg := range tx.Msgs {
 
 			// if a filter's condition is met, mark as filtered
-			if filterDisabledCCTPRoutes(cfg, logger, msg) ||
+			if FilterDisabledCCTPRoutes(cfg, logger, msg) ||
 				filterInvalidDestinationCallers(registeredDomains, logger, msg) {
 				msg.Status = types.Filtered
 			}
@@ -155,14 +155,22 @@ func StartProcessor(
 }
 
 // filterDisabledCCTPRoutes returns true if we haven't enabled relaying from a source domain to a destination domain
-func filterDisabledCCTPRoutes(cfg *types.Config, logger log.Logger, msg *types.MessageState) bool {
+func FilterDisabledCCTPRoutes(cfg *types.Config, logger log.Logger, msg *types.MessageState) bool {
 	val, ok := cfg.EnabledRoutes[msg.SourceDomain]
-	result := !(ok && val == msg.DestDomain)
-	if result {
+	if !ok {
 		logger.Info(fmt.Sprintf("Filtered tx %s because relaying from %d to %d is not enabled",
 			msg.SourceTxHash, msg.SourceDomain, msg.DestDomain))
+		return !ok
 	}
-	return result
+	for _, dd := range val {
+		if dd == msg.DestDomain {
+			return false
+		}
+	}
+	logger.Info(fmt.Sprintf("Filtered tx %s because relaying from %d to %d is not enabled",
+		msg.SourceTxHash, msg.SourceDomain, msg.DestDomain))
+	return true
+
 }
 
 // filterInvalidDestinationCallers returns true if the minter is not the destination caller for the specified domain

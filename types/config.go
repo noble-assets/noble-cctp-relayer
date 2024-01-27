@@ -2,7 +2,7 @@ package types
 
 type Config struct {
 	Chains        map[string]ChainConfig `yaml:"chains"`
-	EnabledRoutes map[Domain]Domain      `yaml:"enabled-routes"`
+	EnabledRoutes map[Domain][]Domain    `yaml:"enabled-routes"`
 	Circle        struct {
 		AttestationBaseUrl string `yaml:"attestation-base-url"`
 		FetchRetries       int    `yaml:"fetch-retries"`
@@ -16,7 +16,7 @@ type Config struct {
 
 type ConfigWrapper struct {
 	Chains        map[string]map[string]any `yaml:"chains"`
-	EnabledRoutes map[Domain]Domain         `yaml:"enabled-routes"`
+	EnabledRoutes map[Domain][]Domain       `yaml:"enabled-routes"`
 	Circle        struct {
 		AttestationBaseUrl string `yaml:"attestation-base-url"`
 		FetchRetries       int    `yaml:"fetch-retries"`

@@ -53,6 +53,7 @@ func NewChain(
 	return &Ethereum{
 		name:                      name,
 		chainID:                   chainID,
+		domain:                    domain,
 		rpcURL:                    rpcURL,
 		wsURL:                     wsURL,
 		messageTransmitterAddress: messageTransmitterAddress,
