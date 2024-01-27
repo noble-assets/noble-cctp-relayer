@@ -48,7 +48,7 @@ func Start(cmd *cobra.Command, args []string) {
 		go c.StartListener(cmd.Context(), Logger, processingQueue)
 
 		if _, ok := registeredDomains[c.Domain()]; ok {
-			Logger.Error("Duplicate domain found", "domain", c.Domain())
+			Logger.Error("Duplicate domain found", "domain", c.Domain(), "name:", c.Name())
 			os.Exit(1)
 		}
 
