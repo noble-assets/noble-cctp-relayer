@@ -164,14 +164,9 @@ func (e *Ethereum) attemptBroadcast(
 	if err == nil {
 		msg.Status = types.Complete
 
-		fullLog, err := tx.MarshalJSON()
-		if err != nil {
-			logger.Error("error marshalling eth tx log", err)
-		}
-
 		msg.DestTxHash = tx.Hash().Hex()
 
-		logger.Info(fmt.Sprintf("Successfully broadcast %s to Ethereum.  Tx hash: %s, FULL LOG: %s", msg.SourceTxHash, msg.DestTxHash, string(fullLog)))
+		logger.Info(fmt.Sprintf("Successfully broadcast %s to Ethereum.  Tx hash: %s", msg.SourceTxHash, msg.DestTxHash))
 
 		return nil
 	}
