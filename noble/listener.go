@@ -78,7 +78,6 @@ func (n *Noble) StartListener(
 					}
 				}
 			case <-ctx.Done():
-				fmt.Println("sup here")
 				timer.Stop()
 				return
 			}
