@@ -97,6 +97,7 @@ func (n *Noble) StartListener(
 					if err != nil || res == nil {
 						logger.Debug(fmt.Sprintf("unable to query Noble block %d", block), "error:", err)
 						blockQueue <- block
+						continue
 					}
 
 					for _, tx := range res.Txs {
