@@ -40,6 +40,10 @@ func (n *Noble) StartListener(
 	currentBlock := n.startBlock
 	lookback := n.lookbackPeriod
 	chainTip, err := n.chainTip(ctx)
+
+	if n.blockQueueChannelSize == 0 {
+		n.blockQueueChannelSize = defaultBlockQueueChannelSize
+	}
 	blockQueue := make(chan uint64, n.blockQueueChannelSize)
 
 	// history

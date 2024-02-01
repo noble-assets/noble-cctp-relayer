@@ -14,12 +14,12 @@ func TestConfig(t *testing.T) {
 	require.NoError(t, err, "Error parsing config")
 
 	// assert noble chainConfig correctly parsed
-	var nobleType interface{} = file.Chains["noble"]
+	var nobleType any = file.Chains["noble"]
 	_, ok := nobleType.(*noble.ChainConfig)
 	require.True(t, ok)
 
 	// assert ethereum chainConfig correctly parsed
-	var ethType interface{} = file.Chains["ethereum"]
+	var ethType any = file.Chains["ethereum"]
 	_, ok = ethType.(*ethereum.ChainConfig)
 	require.True(t, ok)
 }
@@ -28,7 +28,7 @@ func TestBlockQueueChannelSize(t *testing.T) {
 	file, err := cmd.Parse("../config/sample-config.yaml")
 	require.NoError(t, err, "Error parsing config")
 
-	var nobleCfg interface{} = file.Chains["noble"]
+	var nobleCfg any = file.Chains["noble"]
 	n, ok := nobleCfg.(*noble.ChainConfig)
 	require.True(t, ok)
 

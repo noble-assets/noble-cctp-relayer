@@ -4,6 +4,8 @@ import "github.com/strangelove-ventures/noble-cctp-relayer/types"
 
 var _ types.ChainConfig = (*ChainConfig)(nil)
 
+const defaultBlockQueueChannelSize = 1000000
+
 type ChainConfig struct {
 	RPC     string `yaml:"rpc"`
 	ChainID string `yaml:"chain-id"`
