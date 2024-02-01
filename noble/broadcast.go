@@ -61,12 +61,13 @@ func (n *Noble) Broadcast(
 
 	// sign and broadcast txn
 	for attempt := 0; attempt <= n.maxRetries; attempt++ {
-		if err := n.attemptBroadcast(ctx, logger, msgs, sequenceMap, sdkContext, txBuilder); err == nil {
+		err := n.attemptBroadcast(ctx, logger, msgs, sequenceMap, sdkContext, txBuilder)
+		if err == nil {
 			return nil
 		}
 
 		// Log retry information
-		logger.Info(fmt.Sprintf("Retrying in %d seconds", n.retryIntervalSeconds))
+		logger.Error("Broadcasting to noble failed. Retrying...", "error", err, "interval_seconds", n.retryIntervalSeconds)
 		time.Sleep(time.Duration(n.retryIntervalSeconds) * time.Second)
 	}
 
@@ -118,6 +119,10 @@ func (n *Noble) attemptBroadcast(
 			msg.SourceDomain,
 			msg.DestDomain,
 			msg.SourceTxHash))
+	}
+
+	if len(receiveMsgs) == 0 {
+		return nil
 	}
 
 	if err := txBuilder.SetMsgs(receiveMsgs...); err != nil {
