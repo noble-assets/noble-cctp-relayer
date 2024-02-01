@@ -51,7 +51,9 @@ type MessageState struct {
 // EvmLogToMessageState transforms an evm log into a messageState given an ABI
 func EvmLogToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log) (messageState *MessageState, err error) {
 	event := make(map[string]interface{})
-	_ = abi.UnpackIntoMap(event, messageSent.Name, log.Data)
+	if err = abi.UnpackIntoMap(event, messageSent.Name, log.Data); err != nil {
+		return nil, fmt.Errorf("unable to unpack evm log. error: %w", err)
+	}
 
 	rawMessageSentBytes := event["message"].([]byte)
 	message, _ := new(types.Message).Parse(rawMessageSentBytes)

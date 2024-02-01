@@ -28,6 +28,8 @@ chains:
     broadcast-retries: 5 # number of times to attempt the broadcast
     broadcast-retry-interval: 5 # time between retries in seconds
 
+    block-queue-channel-size: 1000000 # 1000000 is a safe default, increase number if starting from a very early block
+
     minter-private-key: # hex encoded privateKey
 
 # source domain id -> destination domain id

@@ -30,10 +30,11 @@ type Noble struct {
 	lookbackPeriod uint64
 	workers        uint32
 
-	gasLimit             uint64
-	txMemo               string
-	maxRetries           int
-	retryIntervalSeconds int
+	gasLimit              uint64
+	txMemo                string
+	maxRetries            int
+	retryIntervalSeconds  int
+	blockQueueChannelSize uint64
 
 	mu sync.Mutex
 }
@@ -49,6 +50,7 @@ func NewChain(
 	txMemo string,
 	maxRetries int,
 	retryIntervalSeconds int,
+	blockQueueChannelSize uint64,
 ) (*Noble, error) {
 	cc, err := cosmos.NewProvider(rpcURL)
 	if err != nil {
@@ -66,17 +68,18 @@ func NewChain(
 	minterAddress := sdk.MustBech32ifyAddressBytes("noble", address)
 
 	return &Noble{
-		cc:                   cc,
-		chainID:              chainID,
-		startBlock:           startBlock,
-		lookbackPeriod:       lookbackPeriod,
-		workers:              workers,
-		privateKey:           &privKey,
-		minterAddress:        minterAddress,
-		gasLimit:             gasLimit,
-		txMemo:               txMemo,
-		maxRetries:           maxRetries,
-		retryIntervalSeconds: retryIntervalSeconds,
+		cc:                    cc,
+		chainID:               chainID,
+		startBlock:            startBlock,
+		lookbackPeriod:        lookbackPeriod,
+		workers:               workers,
+		privateKey:            &privKey,
+		minterAddress:         minterAddress,
+		gasLimit:              gasLimit,
+		txMemo:                txMemo,
+		maxRetries:            maxRetries,
+		retryIntervalSeconds:  retryIntervalSeconds,
+		blockQueueChannelSize: blockQueueChannelSize,
 	}, nil
 }
 
