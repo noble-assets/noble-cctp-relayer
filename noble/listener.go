@@ -40,7 +40,7 @@ func (n *Noble) StartListener(
 	currentBlock := n.startBlock
 	lookback := n.lookbackPeriod
 	chainTip, err := n.chainTip(ctx)
-	blockQueue := make(chan uint64, 1000000)
+	blockQueue := make(chan uint64, n.blockQueueChannelSize)
 
 	// history
 	currentBlock = currentBlock - lookback

@@ -23,3 +23,17 @@ func TestConfig(t *testing.T) {
 	_, ok = ethType.(*ethereum.ChainConfig)
 	require.True(t, ok)
 }
+
+func TestBlockQueueChannelSize(t *testing.T) {
+	file, err := cmd.Parse("../config/sample-config.yaml")
+	require.NoError(t, err, "Error parsing config")
+
+	var nobleCfg interface{} = file.Chains["noble"]
+	n, ok := nobleCfg.(*noble.ChainConfig)
+	require.True(t, ok)
+
+	// block-queue-channel-size is set to 1000000 in sample-config
+	expected := uint64(1000000)
+
+	require.Equal(t, expected, n.BlockQueueChannelSize)
+}

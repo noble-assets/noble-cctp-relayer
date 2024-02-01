@@ -17,6 +17,8 @@ type ChainConfig struct {
 	BroadcastRetries       int    `yaml:"broadcast-retries"`
 	BroadcastRetryInterval int    `yaml:"broadcast-retry-interval"`
 
+	BlockQueueChannelSize uint64 `yaml:"block-queue-channel-size"`
+
 	// TODO move to keyring
 	MinterPrivateKey string `yaml:"minter-private-key"`
 }
@@ -33,5 +35,6 @@ func (c *ChainConfig) Chain(name string) (types.Chain, error) {
 		c.TxMemo,
 		c.BroadcastRetries,
 		c.BroadcastRetryInterval,
+		c.BlockQueueChannelSize,
 	)
 }
