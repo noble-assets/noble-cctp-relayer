@@ -2,56 +2,31 @@ package integration_testing
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/hex"
 	"fmt"
-	"io"
 	"log"
 	"math/big"
-	"net/http"
-	"strconv"
 	"strings"
-	"testing"
+
+	"crypto/ecdsa"
 
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	bankTypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cosmos"
-	"github.com/stretchr/testify/require"
 )
 
-// USDC Token Address on Sepolia
-const usdcTokenAddress = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
+const (
+	usdcTokenAddressSepolia      = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
+	TokenMessengerAddressSepolia = "0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5"
 
-func getDydxBalance(address string) uint64 {
-	rawResponse, _ := http.Get(fmt.Sprintf(
-		"https://dydx-testnet-api.polkachu.com/cosmos/bank/v1beta1/balances/%s/by_denom?denom=ibc/8E27BA2D5493AF5636760E354E46004562C46AB7EC0CC4C1CA14E9E20E2545B5", address))
-	body, _ := io.ReadAll(rawResponse.Body)
-	response := BalanceResponse{}
-	_ = json.Unmarshal(body, &response)
-	res, _ := strconv.ParseInt(response.Balance.Amount, 0, 0)
-	return uint64(res)
-}
-
-func getEthereumLatestBlockHeight(t *testing.T) uint64 {
-	client, err := ethclient.Dial(ethCfg.RPC)
-	require.Nil(t, err)
-
-	header, err := client.HeaderByNumber(context.Background(), nil)
-	require.Nil(t, err)
-	return header.Number.Uint64()
-}
-
-func getNobleLatestBlockHeight() uint64 {
-	rawResponse, _ := http.Get("https://rpc.testnet.noble.strange.love/block")
-	body, _ := io.ReadAll(rawResponse.Body)
-	response := NobleBlockResponse{}
-	_ = json.Unmarshal(body, &response)
-	res, _ := strconv.ParseInt(response.Result.Block.Header.Height, 0, 0)
-	return uint64(res)
-}
+	uusdcDenom = "uusdc"
+)
 
 func getNobleAccountBalance(ctx context.Context, cc *cosmos.CosmosProvider, address, denom string) (uint64, error) {
 	qc := bankTypes.NewQueryClient(cc)
@@ -82,23 +57,23 @@ func getNobleAccountNumberSequenceGRPC(cc *cosmos.CosmosProvider, address string
 
 }
 
-func getEthBalance(client *ethclient.Client, address string) uint64 {
-	accountAddress := common.HexToAddress(address)
+func getEthBalance(client *ethclient.Client, usdcTokenAddress, walletAddress string) (uint64, error) {
+	accountAddress := common.HexToAddress(walletAddress)
 	tokenAddress := common.HexToAddress(usdcTokenAddress)
 	erc20ABI := `[{"constant":true,"inputs":[{"name":"_owner","type":"address"}],"name":"balanceOf","outputs":[{"name":"balance","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"}]`
 	parsedABI, err := abi.JSON(strings.NewReader(erc20ABI))
 	if err != nil {
-		log.Fatalf("Failed to parse contract ABI: %v", err)
+		return 0, fmt.Errorf("failed to parse contract ABI: %v", err)
 	}
 
 	data, err := parsedABI.Pack("balanceOf", accountAddress)
 	if err != nil {
-		log.Fatalf("Failed to pack data into ABI interface: %v", err)
+		return 0, fmt.Errorf("failed to pack data into ABI interface: %v", err)
 	}
 
 	result, err := client.CallContract(context.Background(), ethereum.CallMsg{To: &tokenAddress, Data: data}, nil)
 	if err != nil {
-		log.Fatalf("Failed to call contract: %v", err)
+		return 0, fmt.Errorf("failed to call contract: %v", err)
 	}
 
 	balance := new(big.Int)
@@ -108,5 +83,55 @@ func getEthBalance(client *ethclient.Client, address string) uint64 {
 	}
 
 	// Convert to uint64
-	return balance.Uint64()
+	return balance.Uint64(), nil
+}
+
+// ethConvertPrivateKeytoAddress gets the public address from a hex encoded private key
+func ethConvertPrivateKeytoAddress(privateKeyHex string) (string, error) {
+	// Decode hex-encoded private key
+	privateKeyBytes, err := hex.DecodeString(privateKeyHex)
+	if err != nil {
+		return "", err
+	}
+
+	// Parse the private key
+	privateKey, err := crypto.ToECDSA(privateKeyBytes)
+	if err != nil {
+		return "", err
+	}
+
+	// Get the public key from the private key
+	publicKey := privateKey.Public()
+
+	// Convert the public key to the ECDSA format
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		return "", fmt.Errorf("Error converting public key to ECDSA format")
+	}
+
+	// Generate Ethereum address
+	address := crypto.PubkeyToAddress(*publicKeyECDSA).Hex()
+	return address, nil
+}
+
+func generateEthWallet() (address, privateKeyHex string, err error) {
+	privateKey, err := crypto.GenerateKey()
+	if err != nil {
+		return "", "", err
+	}
+
+	privateKeyBytes := crypto.FromECDSA(privateKey)
+
+	privateKeyHex = hexutil.Encode(privateKeyBytes)[2:]
+
+	publicKey := privateKey.Public()
+
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		return "", "", fmt.Errorf("error casting public key to ECDSA")
+	}
+
+	address = crypto.PubkeyToAddress(*publicKeyECDSA).Hex()
+
+	return address, privateKeyHex, nil
 }

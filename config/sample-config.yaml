@@ -1,20 +1,4 @@
 chains:
-  ethereum:
-    chain-id: 5
-    domain: 0
-    rpc: # Ethereum RPC
-    ws: # Ethereum Websocket
-    message-transmitter: "0x26413e8157CD32011E726065a5462e97dD4d03D9"
-
-    start-block: 0 # set to 0 to default to latest block
-    lookback-period: 5 # historical blocks to look back on launch
-
-    broadcast-retries: 5 # number of times to attempt the broadcast
-    broadcast-retry-interval: 10 # time between retries in seconds
-
-    minter-private-key: # private key
-
-
   noble:
     rpc: #noble RPC; for stability, use a reliable private node 
     chain-id: "grand-1"
@@ -32,10 +16,73 @@ chains:
 
     minter-private-key: # hex encoded privateKey
 
-# source domain id -> destination domain id
+  ethereum:
+    chain-id: 5
+    domain: 0
+    rpc:
+    ws: # websocket
+    message-transmitter: "0x26413e8157CD32011E726065a5462e97dD4d03D9"
+
+    start-block: 0 # set to 0 to default to latest block
+    lookback-period: 5 # historical blocks to look back on launch
+
+    broadcast-retries: 5 # number of times to attempt the broadcast
+    broadcast-retry-interval: 10 # time between retries in seconds
+
+    minter-private-key: # private key
+
+  optimism:
+    chain-id: 10
+    domain: 2
+    rpc: ""
+    ws: ""
+    message-transmitter: "0x4d41f22c5a0e5c74090899e5a8fb597a8842b3e8"
+
+    start-block: 0
+    lookback-period: 0 # (2 second block time)
+
+    broadcast-retries: 5 # number of times to attempt the broadcast
+    broadcast-retry-interval: 10 # time between retries in seconds
+
+    minter-private-key: ""
+
+  arbitrum:
+    chain-id: 42161
+    domain: 3
+    rpc: ""
+    ws: ""
+    message-transmitter: "0xC30362313FBBA5cf9163F0bb16a0e01f01A896ca"
+
+    start-block: 0
+    lookback-period: 0 # .26 second block time
+
+    broadcast-retries: 5 # number of times to attempt the broadcast
+    broadcast-retry-interval: 10 # time between retries in seconds
+
+    minter-private-key: ""
+
+  avalanche:
+    chain-id: 43114
+    domain: 1
+    rpc: ""
+    ws: ""
+    message-transmitter: "0x8186359af5f57fbb40c6b14a588d2a59c0c29880"
+
+    start-block: 0
+    lookback-period: 600 # 30 min (3 second block time)
+
+    broadcast-retries: 5 # number of times to attempt the broadcast
+    broadcast-retry-interval: 10 # time between retries in seconds
+
+    minter-private-key: "" 
+
+# source domain id -> []destination domain id
 enabled-routes:
-  0: [4] # ethereum to noble
-  4: [0] # noble to ethereum
+  0: [4] # ethereum -> noble
+  1: [4] # avalanche -> noble
+  2: [4] # optimism -> noble
+  3: [4] # arbitrum -> noble
+  4: [0,1,2,3] # noble -> ethereum, avalanche, optimism, arbitrum
 
 circle:
   attestation-base-url: "https://iris-api-sandbox.circle.com/attestations/"

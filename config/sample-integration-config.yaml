@@ -1,12 +1,111 @@
-# This file is for integration testing. 
-# These extra wallets keep the relayer wallet separate from the wallet used to send test transactions
+# This file is for integration testing on deployed relayers
+# use this file inconjunction with: integration/deployed_relayer_test.go
 
-networks:
-  ethereum:
-  # Sepolia
-    address: 
-    private_key:
+# "destination-caller": address of the relayer you are testing. Only a relayer with this
+# address can pick up the transaction.
 
+# "address" and "private-key" must correlate to each other. This is the wallet that will be submitting the deposit for burn
+
+# USDC Token Addresses (mainnet): https://developers.circle.com/stablecoins/docs/usdc-on-main-networks
+# USDC Token Addresses (testnet): https://developers.circle.com/stablecoins/docs/usdc-on-test-networks
+
+# tokenMessenger contract addresses: https://developers.circle.com/stablecoins/docs/evm-smart-contracts
+
+testnet:
   noble:
-    address: 
-    private_key:
+    chain-id: "grand-1"
+    domain: 4
+    address: ""
+    private-key: ""
+    rpc: ""
+    destination-caller: ""
+
+  ethereum:
+    chain-id: "11155111"
+    domain: 0
+    address: ""
+    private-key: ""
+    rpc: ""
+    usdc-token-address: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
+    token-messenger-address: "0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5"
+    destination-caller: ""
+
+  arbitrum:
+    chain-id: "421614"
+    domain: 3
+    address: ""
+    private-key: ""
+    rpc: ""
+    usdc-token-address: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d"
+    token-messenger-address: "0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5"
+    destination-caller: ""
+
+  avalanche:
+    chain-id: "43113"
+    domain: 1
+    address: ""
+    private-key: ""
+    rpc: ""
+    usdc-token-address: "0x5425890298aed601595a70ab815c96711a31bc65"
+    token-messenger-address: "0xeb08f243e5d3fcff26a9e38ae5520a669f4019d0"
+    destination-caller: ""
+
+  optimism:
+    chain-id: "11155420"
+    domain: 2
+    address: ""
+    private-key: ""
+    rpc: ""
+    usdc-token-address: "0x5fd84259d66Cd46123540766Be93DFE6D43130D7"
+    token-messenger-address: "0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5"
+    destination-caller: ""
+
+mainnet:
+  noble:
+    chain-id: "noble-1"
+    domain: 4
+    address: ""
+    private-key: ""
+    rpc: ""
+    destination-caller: ""
+
+  ethereum:
+    chain-id: "1"
+    domain: 0
+    address: ""
+    private-key: ""
+    rpc: ""
+    usdc-token-address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+    token-messenger-address: "0xbd3fa81b58ba92a82136038b25adec7066af3155"
+    destination-caller: ""
+
+  arbitrum:
+    chain-id: "42161"
+    domain: 3
+    address: ""
+    private-key: ""
+    rpc: ""
+    usdc-token-address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"
+    token-messenger-address: "0x19330d10D9Cc8751218eaf51E8885D058642E08A"
+    destination-caller: ""
+
+  avalanche:
+    chain-id: "43114"
+    domain: 1
+    address: ""
+    private-key: ""
+    rpc: ""
+    usdc-token-address: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E"
+    token-messenger-address: "0x6b25532e1060ce10cc3b0a99e5683b91bfde6982"
+    destination-caller: ""
+
+  optimism:
+    chain-id: "10"
+    domain: 2
+    address: ""
+    private-key: ""
+    rpc: ""
+    usdc-token-address: "0x0b2c639c533813f4aa9d7837caf62653d097ff85"
+    token-messenger-address: "0x2B4069517957735bE00ceE0fadAE88a26365528f"
+    destination-caller: ""
+
