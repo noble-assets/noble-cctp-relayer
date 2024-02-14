@@ -205,6 +205,14 @@ func filterLowTransfers(cfg *types.Config, logger log.Logger, msg *types.Message
 		return true
 	}
 
+	logger.Info(
+		"Not filtering tx due to low transfer amount",
+		"source_domain", msg.SourceDomain,
+		"source_tx", msg.SourceTxHash,
+		"amount", bm.Amount.Uint64(),
+		"min_amount", cfg.MinAmount,
+	)
+
 	return false
 }
 
