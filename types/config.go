@@ -27,6 +27,7 @@ type ConfigWrapper struct {
 	Api                  struct {
 		TrustedProxies []string `yaml:"trusted-proxies"`
 	} `yaml:"api"`
+	MinAmount uint64 `yaml:"min-amount"`
 }
 
 type ChainConfig interface {
