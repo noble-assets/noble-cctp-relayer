@@ -41,6 +41,7 @@ type MessageState struct {
 	SourceTxHash      string
 	DestTxHash        string
 	MsgSentBytes      []byte // bytes of the MessageSent message transmitter event
+	MsgBody           []byte // bytes of the MessageBody
 	DestinationCaller []byte // address authorized to call transaction
 	Channel           string // "channel-%d" if a forward, empty if not a forward
 	Created           time.Time
@@ -68,6 +69,7 @@ func EvmLogToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log)
 		DestDomain:        Domain(message.DestinationDomain),
 		SourceTxHash:      log.TxHash.Hex(),
 		MsgSentBytes:      rawMessageSentBytes,
+		MsgBody:           message.MessageBody,
 		DestinationCaller: message.DestinationCaller,
 		Nonce:             message.Nonce,
 		Created:           time.Now(),

@@ -188,9 +188,9 @@ func filterInvalidDestinationCallers(registeredDomains map[types.Domain]types.Ch
 }
 
 func filterLowTransfers(cfg *types.Config, logger log.Logger, msg *types.MessageState) bool {
-	bm, err := new(cctptypes.BurnMessage).Parse(msg.MsgSentBytes)
+	bm, err := new(cctptypes.BurnMessage).Parse(msg.MsgBody)
 	if err != nil {
-		logger.Error("Error parsing burn message", "err", err)
+		logger.Info("This is not a burn message", "err", err)
 		return true
 	}
 
