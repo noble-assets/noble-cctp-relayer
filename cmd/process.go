@@ -201,7 +201,11 @@ func filterLowTransfers(cfg *types.Config, logger log.Logger, msg *types.Message
 		minBurnAmount = cfg.Chains["noble"].(*noble.ChainConfig).MinAmount
 	} else {
 		for _, chain := range cfg.Chains {
-			c := chain.(*ethereum.ChainConfig)
+			c, ok := chain.(*ethereum.ChainConfig)
+			if !ok {
+				// noble chain, handled above
+				continue
+			}
 			if c.Domain == msg.DestDomain {
 				minBurnAmount = c.MinAmount
 			}
