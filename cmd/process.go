@@ -11,6 +11,8 @@ import (
 	cctptypes "github.com/circlefin/noble-cctp/x/cctp/types"
 	"github.com/spf13/cobra"
 	"github.com/strangelove-ventures/noble-cctp-relayer/circle"
+	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
+	"github.com/strangelove-ventures/noble-cctp-relayer/noble"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
@@ -194,13 +196,25 @@ func filterLowTransfers(cfg *types.Config, logger log.Logger, msg *types.Message
 		return true
 	}
 
-	if bm.Amount.LT(math.NewIntFromUint64(cfg.MinAmount)) {
+	var minBurnAmount uint64
+	if msg.DestDomain == types.Domain(4) {
+		minBurnAmount = cfg.Chains["noble"].(*noble.ChainConfig).MinAmount
+	} else {
+		for _, chain := range cfg.Chains {
+			c := chain.(*ethereum.ChainConfig)
+			if c.Domain == msg.DestDomain {
+				minBurnAmount = c.MinAmount
+			}
+		}
+	}
+
+	if bm.Amount.LT(math.NewIntFromUint64(minBurnAmount)) {
 		logger.Info(
 			"Filtered tx because the transfer amount is less than the minimum allowed amount",
 			"source_domain", msg.SourceDomain,
 			"source_tx", msg.SourceTxHash,
 			"amount", bm.Amount,
-			"min_amount", cfg.MinAmount,
+			"min_amount", minBurnAmount,
 		)
 		return true
 	}
@@ -210,7 +224,7 @@ func filterLowTransfers(cfg *types.Config, logger log.Logger, msg *types.Message
 		"source_domain", msg.SourceDomain,
 		"source_tx", msg.SourceTxHash,
 		"amount", bm.Amount.Uint64(),
-		"min_amount", cfg.MinAmount,
+		"min_amount", minBurnAmount,
 	)
 
 	return false
