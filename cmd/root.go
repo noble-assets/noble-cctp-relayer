@@ -112,6 +112,7 @@ func Parse(file string) (*types.Config, error) {
 		ProcessorWorkerCount: cfg.ProcessorWorkerCount,
 		Api:                  cfg.Api,
 		Chains:               make(map[string]types.ChainConfig),
+		MinAmount:            cfg.MinAmount,
 	}
 
 	for name, chain := range cfg.Chains {

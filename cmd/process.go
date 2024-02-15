@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"cosmossdk.io/log"
+	"cosmossdk.io/math"
+	cctptypes "github.com/circlefin/noble-cctp/x/cctp/types"
 	"github.com/spf13/cobra"
 	"github.com/strangelove-ventures/noble-cctp-relayer/circle"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
@@ -91,7 +93,8 @@ func StartProcessor(
 
 			// if a filter's condition is met, mark as filtered
 			if FilterDisabledCCTPRoutes(cfg, logger, msg) ||
-				filterInvalidDestinationCallers(registeredDomains, logger, msg) {
+				filterInvalidDestinationCallers(registeredDomains, logger, msg) ||
+				filterLowTransfers(cfg, logger, msg) {
 				msg.Status = types.Filtered
 			}
 
@@ -182,6 +185,35 @@ func filterInvalidDestinationCallers(registeredDomains map[types.Domain]types.Ch
 	}
 
 	return !chain.IsDestinationCaller(msg.DestinationCaller)
+}
+
+func filterLowTransfers(cfg *types.Config, logger log.Logger, msg *types.MessageState) bool {
+	bm, err := new(cctptypes.BurnMessage).Parse(msg.MsgBody)
+	if err != nil {
+		logger.Info("This is not a burn message", "err", err)
+		return true
+	}
+
+	if bm.Amount.LT(math.NewIntFromUint64(cfg.MinAmount)) {
+		logger.Info(
+			"Filtered tx because the transfer amount is less than the minimum allowed amount",
+			"source_domain", msg.SourceDomain,
+			"source_tx", msg.SourceTxHash,
+			"amount", bm.Amount,
+			"min_amount", cfg.MinAmount,
+		)
+		return true
+	}
+
+	logger.Info(
+		"Not filtering tx due to low transfer amount",
+		"source_domain", msg.SourceDomain,
+		"source_tx", msg.SourceTxHash,
+		"amount", bm.Amount.Uint64(),
+		"min_amount", cfg.MinAmount,
+	)
+
+	return false
 }
 
 func LookupKey(sourceTxHash string) string {

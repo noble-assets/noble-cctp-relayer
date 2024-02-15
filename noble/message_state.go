@@ -66,6 +66,7 @@ func txToMessageState(tx *ctypes.ResultTx) ([]*types.MessageState, error) {
 						Nonce:             msg.Nonce,
 						SourceTxHash:      tx.Hash.String(),
 						MsgSentBytes:      rawMessageSentBytes,
+						MsgBody:           msg.MessageBody,
 						DestinationCaller: msg.DestinationCaller,
 						Created:           now,
 						Updated:           now,
