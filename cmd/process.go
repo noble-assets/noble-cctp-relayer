@@ -199,8 +199,9 @@ func filterLowTransfers(cfg *types.Config, logger log.Logger, msg *types.Message
 	var minBurnAmount uint64
 	if msg.DestDomain == types.Domain(4) {
 		minBurnAmount = cfg.Chains["noble"].(*noble.ChainConfig).MinAmount
+		logger.Info("CHAIN: Noble", "min burn amount: ", minBurnAmount)
 	} else {
-		for _, chain := range cfg.Chains {
+		for name, chain := range cfg.Chains {
 			c, ok := chain.(*ethereum.ChainConfig)
 			if !ok {
 				// noble chain, handled above
@@ -208,6 +209,7 @@ func filterLowTransfers(cfg *types.Config, logger log.Logger, msg *types.Message
 			}
 			if c.Domain == msg.DestDomain {
 				minBurnAmount = c.MinAmount
+				logger.Info("ETCH CHAIN", "chain", name, "min burn amount:", minBurnAmount)
 			}
 		}
 	}
@@ -215,6 +217,7 @@ func filterLowTransfers(cfg *types.Config, logger log.Logger, msg *types.Message
 	if bm.Amount.LT(math.NewIntFromUint64(minBurnAmount)) {
 		logger.Info(
 			"Filtered tx because the transfer amount is less than the minimum allowed amount",
+			"dest domain", msg.DestDomain,
 			"source_domain", msg.SourceDomain,
 			"source_tx", msg.SourceTxHash,
 			"amount", bm.Amount,
@@ -225,6 +228,7 @@ func filterLowTransfers(cfg *types.Config, logger log.Logger, msg *types.Message
 
 	logger.Info(
 		"Not filtering tx due to low transfer amount",
+		"dest domain", msg.DestDomain,
 		"source_domain", msg.SourceDomain,
 		"source_tx", msg.SourceTxHash,
 		"amount", bm.Amount.Uint64(),
