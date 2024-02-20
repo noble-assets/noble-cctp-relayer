@@ -14,7 +14,7 @@ chains:
 
     block-queue-channel-size: 1000000 # 1000000 is a safe default, increase number if starting from a very early block
 
-    min-mint-amount: 0
+    min-mint-amount: 0 # minamum transaction amount needed for relayer to broadcast the MsgReceive/burn for this chain. IE. if this chain is the destintation chain
 
     minter-private-key: # hex encoded privateKey
 
@@ -31,7 +31,7 @@ chains:
     broadcast-retries: 5 # number of times to attempt the broadcast
     broadcast-retry-interval: 10 # time between retries in seconds
 
-    min-mint-amount: 10000000
+    min-mint-amount: 10000000 # (10000000 = $10) minamum transaction amount needed for relayer to broadcast the MsgReceive/burn for this chain. IE. if this chain is the destintation chain
 
     minter-private-key: # private key
 
