@@ -11,6 +11,8 @@ import (
 	cctptypes "github.com/circlefin/noble-cctp/x/cctp/types"
 	"github.com/spf13/cobra"
 	"github.com/strangelove-ventures/noble-cctp-relayer/circle"
+	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
+	"github.com/strangelove-ventures/noble-cctp-relayer/noble"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
@@ -187,6 +189,7 @@ func filterInvalidDestinationCallers(registeredDomains map[types.Domain]types.Ch
 	return !chain.IsDestinationCaller(msg.DestinationCaller)
 }
 
+// filterLowTransfers returns true if the amount being transfered to the destination chain is lower than the min-mint-amount configured
 func filterLowTransfers(cfg *types.Config, logger log.Logger, msg *types.MessageState) bool {
 	bm, err := new(cctptypes.BurnMessage).Parse(msg.MsgBody)
 	if err != nil {
@@ -194,24 +197,39 @@ func filterLowTransfers(cfg *types.Config, logger log.Logger, msg *types.Message
 		return true
 	}
 
-	if bm.Amount.LT(math.NewIntFromUint64(cfg.MinAmount)) {
+	// TODO: not assume that "noble" is domain 4, add "domain" to the noble chain conifg
+	var minBurnAmount uint64
+	if msg.DestDomain == types.Domain(4) {
+		nobleCfg, ok := cfg.Chains["noble"].(*noble.ChainConfig)
+		if !ok {
+			logger.Info("chain named 'noble' not found in config, filtering transaction")
+			return true
+		}
+		minBurnAmount = nobleCfg.MinMintAmount
+	} else {
+		for _, chain := range cfg.Chains {
+			c, ok := chain.(*ethereum.ChainConfig)
+			if !ok {
+				// noble chain, handled above
+				continue
+			}
+			if c.Domain == msg.DestDomain {
+				minBurnAmount = c.MinMintAmount
+			}
+		}
+	}
+
+	if bm.Amount.LT(math.NewIntFromUint64(minBurnAmount)) {
 		logger.Info(
 			"Filtered tx because the transfer amount is less than the minimum allowed amount",
+			"dest domain", msg.DestDomain,
 			"source_domain", msg.SourceDomain,
 			"source_tx", msg.SourceTxHash,
 			"amount", bm.Amount,
-			"min_amount", cfg.MinAmount,
+			"min_amount", minBurnAmount,
 		)
 		return true
 	}
-
-	logger.Info(
-		"Not filtering tx due to low transfer amount",
-		"source_domain", msg.SourceDomain,
-		"source_tx", msg.SourceTxHash,
-		"amount", bm.Amount.Uint64(),
-		"min_amount", cfg.MinAmount,
-	)
 
 	return false
 }
