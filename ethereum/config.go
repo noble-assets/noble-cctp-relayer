@@ -19,7 +19,7 @@ type ChainConfig struct {
 	BroadcastRetries       int `yaml:"broadcast-retries"`
 	BroadcastRetryInterval int `yaml:"broadcast-retry-interval"`
 
-	MinAmount uint64 `yaml:"min-amount"`
+	MinMintAmount uint64 `yaml:"min-mint-amount"`
 
 	// TODO move to keyring
 	MinterPrivateKey string `yaml:"minter-private-key"`
@@ -38,6 +38,6 @@ func (c *ChainConfig) Chain(name string) (types.Chain, error) {
 		c.MinterPrivateKey,
 		c.BroadcastRetries,
 		c.BroadcastRetryInterval,
-		c.MinAmount,
+		c.MinMintAmount,
 	)
 }

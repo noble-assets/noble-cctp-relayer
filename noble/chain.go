@@ -35,7 +35,7 @@ type Noble struct {
 	maxRetries            int
 	retryIntervalSeconds  int
 	blockQueueChannelSize uint64
-	minamount             uint64
+	minAmount             uint64
 
 	mu sync.Mutex
 }
@@ -82,7 +82,7 @@ func NewChain(
 		maxRetries:            maxRetries,
 		retryIntervalSeconds:  retryIntervalSeconds,
 		blockQueueChannelSize: blockQueueChannelSize,
-		minamount:             minAmount,
+		minAmount:             minAmount,
 	}, nil
 }
 

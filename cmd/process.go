@@ -189,7 +189,7 @@ func filterInvalidDestinationCallers(registeredDomains map[types.Domain]types.Ch
 	return !chain.IsDestinationCaller(msg.DestinationCaller)
 }
 
-// filterLowTransfers returns true if the amount being transfered to the destination chain is lower than the min-amount configured
+// filterLowTransfers returns true if the amount being transfered to the destination chain is lower than the min-mint-amount configured
 func filterLowTransfers(cfg *types.Config, logger log.Logger, msg *types.MessageState) bool {
 	bm, err := new(cctptypes.BurnMessage).Parse(msg.MsgBody)
 	if err != nil {
@@ -205,7 +205,7 @@ func filterLowTransfers(cfg *types.Config, logger log.Logger, msg *types.Message
 			logger.Info("chain named 'noble' not found in config, filtering transaction")
 			return true
 		}
-		minBurnAmount = nobleCfg.MinAmount
+		minBurnAmount = nobleCfg.MinMintAmount
 	} else {
 		for _, chain := range cfg.Chains {
 			c, ok := chain.(*ethereum.ChainConfig)
@@ -214,7 +214,7 @@ func filterLowTransfers(cfg *types.Config, logger log.Logger, msg *types.Message
 				continue
 			}
 			if c.Domain == msg.DestDomain {
-				minBurnAmount = c.MinAmount
+				minBurnAmount = c.MinMintAmount
 			}
 		}
 	}
