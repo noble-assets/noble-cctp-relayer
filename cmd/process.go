@@ -293,7 +293,7 @@ func getTxByHash(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "unable to parse domain"})
 	}
 
-	if tx, ok := State.Load(txHash); ok && domain == "" || (domain != "" && tx.Msgs[0].SourceDomain == types.Domain(domainInt)) {
+	if tx, ok := State.Load(txHash); ok && domain == "" || (domain != "" && tx.Msgs[0].SourceDomain == types.Domain(uint32(domainInt))) {
 		c.JSON(http.StatusOK, tx.Msgs)
 		return
 	}
