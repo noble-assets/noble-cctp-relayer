@@ -7,11 +7,13 @@ import (
 // StateMap wraps sync.Map with type safety
 // maps source tx hash -> TxState
 type StateMap struct {
+	Mu       sync.Mutex
 	internal sync.Map
 }
 
 func NewStateMap() *StateMap {
 	return &StateMap{
+		Mu:       sync.Mutex{},
 		internal: sync.Map{},
 	}
 }

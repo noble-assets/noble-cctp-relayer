@@ -2,43 +2,31 @@ package noble_test
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
-	"cosmossdk.io/log"
-	"github.com/rs/zerolog"
-	"github.com/strangelove-ventures/noble-cctp-relayer/cmd"
 	"github.com/strangelove-ventures/noble-cctp-relayer/noble"
+	testutil "github.com/strangelove-ventures/noble-cctp-relayer/test_util"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"github.com/stretchr/testify/require"
 )
 
-var cfg *types.Config
-var logger log.Logger
-var processingQueue chan *types.TxState
-
-func init() {
-	var err error
-	cfg, err = cmd.Parse("../.ignore/testnet.yaml")
-	if err != nil {
-		panic(err)
-	}
-
-	logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.DebugLevel))
-	processingQueue = make(chan *types.TxState, 10000)
-	cfg.Chains["noble"].(*noble.ChainConfig).Workers = 1
-}
-
+// TODO: update test to not rely on live node with block history
 func TestStartListener(t *testing.T) {
-	cfg.Chains["noble"].(*noble.ChainConfig).StartBlock = 3273557
-	n, err := cfg.Chains["noble"].(*noble.ChainConfig).Chain("noble")
+	a, _ := testutil.ConfigSetup(t)
+	nobleCfg := a.Config.Chains["noble"].(*noble.ChainConfig)
+
+	nobleCfg.StartBlock = 3273557
+
+	n, err := nobleCfg.Chain("noble")
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go n.StartListener(ctx, logger, processingQueue)
+	processingQueue := make(chan *types.TxState, 10000)
+
+	go n.StartListener(ctx, a.Logger, processingQueue)
 
 	time.Sleep(20 * time.Second)
 

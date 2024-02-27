@@ -14,7 +14,8 @@ type Chain interface {
 	// Domain returns the domain ID of the chain.
 	Domain() Domain
 
-	// IsDestinationCaller returns true if the specified destination caller is the minter for the specified domain.
+	// IsDestinationCaller returns true if the specified destination caller is the minter for the specified domain OR
+	// if destination caller is left empty
 	IsDestinationCaller(destinationCaller []byte) bool
 
 	// InitializeBroadcaster initializes the minter account info for the chain.

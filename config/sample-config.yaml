@@ -86,7 +86,7 @@ enabled-routes:
 
 circle:
   attestation-base-url: "https://iris-api-sandbox.circle.com/attestations/"
-  fetch-retries: 0 # additional times to fetch an attestation
+  fetch-retries: 30 # additional times to fetch an attestation
   fetch-retry-interval: 3 # time between retries in seconds
 
 processor-worker-count: 16

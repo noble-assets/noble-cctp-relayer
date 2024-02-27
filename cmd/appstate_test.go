@@ -10,7 +10,7 @@ import (
 )
 
 func TestConfig(t *testing.T) {
-	file, err := cmd.Parse("../config/sample-config.yaml")
+	file, err := cmd.ParseConfig("../config/sample-config.yaml")
 	require.NoError(t, err, "Error parsing config")
 
 	// assert noble chainConfig correctly parsed
@@ -25,7 +25,7 @@ func TestConfig(t *testing.T) {
 }
 
 func TestBlockQueueChannelSize(t *testing.T) {
-	file, err := cmd.Parse("../config/sample-config.yaml")
+	file, err := cmd.ParseConfig("../config/sample-config.yaml")
 	require.NoError(t, err, "Error parsing config")
 
 	var nobleCfg any = file.Chains["noble"]

@@ -5,11 +5,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
-	"os"
 	"testing"
 	"time"
 
-	"cosmossdk.io/log"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	"github.com/cosmos/cosmos-sdk/testutil/testdata"
 	"github.com/cosmos/cosmos-sdk/types/bech32"
@@ -17,7 +15,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/rs/zerolog"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cosmos"
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
@@ -38,15 +35,19 @@ import (
 // This test uses the Noble wallet in the config as the destination caller to ensure that
 // to ensure that this instance of the relayer picks up the transaction
 func TestEthBurnToNobleMint(t *testing.T) {
+	a := cmd.NewappState()
+	a.Debug = true
+	a.InitLogger()
+
 	ctx := context.Background()
-	logger := log.NewLogger(os.Stdout, log.LevelOption(zerolog.DebugLevel))
 
 	// Relayer config
-	cfg, err := cmd.Parse("../.ignore/testnet.yaml")
+	cfg, err := cmd.ParseConfig("../.ignore/testnet.yaml")
 	require.NoError(t, err)
+	a.Config = cfg
 
-	nobleCfg := cfg.Chains["noble"].(*noble.ChainConfig)
-	ethCfg := cfg.Chains["sepolia"].(*ethereum.ChainConfig)
+	nobleCfg := a.Config.Chains["noble"].(*noble.ChainConfig)
+	ethCfg := a.Config.Chains["sepolia"].(*ethereum.ChainConfig)
 
 	nobleChain, err := nobleCfg.Chain("noble")
 	require.NoError(t, err)
@@ -61,13 +62,13 @@ func TestEthBurnToNobleMint(t *testing.T) {
 	registeredDomains[4] = nobleChain
 
 	sequenceMap := types.NewSequenceMap()
-	err = nobleChain.InitializeBroadcaster(ctx, logger, sequenceMap)
+	err = nobleChain.InitializeBroadcaster(ctx, a.Logger, sequenceMap)
 	require.NoError(t, err)
 
 	processingQueue := make(chan *types.TxState, 10)
 
-	go ethChain.StartListener(ctx, logger, processingQueue)
-	go cmd.StartProcessor(ctx, cfg, logger, registeredDomains, processingQueue, sequenceMap)
+	go ethChain.StartListener(ctx, a.Logger, processingQueue)
+	go cmd.StartProcessor(ctx, a, registeredDomains, processingQueue, sequenceMap)
 
 	_, _, generatedWallet := testdata.KeyTestPubAddr()
 	destAddress, _ := bech32.ConvertAndEncode("noble", generatedWallet)
@@ -106,6 +107,9 @@ func TestEthBurnToNobleMint(t *testing.T) {
 	_, err = erc20.Approve(auth, common.HexToAddress(TokenMessengerAddressSepolia), burnAmount)
 	require.Nil(t, err)
 
+	// Ensure approval is on chain
+	time.Sleep(20 * time.Second)
+
 	// create tokenMessenger
 	tokenMessenger, err := contracts.NewTokenMessenger(common.HexToAddress(TokenMessengerAddressSepolia), client)
 	require.Nil(t, err)
@@ -135,7 +139,7 @@ func TestEthBurnToNobleMint(t *testing.T) {
 		[32]byte(destinationCallerPadded),
 	)
 	if err != nil {
-		logger.Error("Failed to update value", "err", err)
+		a.Logger.Error("Failed to update value", "err", err)
 	}
 
 	time.Sleep(5 * time.Second)

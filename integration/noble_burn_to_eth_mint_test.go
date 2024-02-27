@@ -5,11 +5,9 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
-	"cosmossdk.io/log"
 	"cosmossdk.io/math"
 	nobletypes "github.com/circlefin/noble-cctp/x/cctp/types"
 	sdkClient "github.com/cosmos/cosmos-sdk/client"
@@ -24,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/rs/zerolog"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cosmos"
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
@@ -44,12 +41,16 @@ import (
 // This test uses the Sepolia wallet in the config as the destination caller to ensure that
 // to ensure that this instance of the relayer picks up the transaction
 func TestNobleBurnToEthMint(t *testing.T) {
+	a := cmd.NewappState()
+	a.Debug = true
+	a.InitLogger()
+
 	ctx := context.Background()
-	logger := log.NewLogger(os.Stdout, log.LevelOption(zerolog.DebugLevel))
 
 	// Relayer config
-	cfg, err := cmd.Parse("../.ignore/testnet.yaml")
+	cfg, err := cmd.ParseConfig("../.ignore/testnet.yaml")
 	require.NoError(t, err)
+	a.Config = cfg
 
 	nobleCfg := cfg.Chains["noble"].(*noble.ChainConfig)
 	ethCfg := cfg.Chains["sepolia"].(*ethereum.ChainConfig)
@@ -66,13 +67,13 @@ func TestNobleBurnToEthMint(t *testing.T) {
 	registeredDomains[4] = nobleChain
 
 	sequenceMap := types.NewSequenceMap()
-	err = ethChain.InitializeBroadcaster(ctx, logger, sequenceMap)
+	err = ethChain.InitializeBroadcaster(ctx, a.Logger, sequenceMap)
 	require.NoError(t, err)
 
 	processingQueue := make(chan *types.TxState, 10)
 
-	go nobleChain.StartListener(ctx, logger, processingQueue)
-	go cmd.StartProcessor(ctx, cfg, logger, registeredDomains, processingQueue, sequenceMap)
+	go nobleChain.StartListener(ctx, a.Logger, processingQueue)
+	go cmd.StartProcessor(ctx, a, registeredDomains, processingQueue, sequenceMap)
 
 	ethDestinationAddress, _, err := generateEthWallet()
 	require.NoError(t, err)

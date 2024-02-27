@@ -2,46 +2,32 @@ package ethereum_test
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
-	"cosmossdk.io/log"
-	"github.com/rs/zerolog"
-	"github.com/strangelove-ventures/noble-cctp-relayer/cmd"
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
+	testutil "github.com/strangelove-ventures/noble-cctp-relayer/test_util"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 	"github.com/stretchr/testify/require"
 )
 
-var cfg *types.Config
-var logger log.Logger
-var processingQueue chan *types.TxState
-
-func init() {
-	var err error
-	cfg, err = cmd.Parse("../.ignore/unit_tests.yaml")
-	if err != nil {
-		panic(err)
-	}
-
-	logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.ErrorLevel))
-	processingQueue = make(chan *types.TxState, 10000)
-}
-
-// tests for a historical log
+// TODO: update test. This test is currently outdated as the RPC endpoints likely won't have this much history
 func TestStartListener(t *testing.T) {
-	ethCfg := ethereum.ChainConfig{
-		StartBlock:     9702735,
-		LookbackPeriod: 0,
-	}
-	eth, err := ethCfg.Chain("ethereum")
+	a, _ := testutil.ConfigSetup(t)
+
+	ethConfig := a.Config.Chains["ethereum"].(*ethereum.ChainConfig)
+	ethConfig.StartBlock = 9702735
+	ethConfig.LookbackPeriod = 0
+
+	eth, err := ethConfig.Chain("ethereum")
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go eth.StartListener(ctx, logger, processingQueue)
+	processingQueue := make(chan *types.TxState, 10000)
+
+	go eth.StartListener(ctx, a.Logger, processingQueue)
 
 	time.Sleep(5 * time.Second)
 
