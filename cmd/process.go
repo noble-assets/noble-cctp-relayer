@@ -288,7 +288,7 @@ func getTxByHash(c *gin.Context) {
 	txHash := c.Param("txHash")
 
 	domain := c.Query("domain")
-	domainInt, err := strconv.ParseInt(domain, 10, 0)
+	domainInt, err := strconv.ParseInt(domain, 10, 32)
 	if domain != "" && err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "unable to parse domain"})
 	}
