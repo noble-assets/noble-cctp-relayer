@@ -14,13 +14,15 @@ chains:
 
     block-queue-channel-size: 1000000 # 1000000 is a safe default, increase number if starting from a very early block
 
+    min-mint-amount: 0
+
     minter-private-key: # hex encoded privateKey
 
   ethereum:
     chain-id: 5
     domain: 0
-    rpc:
-    ws: # websocket
+    rpc: # Ethereum RPC
+    ws: # Ethereum Websocket
     message-transmitter: "0x26413e8157CD32011E726065a5462e97dD4d03D9"
 
     start-block: 0 # set to 0 to default to latest block
@@ -28,6 +30,8 @@ chains:
 
     broadcast-retries: 5 # number of times to attempt the broadcast
     broadcast-retry-interval: 10 # time between retries in seconds
+
+    min-mint-amount: 10000000
 
     minter-private-key: # private key
 
@@ -44,6 +48,8 @@ chains:
     broadcast-retries: 5 # number of times to attempt the broadcast
     broadcast-retry-interval: 10 # time between retries in seconds
 
+    min-mint-amount: 10000000
+
     minter-private-key: ""
 
   arbitrum:
@@ -59,6 +65,8 @@ chains:
     broadcast-retries: 5 # number of times to attempt the broadcast
     broadcast-retry-interval: 10 # time between retries in seconds
 
+    min-mint-amount: 10000000
+
     minter-private-key: ""
 
   avalanche:
@@ -73,6 +81,8 @@ chains:
 
     broadcast-retries: 5 # number of times to attempt the broadcast
     broadcast-retry-interval: 10 # time between retries in seconds
+
+    min-mint-amount: 10000000
 
     minter-private-key: "" 
 

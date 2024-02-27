@@ -9,9 +9,13 @@ import (
 	"time"
 
 	"cosmossdk.io/log"
+	"cosmossdk.io/math"
+	cctptypes "github.com/circlefin/noble-cctp/x/cctp/types"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
 	"github.com/strangelove-ventures/noble-cctp-relayer/circle"
+	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
+	"github.com/strangelove-ventures/noble-cctp-relayer/noble"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
@@ -104,7 +108,8 @@ func StartProcessor(
 
 			// if a filter's condition is met, mark as filtered
 			if FilterDisabledCCTPRoutes(cfg, logger, msg) ||
-				filterInvalidDestinationCallers(registeredDomains, logger, msg) {
+				filterInvalidDestinationCallers(registeredDomains, logger, msg) ||
+				filterLowTransfers(cfg, logger, msg) {
 				State.Mu.Lock()
 				msg.Status = types.Filtered
 				State.Mu.Unlock()
@@ -211,6 +216,51 @@ func filterInvalidDestinationCallers(registeredDomains map[types.Domain]types.Ch
 	logger.Info(fmt.Sprintf("Filtered tx %s from %d to %d due to destination caller: %s)",
 		msg.SourceTxHash, msg.SourceDomain, msg.DestDomain, msg.DestinationCaller))
 	return true
+}
+
+// filterLowTransfers returns true if the amount being transfered to the destination chain is lower than the min-mint-amount configured
+func filterLowTransfers(cfg *types.Config, logger log.Logger, msg *types.MessageState) bool {
+	bm, err := new(cctptypes.BurnMessage).Parse(msg.MsgBody)
+	if err != nil {
+		logger.Info("This is not a burn message", "err", err)
+		return true
+	}
+
+	// TODO: not assume that "noble" is domain 4, add "domain" to the noble chain conifg
+	var minBurnAmount uint64
+	if msg.DestDomain == types.Domain(4) {
+		nobleCfg, ok := cfg.Chains["noble"].(*noble.ChainConfig)
+		if !ok {
+			logger.Info("chain named 'noble' not found in config, filtering transaction")
+			return true
+		}
+		minBurnAmount = nobleCfg.MinMintAmount
+	} else {
+		for _, chain := range cfg.Chains {
+			c, ok := chain.(*ethereum.ChainConfig)
+			if !ok {
+				// noble chain, handled above
+				continue
+			}
+			if c.Domain == msg.DestDomain {
+				minBurnAmount = c.MinMintAmount
+			}
+		}
+	}
+
+	if bm.Amount.LT(math.NewIntFromUint64(minBurnAmount)) {
+		logger.Info(
+			"Filtered tx because the transfer amount is less than the minimum allowed amount",
+			"dest domain", msg.DestDomain,
+			"source_domain", msg.SourceDomain,
+			"source_tx", msg.SourceTxHash,
+			"amount", bm.Amount,
+			"min_amount", minBurnAmount,
+		)
+		return true
+	}
+
+	return false
 }
 
 func LookupKey(sourceTxHash string) string {
