@@ -68,8 +68,7 @@ func Start(a *AppState) *cobra.Command {
 			<-cmd.Context().Done()
 		},
 	}
-	// cmd.Flags().StringVarP(&cfgFile, "config", "c", "config.yaml", "file path of config file")
-	// cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "use this flag to set log level to `debug`")
+
 	return cmd
 }
 
