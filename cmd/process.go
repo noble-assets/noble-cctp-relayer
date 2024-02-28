@@ -31,11 +31,17 @@ func Start(a *AppState) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "start",
 		Short: "Start relaying CCTP transactions",
+
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			a.InitAppState()
+			return nil
+		},
 		Run: func(cmd *cobra.Command, args []string) {
+
 			logger := a.Logger
 			cfg := a.Config
 
-			startApi(a)
+			go startApi(a)
 
 			// messageState processing queue
 			var processingQueue = make(chan *types.TxState, 10000)
