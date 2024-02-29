@@ -9,9 +9,6 @@ ldflags = -X github.com/strangelove-ventures/noble-cctp-relayer/cmd.Version=$(VE
 ldflags += $(LDFLAGS)
 ldflags := $(strip $(ldflags))
 
-GOPATH := $(shell go env GOPATH)
-GOBIN := $(GOPATH)/bin
-
 .PHONY: all format lint
 all: format lint
 
