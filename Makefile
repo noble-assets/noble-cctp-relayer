@@ -9,12 +9,15 @@ ldflags = -X github.com/strangelove-ventures/noble-cctp-relayer/cmd.Version=$(VE
 ldflags += $(LDFLAGS)
 ldflags := $(strip $(ldflags))
 
-.PHONY: all format lint
-all: format lint
+# used for Docker build
+GOPATH := $(shell go env GOPATH)
+GOBIN := $(GOPATH)/bin
+
 
 ###############################################################################
 ###                          Formatting & Linting                           ###
 ###############################################################################
+.PHONY: format lint
 
 gofumpt_cmd=mvdan.cc/gofumpt
 golangci_lint_cmd=github.com/golangci/golangci-lint/cmd/golangci-lint
@@ -33,7 +36,17 @@ lint:
 ###############################################################################
 ###                              Install                                    ###
 ###############################################################################
+.PHONY: install
 
 install: go.sum
 	@echo "🤖 Building noble-cctp-relayer..."
 	@go build -mod=readonly -ldflags '$(ldflags)' -o $(GOBIN)/noble-cctp-relayer main.go
+
+###############################################################################
+###                              Docker                                     ###
+###############################################################################
+.PHONEY: local-docker
+
+local-docker:
+	@echo "🤖 Building docker image noble-cctp-relayer:local"
+	@docker build -t cctp-relayer:local-test -f ./local.Dockerfile .
