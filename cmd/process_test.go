@@ -17,7 +17,7 @@ import (
 // var a *cmd.AppState
 var processingQueue chan *types.TxState
 
-// new log -> create state entry
+// new log -> create state entry (not a real message, will just create state)
 func TestProcessNewLog(t *testing.T) {
 	a, registeredDomains := testutil.ConfigSetup(t)
 
@@ -31,6 +31,7 @@ func TestProcessNewLog(t *testing.T) {
 		TxHash: "1",
 		Msgs: []*types.MessageState{
 			{
+				MsgBody:           make([]byte, 132),
 				SourceTxHash:      "1",
 				SourceDomain:      0,
 				DestDomain:        4,
@@ -78,8 +79,8 @@ func TestProcessDisabledCctpRoute(t *testing.T) {
 
 	time.Sleep(2 * time.Second)
 
-	cmd.State.Mu.Lock()
-	defer cmd.State.Mu.Unlock()
+	// cmd.State.Mu.Lock()
+	// defer cmd.State.Mu.Unlock()
 	actualState, ok := cmd.State.Load(expectedState.TxHash)
 	require.True(t, ok)
 	require.Equal(t, types.Filtered, actualState.Msgs[0].Status)
