@@ -14,12 +14,15 @@ type AppState struct {
 
 	ConfigPath string
 
+	// Depreciated in favor of LogLevel
 	Debug bool
+
+	LogLevel string
 
 	Logger log.Logger
 }
 
-func NewappState() *AppState {
+func NewAppState() *AppState {
 	return &AppState{}
 }
 
@@ -34,10 +37,22 @@ func (a *AppState) InitAppState() {
 }
 
 func (a *AppState) InitLogger() {
+	// info level is default
+	level := zerolog.InfoLevel
+	switch a.LogLevel {
+	case "debug":
+		level = zerolog.DebugLevel
+	case "warn":
+		level = zerolog.WarnLevel
+	case "error":
+		level = zerolog.ErrorLevel
+	}
+
+	// a.Debug is Depreciatred!
 	if a.Debug {
-		a.Logger = log.NewLogger(os.Stdout)
+		a.Logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.DebugLevel))
 	} else {
-		a.Logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.InfoLevel))
+		a.Logger = log.NewLogger(os.Stdout, log.LevelOption(level))
 	}
 }
 

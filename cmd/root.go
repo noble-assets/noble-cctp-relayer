@@ -14,7 +14,7 @@ var defaultConfigPath = "./config"
 func NewRootCmd() *cobra.Command {
 	// Use a local app state instance scoped to the new root command,
 	// so that tests don't concurrently access the state.
-	a := NewappState()
+	a := NewAppState()
 
 	var rootCmd = &cobra.Command{
 		Use:   appName,

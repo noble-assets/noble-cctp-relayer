@@ -15,7 +15,7 @@ type Chain interface {
 	Domain() Domain
 
 	// IsDestinationCaller returns true if the specified destination caller is the minter for the specified domain OR
-	// if destination caller is left empty
+	// if destination caller is a zero byte array(left empty in deposit for burn message)
 	IsDestinationCaller(destinationCaller []byte) bool
 
 	// InitializeBroadcaster initializes the minter account info for the chain.

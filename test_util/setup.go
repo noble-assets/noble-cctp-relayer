@@ -51,8 +51,8 @@ func ConfigSetup(t *testing.T) (a *cmd.AppState, registeredDomains map[types.Dom
 		},
 	}
 
-	a = cmd.NewappState()
-	a.Debug = true
+	a = cmd.NewAppState()
+	a.LogLevel = "debug"
 	a.InitLogger()
 	a.Config = &testConfig
 

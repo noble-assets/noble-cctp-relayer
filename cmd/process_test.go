@@ -44,8 +44,6 @@ func TestProcessNewLog(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	cmd.State.Mu.Lock()
-	defer cmd.State.Mu.Unlock()
 	actualState, ok := cmd.State.Load(expectedState.TxHash)
 	require.True(t, ok)
 	require.Equal(t, types.Created, actualState.Msgs[0].Status)
@@ -79,8 +77,6 @@ func TestProcessDisabledCctpRoute(t *testing.T) {
 
 	time.Sleep(2 * time.Second)
 
-	// cmd.State.Mu.Lock()
-	// defer cmd.State.Mu.Unlock()
 	actualState, ok := cmd.State.Load(expectedState.TxHash)
 	require.True(t, ok)
 	require.Equal(t, types.Filtered, actualState.Msgs[0].Status)
@@ -116,8 +112,6 @@ func TestProcessInvalidDestinationCaller(t *testing.T) {
 
 	time.Sleep(2 * time.Second)
 
-	cmd.State.Mu.Lock()
-	defer cmd.State.Mu.Unlock()
 	actualState, ok := cmd.State.Load(expectedState.TxHash)
 	require.True(t, ok)
 	require.Equal(t, types.Filtered, actualState.Msgs[0].Status)

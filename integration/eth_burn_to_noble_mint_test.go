@@ -35,8 +35,8 @@ import (
 // This test uses the Noble wallet in the config as the destination caller to ensure that
 // to ensure that this instance of the relayer picks up the transaction
 func TestEthBurnToNobleMint(t *testing.T) {
-	a := cmd.NewappState()
-	a.Debug = true
+	a := cmd.NewAppState()
+	a.LogLevel = "debug"
 	a.InitLogger()
 
 	ctx := context.Background()

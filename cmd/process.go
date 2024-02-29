@@ -32,9 +32,8 @@ func Start(a *AppState) *cobra.Command {
 		Use:   "start",
 		Short: "Start relaying CCTP transactions",
 
-		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
 			a.InitAppState()
-			return nil
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 
@@ -97,16 +96,14 @@ func StartProcessor(
 		dequeuedTx := <-processingQueue
 
 		// if this is the first time seeing this message, add it to the State
-		State.Mu.Lock()
-		tx, ok := State.Load(LookupKey(dequeuedTx.TxHash))
+		tx, ok := State.Load(dequeuedTx.TxHash)
 		if !ok {
-			State.Store(LookupKey(dequeuedTx.TxHash), dequeuedTx)
-			tx, _ = State.Load(LookupKey(dequeuedTx.TxHash))
+			State.Store(dequeuedTx.TxHash, dequeuedTx)
+			tx, _ = State.Load(dequeuedTx.TxHash)
 			for _, msg := range tx.Msgs {
 				msg.Status = types.Created
 			}
 		}
-		State.Mu.Unlock()
 
 		var broadcastMsgs = make(map[types.Domain][]*types.MessageState)
 		var requeue bool
@@ -267,11 +264,6 @@ func filterLowTransfers(cfg *types.Config, logger log.Logger, msg *types.Message
 	}
 
 	return false
-}
-
-func LookupKey(sourceTxHash string) string {
-	// return fmt.Sprintf("%s-%s", sourceTxHash, messageType)
-	return sourceTxHash
 }
 
 func startApi(a *AppState) {
