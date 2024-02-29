@@ -16,7 +16,7 @@ import (
 // Command for printing current configuration
 func configShowCmd(a *AppState) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "showConfig",
+		Use:     "show-config",
 		Aliases: []string{"sc"},
 		Short:   "Prints current configuration. By default it prints in yaml",
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
@@ -24,7 +24,7 @@ func configShowCmd(a *AppState) *cobra.Command {
 			return nil
 		},
 		Example: strings.TrimSpace(fmt.Sprintf(`
-$ %s showConfig --config %s
+$ %s show-config --config %s
 $ %s sc`, appName, defaultConfigPath, appName)),
 		RunE: func(cmd *cobra.Command, args []string) error {
 
