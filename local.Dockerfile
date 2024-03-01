@@ -1,23 +1,11 @@
-FROM golang:1.20-alpine AS build-env
+FROM --platform=$BUILDPLATFORM golang:1.20-alpine AS build-env
 
-RUN apk add --update --no-cache openssh curl make git libc-dev bash gcc linux-headers eudev-dev
-
-WORKDIR /src
-# Only necessary while github.com/circlefin/noble-cctp is private
-ARG GITAUTH
-
-RUN mkdir -p /root/.ssh; \
-    echo "$GITAUTH" | base64 -d  > /root/.ssh/id_ed25519; \
-    chmod 600 /root/.ssh/id_ed25519; \
-    git config --global --add url."git@github.com:circlefin/noble-cctp.git".insteadOf "https://github.com/circlefin/noble-cctp"; \
-    ssh-keyscan github.com >> /root/.ssh/known_hosts
+RUN apk add --update --no-cache curl make git libc-dev bash gcc linux-headers eudev-dev
 
 ADD . .
 
-RUN export GOOS=linux GOARCH=$TARGETARCH CGO_ENABLED=1; \
-    GOPRIVATE='github.com/circlefin/noble-cctp'; \
-    LDFLAGS='-linkmode external -extldflags "-static"'; \
-    go install -ldflags "-s -w $LDFLAGS"
+RUN CGO_ENABLED=1 LDFLAGS='-linkmode external -s -w -extldflags "-static"' \
+    make install;
 
 # Use minimal busybox from infra-toolkit image for final scratch image
 FROM ghcr.io/strangelove-ventures/infra-toolkit:v0.0.8 AS busybox-min
@@ -75,7 +63,7 @@ RUN for b in \
 RUN rm ln rm
 
 # Install chain binaries
-COPY --from=build-env /go/bin/noble-cctp-relayer /bin
+COPY --from=build-env /bin/noble-cctp-relayer /bin
 
 # Install trusted CA certificates
 COPY --from=busybox-min /etc/ssl/cert.pem /etc/ssl/cert.pem
@@ -87,4 +75,4 @@ COPY --from=busybox-min --chown=100:1000 /home/strangelove /home/strangelove
 WORKDIR /home/strangelove
 USER strangelove
 
-ENTRYPOINT ["noble-cctp-relayer", "start", "--config", "./config/testnet.yaml"]
+# ENTRYPOINT ["noble-cctp-relayer", "start", "--config", "./config/testnet.yaml"]

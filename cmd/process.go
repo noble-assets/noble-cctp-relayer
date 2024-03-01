@@ -3,24 +3,21 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"cosmossdk.io/log"
 	"cosmossdk.io/math"
 	cctptypes "github.com/circlefin/noble-cctp/x/cctp/types"
+	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
 	"github.com/strangelove-ventures/noble-cctp-relayer/circle"
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/noble"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
-
-var startCmd = &cobra.Command{
-	Use:   "start",
-	Short: "Start relaying CCTP transactions from Ethereum to Noble",
-	Run:   Start,
-}
 
 // State and Store map the iris api lookup id -> MessageState
 // State represents all in progress burns/mints
@@ -30,60 +27,79 @@ var State = types.NewStateMap()
 // SequenceMap maps the domain -> the equivalent minter account sequence or nonce
 var sequenceMap = types.NewSequenceMap()
 
-func Start(cmd *cobra.Command, args []string) {
+func Start(a *AppState) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "start",
+		Short: "Start relaying CCTP transactions",
 
-	// messageState processing queue
-	var processingQueue = make(chan *types.TxState, 10000)
+		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
+			a.InitAppState()
+		},
+		Run: func(cmd *cobra.Command, args []string) {
 
-	registeredDomains := make(map[types.Domain]types.Chain)
+			logger := a.Logger
+			cfg := a.Config
 
-	for name, cfg := range Cfg.Chains {
-		c, err := cfg.Chain(name)
-		if err != nil {
-			Logger.Error("Error creating chain", "err: ", err)
-			os.Exit(1)
-		}
+			go startApi(a)
 
-		if err := c.InitializeBroadcaster(cmd.Context(), Logger, sequenceMap); err != nil {
-			Logger.Error("Error initializing broadcaster", "err: ", err)
-			os.Exit(1)
-		}
+			// messageState processing queue
+			var processingQueue = make(chan *types.TxState, 10000)
 
-		go c.StartListener(cmd.Context(), Logger, processingQueue)
+			registeredDomains := make(map[types.Domain]types.Chain)
 
-		if _, ok := registeredDomains[c.Domain()]; ok {
-			Logger.Error("Duplicate domain found", "domain", c.Domain(), "name:", c.Name())
-			os.Exit(1)
-		}
+			for name, cfg := range cfg.Chains {
+				c, err := cfg.Chain(name)
+				if err != nil {
+					logger.Error("Error creating chain", "err: ", err)
+					os.Exit(1)
+				}
 
-		registeredDomains[c.Domain()] = c
+				if err := c.InitializeBroadcaster(cmd.Context(), logger, sequenceMap); err != nil {
+					logger.Error("Error initializing broadcaster", "err: ", err)
+					os.Exit(1)
+				}
+
+				go c.StartListener(cmd.Context(), logger, processingQueue)
+
+				if _, ok := registeredDomains[c.Domain()]; ok {
+					logger.Error("Duplicate domain found", "domain", c.Domain(), "name:", c.Name())
+					os.Exit(1)
+				}
+
+				registeredDomains[c.Domain()] = c
+			}
+
+			// spin up Processor worker pool
+			for i := 0; i < int(cfg.ProcessorWorkerCount); i++ {
+				go StartProcessor(cmd.Context(), a, registeredDomains, processingQueue, sequenceMap)
+			}
+
+			<-cmd.Context().Done()
+		},
 	}
 
-	// spin up Processor worker pool
-	for i := 0; i < int(Cfg.ProcessorWorkerCount); i++ {
-		go StartProcessor(cmd.Context(), Cfg, Logger, registeredDomains, processingQueue, sequenceMap)
-	}
-
-	<-cmd.Context().Done()
+	return cmd
 }
 
 // StartProcessor is the main processing pipeline.
 func StartProcessor(
 	ctx context.Context,
-	cfg *types.Config,
-	logger log.Logger,
+	a *AppState,
 	registeredDomains map[types.Domain]types.Chain,
 	processingQueue chan *types.TxState,
 	sequenceMap *types.SequenceMap,
 ) {
+	logger := a.Logger
+	cfg := a.Config
+
 	for {
 		dequeuedTx := <-processingQueue
 
 		// if this is the first time seeing this message, add it to the State
-		tx, ok := State.Load(LookupKey(dequeuedTx.TxHash))
+		tx, ok := State.Load(dequeuedTx.TxHash)
 		if !ok {
-			State.Store(LookupKey(dequeuedTx.TxHash), dequeuedTx)
-			tx, _ = State.Load(LookupKey(dequeuedTx.TxHash))
+			State.Store(dequeuedTx.TxHash, dequeuedTx)
+			tx, _ = State.Load(dequeuedTx.TxHash)
 			for _, msg := range tx.Msgs {
 				msg.Status = types.Created
 			}
@@ -97,7 +113,9 @@ func StartProcessor(
 			if FilterDisabledCCTPRoutes(cfg, logger, msg) ||
 				filterInvalidDestinationCallers(registeredDomains, logger, msg) ||
 				filterLowTransfers(cfg, logger, msg) {
+				State.Mu.Lock()
 				msg.Status = types.Filtered
+				State.Mu.Unlock()
 			}
 
 			// if the message is burned or pending, check for an attestation
@@ -106,8 +124,10 @@ func StartProcessor(
 				if response != nil {
 					if msg.Status == types.Created && response.Status == "pending_confirmations" {
 						logger.Debug("Attestation is created but still pending confirmations for 0x" + msg.IrisLookupId + ".  Retrying...")
+						State.Mu.Lock()
 						msg.Status = types.Pending
 						msg.Updated = time.Now()
+						State.Mu.Unlock()
 						time.Sleep(10 * time.Second)
 						requeue = true
 						continue
@@ -118,10 +138,12 @@ func StartProcessor(
 						continue
 					} else if response.Status == "complete" {
 						logger.Debug("Attestation is complete for 0x" + msg.IrisLookupId + ".  Retrying...")
+						State.Mu.Lock()
 						msg.Status = types.Attested
 						msg.Attestation = response.Attestation
 						msg.Updated = time.Now()
 						broadcastMsgs[msg.DestDomain] = append(broadcastMsgs[msg.DestDomain], msg)
+						State.Mu.Unlock()
 					}
 				} else {
 					// add attestation retry intervals per domain here
@@ -147,10 +169,12 @@ func StartProcessor(
 				continue
 			}
 
+			State.Mu.Lock()
 			for _, msg := range msgs {
 				msg.Status = types.Complete
 				msg.Updated = time.Now()
 			}
+			State.Mu.Unlock()
 
 		}
 		if requeue {
@@ -185,8 +209,16 @@ func filterInvalidDestinationCallers(registeredDomains map[types.Domain]types.Ch
 		logger.Error("No chain registered for domain", "domain", msg.DestDomain)
 		return true
 	}
+	validCaller := chain.IsDestinationCaller(msg.DestinationCaller)
 
-	return !chain.IsDestinationCaller(msg.DestinationCaller)
+	if validCaller {
+		// we do not want to filter this message if valid caller
+		return false
+	}
+
+	logger.Info(fmt.Sprintf("Filtered tx %s from %d to %d due to destination caller: %s)",
+		msg.SourceTxHash, msg.SourceDomain, msg.DestDomain, msg.DestinationCaller))
+	return true
 }
 
 // filterLowTransfers returns true if the amount being transfered to the destination chain is lower than the min-mint-amount configured
@@ -234,11 +266,35 @@ func filterLowTransfers(cfg *types.Config, logger log.Logger, msg *types.Message
 	return false
 }
 
-func LookupKey(sourceTxHash string) string {
-	// return fmt.Sprintf("%s-%s", sourceTxHash, messageType)
-	return sourceTxHash
+func startApi(a *AppState) {
+	logger := a.Logger
+	cfg := a.Config
+	gin.SetMode(gin.ReleaseMode)
+	router := gin.Default()
+
+	err := router.SetTrustedProxies(cfg.Api.TrustedProxies) // vpn.primary.strange.love
+	if err != nil {
+		logger.Error("unable to set trusted proxies on API server: " + err.Error())
+		os.Exit(1)
+	}
+
+	router.GET("/tx/:txHash", getTxByHash)
+	router.Run("localhost:8000")
 }
 
-func init() {
-	cobra.OnInitialize(func() {})
+func getTxByHash(c *gin.Context) {
+	txHash := c.Param("txHash")
+
+	domain := c.Query("domain")
+	domainInt, err := strconv.ParseInt(domain, 10, 32)
+	if domain != "" && err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "unable to parse domain"})
+	}
+
+	if tx, ok := State.Load(txHash); ok && domain == "" || (domain != "" && tx.Msgs[0].SourceDomain == types.Domain(uint32(domainInt))) {
+		c.JSON(http.StatusOK, tx.Msgs)
+		return
+	}
+
+	c.JSON(http.StatusNotFound, gin.H{"message": "message not found"})
 }

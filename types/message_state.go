@@ -32,8 +32,7 @@ type TxState struct {
 }
 
 type MessageState struct {
-	IrisLookupId string // hex encoded MessageSent bytes
-	// Type         string // 'mint' or 'forward'
+	IrisLookupId      string // hex encoded MessageSent bytes
 	Status            string // created, pending, attested, complete, failed, filtered
 	Attestation       string // hex encoded attestation
 	SourceDomain      Domain // uint32 source domain id

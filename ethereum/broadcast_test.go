@@ -3,32 +3,36 @@ package ethereum_test
 import (
 	"context"
 	"math/big"
+	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/joho/godotenv"
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum/contracts"
+	testutil "github.com/strangelove-ventures/noble-cctp-relayer/test_util"
 	"github.com/stretchr/testify/require"
 )
 
 func TestEthUsedNonce(t *testing.T) {
+	err := godotenv.Load(testutil.EnvFile)
+	require.NoError(t, err)
+
 	sourceDomain := uint32(4)
-	nonce := uint64(2970)
+	nonce := uint64(612)
 
 	key := append(
 		common.LeftPadBytes((big.NewInt(int64(sourceDomain))).Bytes(), 4),
 		common.LeftPadBytes((big.NewInt(int64(nonce))).Bytes(), 8)...,
 	)
 
-	require.Equal(t, []byte("\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x0B\x9A"), key)
-
-	client, err := ethclient.Dial("https://mainnet.infura.io/v3/e44b63a541e94b30a74a97447518c0ec")
+	client, err := ethclient.Dial(os.Getenv("SEPOLIA_RPC"))
 	require.NoError(t, err)
 	defer client.Close()
 
-	messageTransmitter, err := contracts.NewMessageTransmitter(common.HexToAddress("0x0a992d191deec32afe36203ad87d7d289a738f81"), client)
+	messageTransmitter, err := contracts.NewMessageTransmitter(common.HexToAddress("0x7865fAfC2db2093669d92c0F33AeEF291086BEFD"), client)
 	require.NoError(t, err)
 
 	co := &bind.CallOpts{
