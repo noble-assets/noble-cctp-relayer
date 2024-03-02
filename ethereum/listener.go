@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"time"
 
 	"cosmossdk.io/log"
 	ethereum "github.com/ethereum/go-ethereum"
@@ -13,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/pascaldekloe/etherstream"
+	"github.com/strangelove-ventures/noble-cctp-relayer/relayer"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
@@ -41,8 +43,6 @@ func (e *Ethereum) StartListener(
 		logger.Error("unable to initialize ethereum client", "err", err)
 		os.Exit(1)
 	}
-
-	// defer ethClient.Close()
 
 	messageTransmitterAddress := common.HexToAddress(e.messageTransmitterAddress)
 	etherReader := etherstream.Reader{Backend: ethClient}
@@ -128,4 +128,44 @@ func (e *Ethereum) StartListener(
 			}
 		}
 	}()
+}
+
+func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m *relayer.PromMetrics) {
+	logger = logger.With("metric", "wallet blance", "chain", e.name, "domain", e.domain)
+	queryRate := 30 // seconds
+
+	firstTime := true
+	createClient := true
+
+	var err error
+	client, _ := ethclient.DialContext(ctx, e.rpcURL)
+
+	for {
+		if !firstTime {
+			time.Sleep(time.Duration(queryRate) * time.Second)
+			firstTime = false
+		}
+		if createClient {
+			client, err = ethclient.DialContext(ctx, e.rpcURL)
+			if err != nil {
+				logger.Info(fmt.Sprintf("error dialing eth client. Will try again in %d sec", queryRate), "error", err)
+				createClient = true
+				continue
+			}
+		}
+
+		account := common.HexToAddress(e.minterAddress)
+		balance, err := client.BalanceAt(ctx, account, nil)
+		if err != nil {
+			logger.Info(fmt.Sprintf("error querying balance. Will try again in %d sec", queryRate), "error", err)
+			createClient = true
+			continue
+		}
+		floatBalance := new(big.Float).SetInt(balance)
+		float64Value, _ := floatBalance.Float64()
+
+		m.SetWalletBalance(e.name, e.minterAddress, float64Value)
+
+		createClient = false
+	}
 }

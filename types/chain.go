@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"cosmossdk.io/log"
+	"github.com/strangelove-ventures/noble-cctp-relayer/relayer"
 )
 
 // Chain is an interface for common CCTP source and destination chain operations.
@@ -39,4 +40,10 @@ type Chain interface {
 		msgs []*MessageState,
 		sequenceMap *SequenceMap,
 	) error
+
+	WalletBalanceMetric(
+		ctx context.Context,
+		logger log.Logger,
+		metric *relayer.PromMetrics,
+	)
 }

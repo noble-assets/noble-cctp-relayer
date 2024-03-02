@@ -16,6 +16,7 @@ import (
 	"github.com/strangelove-ventures/noble-cctp-relayer/circle"
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/noble"
+	"github.com/strangelove-ventures/noble-cctp-relayer/relayer"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
@@ -47,6 +48,8 @@ func Start(a *AppState) *cobra.Command {
 
 			registeredDomains := make(map[types.Domain]types.Chain)
 
+			metrics := relayer.InitPromMetrics()
+
 			for name, cfg := range cfg.Chains {
 				c, err := cfg.Chain(name)
 				if err != nil {
@@ -60,6 +63,7 @@ func Start(a *AppState) *cobra.Command {
 				}
 
 				go c.StartListener(cmd.Context(), logger, processingQueue)
+				go c.WalletBalanceMetric(cmd.Context(), a.Logger, metrics)
 
 				if _, ok := registeredDomains[c.Domain()]; ok {
 					logger.Error("Duplicate domain found", "domain", c.Domain(), "name:", c.Name())
