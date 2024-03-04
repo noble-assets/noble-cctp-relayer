@@ -1,6 +1,7 @@
 package relayer
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 
@@ -12,7 +13,7 @@ type PromMetrics struct {
 	WalletBalance *prometheus.GaugeVec
 }
 
-func InitPromMetrics() *PromMetrics {
+func InitPromMetrics(port int16) *PromMetrics {
 	reg := prometheus.NewRegistry()
 
 	// labels
@@ -32,7 +33,7 @@ func InitPromMetrics() *PromMetrics {
 	// Expose /metrics HTTP endpoint
 	go func() {
 		http.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{Registry: reg}))
-		log.Fatal(http.ListenAndServe(":2112", nil))
+		log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
 	}()
 
 	return m

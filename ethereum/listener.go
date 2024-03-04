@@ -134,38 +134,52 @@ func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m
 	logger = logger.With("metric", "wallet blance", "chain", e.name, "domain", e.domain)
 	queryRate := 30 // seconds
 
+	// report balance right away, then query bal every `queryRate`
 	firstTime := true
 	createClient := true
 
 	var err error
-	client, _ := ethclient.DialContext(ctx, e.rpcURL)
+	var client *ethclient.Client
+
+	defer func() {
+		if client != nil {
+			client.Close()
+		}
+	}()
 
 	for {
-		if !firstTime {
-			time.Sleep(time.Duration(queryRate) * time.Second)
-			firstTime = false
-		}
-		if createClient {
-			client, err = ethclient.DialContext(ctx, e.rpcURL)
+		select {
+		case <-ctx.Done():
+			return
+
+		default:
+
+			if !firstTime {
+				time.Sleep(time.Duration(queryRate) * time.Second)
+				firstTime = false
+			}
+			if createClient {
+				client, err = ethclient.DialContext(ctx, e.rpcURL)
+				if err != nil {
+					logger.Info(fmt.Sprintf("error dialing eth client. Will try again in %d sec", queryRate), "error", err)
+					createClient = true
+					continue
+				}
+			}
+
+			account := common.HexToAddress(e.minterAddress)
+			balance, err := client.BalanceAt(ctx, account, nil)
 			if err != nil {
-				logger.Info(fmt.Sprintf("error dialing eth client. Will try again in %d sec", queryRate), "error", err)
+				logger.Info(fmt.Sprintf("error querying balance. Will try again in %d sec", queryRate), "error", err)
 				createClient = true
 				continue
 			}
+			floatBalance := new(big.Float).SetInt(balance)
+			float64Value, _ := floatBalance.Float64()
+
+			m.SetWalletBalance(e.name, e.minterAddress, float64Value)
+
+			createClient = false
 		}
-
-		account := common.HexToAddress(e.minterAddress)
-		balance, err := client.BalanceAt(ctx, account, nil)
-		if err != nil {
-			logger.Info(fmt.Sprintf("error querying balance. Will try again in %d sec", queryRate), "error", err)
-			createClient = true
-			continue
-		}
-		floatBalance := new(big.Float).SetInt(balance)
-		float64Value, _ := floatBalance.Float64()
-
-		m.SetWalletBalance(e.name, e.minterAddress, float64Value)
-
-		createClient = false
 	}
 }

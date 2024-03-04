@@ -48,7 +48,12 @@ func Start(a *AppState) *cobra.Command {
 
 			registeredDomains := make(map[types.Domain]types.Chain)
 
-			metrics := relayer.InitPromMetrics()
+			port, err := cmd.Flags().GetInt16(flagMetricsPort)
+			if err != nil {
+				logger.Error("Invalid port", "error", err)
+			}
+
+			metrics := relayer.InitPromMetrics(port)
 
 			for name, cfg := range cfg.Chains {
 				c, err := cfg.Chain(name)
@@ -58,7 +63,7 @@ func Start(a *AppState) *cobra.Command {
 				}
 
 				if err := c.InitializeBroadcaster(cmd.Context(), logger, sequenceMap); err != nil {
-					logger.Error("Error initializing broadcaster", "err: ", err)
+					logger.Error("Error initializing broadcaster", "error", err)
 					os.Exit(1)
 				}
 
