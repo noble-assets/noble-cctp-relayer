@@ -158,6 +158,13 @@ func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m
 				time.Sleep(time.Duration(queryRate) * time.Second)
 				firstTime = false
 			}
+
+			// check if context cancelled durint sleep call above
+			_, isDone := <-ctx.Done()
+			if isDone {
+				return
+			}
+
 			if createClient {
 				client, err = ethclient.DialContext(ctx, e.rpcURL)
 				if err != nil {
