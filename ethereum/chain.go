@@ -24,6 +24,7 @@ type Ethereum struct {
 	wsURL                     string
 	messageTransmitterAddress string
 	startBlock                uint64
+	endBlock                  uint64
 	lookbackPeriod            uint64
 	privateKey                *ecdsa.PrivateKey
 	minterAddress             string
@@ -42,6 +43,7 @@ func NewChain(
 	wsURL string,
 	messageTransmitterAddress string,
 	startBlock uint64,
+	endBlock uint64,
 	lookbackPeriod uint64,
 	privateKey string,
 	maxRetries int,
@@ -60,6 +62,7 @@ func NewChain(
 		wsURL:                     wsURL,
 		messageTransmitterAddress: messageTransmitterAddress,
 		startBlock:                startBlock,
+		endBlock:                  endBlock,
 		lookbackPeriod:            lookbackPeriod,
 		privateKey:                privEcdsaKey,
 		minterAddress:             ethereumAddress,

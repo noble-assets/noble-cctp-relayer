@@ -61,6 +61,14 @@ func (e *Ethereum) StartListener(
 		Addresses: []common.Address{messageTransmitterAddress},
 		Topics:    [][]common.Hash{{messageSent.ID}},
 		FromBlock: big.NewInt(int64(e.startBlock - e.lookbackPeriod)),
+		ToBlock:   big.NewInt(int64(e.endBlock)),
+	}
+	if e.endBlock == 0 {
+		query = ethereum.FilterQuery{
+			Addresses: []common.Address{messageTransmitterAddress},
+			Topics:    [][]common.Hash{{messageSent.ID}},
+			FromBlock: big.NewInt(int64(e.startBlock - e.lookbackPeriod)),
+		}
 	}
 
 	logger.Info(fmt.Sprintf(

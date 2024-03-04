@@ -14,6 +14,7 @@ type ChainConfig struct {
 	MessageTransmitter string `yaml:"message-transmitter"`
 
 	StartBlock     uint64 `yaml:"start-block"`
+	EndBlock       uint64 `yaml:"end-block"`
 	LookbackPeriod uint64 `yaml:"lookback-period"`
 
 	BroadcastRetries       int `yaml:"broadcast-retries"`
@@ -34,6 +35,7 @@ func (c *ChainConfig) Chain(name string) (types.Chain, error) {
 		c.WS,
 		c.MessageTransmitter,
 		c.StartBlock,
+		c.EndBlock,
 		c.LookbackPeriod,
 		c.MinterPrivateKey,
 		c.BroadcastRetries,
