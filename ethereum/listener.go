@@ -156,14 +156,14 @@ func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m
 			if createClient {
 				client, err = ethclient.DialContext(ctx, e.rpcURL)
 				if err != nil {
-					logger.Info(fmt.Sprintf("error dialing eth client. Will try again in %d sec", queryRate), "error", err)
+					logger.Error(fmt.Sprintf("error dialing eth client. Will try again in %d sec", queryRate), "error", err)
 					createClient = true
 					continue
 				}
 			}
 			balance, err := client.BalanceAt(ctx, account, nil)
 			if err != nil {
-				logger.Info(fmt.Sprintf("error querying balance. Will try again in %d sec", queryRate), "error", err)
+				logger.Error(fmt.Sprintf("error querying balance. Will try again in %d sec", queryRate), "error", err)
 				createClient = true
 				continue
 			}
@@ -177,14 +177,14 @@ func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m
 			if createClient {
 				client, err = ethclient.DialContext(ctx, e.rpcURL)
 				if err != nil {
-					logger.Info(fmt.Sprintf("error dialing eth client. Will try again in %d sec", queryRate), "error", err)
+					logger.Error(fmt.Sprintf("error dialing eth client. Will try again in %d sec", queryRate), "error", err)
 					createClient = true
 					continue
 				}
 			}
 			balance, err := client.BalanceAt(ctx, account, nil)
 			if err != nil {
-				logger.Info(fmt.Sprintf("error querying balance. Will try again in %d sec", queryRate), "error", err)
+				logger.Error(fmt.Sprintf("error querying balance. Will try again in %d sec", queryRate), "error", err)
 				createClient = true
 				continue
 			}
