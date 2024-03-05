@@ -21,9 +21,9 @@ Sample configs can be found in [config](config).
 
 By default, metrics are exported at on port :2112/metrics (`http://localhost:2112/metrics`). You can customize the port using the `--metrics-port` flag. 
 
-| **Exported Metric**         | **Description**                                                                                                                          | **Type** |
-|-----------------------------|------------------------------------------------------------------------------------------------------------------------------------------|----------|
-| cctp_relayer_wallet_balance | Current balance of a relayer wallet in Wei.   Noble balances are not currently exported. MsgReceiveMessage is free to submit on Noble.   | Gauge    |
+| **Exported Metric**         | **Description**                                                                                                                                    | **Type** |
+|-----------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------|----------|
+| cctp_relayer_wallet_balance | Current balance of a relayer wallet in Wei.<br><br>Noble balances are not currently exported b/c `MsgReceiveMessage` is free to submit on Noble.   | Gauge    |
 
 
 ### API
