@@ -134,12 +134,10 @@ func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m
 	logger = logger.With("metric", "wallet blance", "chain", e.name, "domain", e.domain)
 	queryRate := 30 // seconds
 
-	// report balance right away, then query bal every `queryRate`
-	firstTime := true
-	createClient := true
-
 	var err error
 	var client *ethclient.Client
+
+	account := common.HexToAddress(e.minterAddress)
 
 	defer func() {
 		if client != nil {
@@ -147,24 +145,14 @@ func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m
 		}
 	}()
 
+	first := make(chan struct{}, 1)
+	first <- struct{}{}
+	createClient := true
 	for {
+		timer := time.NewTimer(time.Duration(queryRate) * time.Second)
 		select {
-		case <-ctx.Done():
-			return
-
-		default:
-
-			if !firstTime {
-				time.Sleep(time.Duration(queryRate) * time.Second)
-				firstTime = false
-			}
-
-			// check if context cancelled durint sleep call above
-			_, isDone := <-ctx.Done()
-			if isDone {
-				return
-			}
-
+		case <-first:
+			timer.Stop()
 			if createClient {
 				client, err = ethclient.DialContext(ctx, e.rpcURL)
 				if err != nil {
@@ -173,8 +161,6 @@ func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m
 					continue
 				}
 			}
-
-			account := common.HexToAddress(e.minterAddress)
 			balance, err := client.BalanceAt(ctx, account, nil)
 			if err != nil {
 				logger.Info(fmt.Sprintf("error querying balance. Will try again in %d sec", queryRate), "error", err)
@@ -187,6 +173,30 @@ func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m
 			m.SetWalletBalance(e.name, e.minterAddress, float64Value)
 
 			createClient = false
+		case <-timer.C:
+			if createClient {
+				client, err = ethclient.DialContext(ctx, e.rpcURL)
+				if err != nil {
+					logger.Info(fmt.Sprintf("error dialing eth client. Will try again in %d sec", queryRate), "error", err)
+					createClient = true
+					continue
+				}
+			}
+			balance, err := client.BalanceAt(ctx, account, nil)
+			if err != nil {
+				logger.Info(fmt.Sprintf("error querying balance. Will try again in %d sec", queryRate), "error", err)
+				createClient = true
+				continue
+			}
+			floatBalance := new(big.Float).SetInt(balance)
+			float64Value, _ := floatBalance.Float64()
+
+			m.SetWalletBalance(e.name, e.minterAddress, float64Value)
+
+			createClient = false
+		case <-ctx.Done():
+			timer.Stop()
+			return
 		}
 	}
 }
