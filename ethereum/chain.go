@@ -30,6 +30,8 @@ type Ethereum struct {
 	maxRetries                int
 	retryIntervalSeconds      int
 	minAmount                 uint64
+	MetricsDenom              string
+	MetricsExponent           int
 
 	mu sync.Mutex
 }
@@ -47,6 +49,8 @@ func NewChain(
 	maxRetries int,
 	retryIntervalSeconds int,
 	minAmount uint64,
+	metricsDenom string,
+	metricsExponent int,
 ) (*Ethereum, error) {
 	privEcdsaKey, ethereumAddress, err := GetEcdsaKeyAddress(privateKey)
 	if err != nil {
@@ -66,6 +70,8 @@ func NewChain(
 		maxRetries:                maxRetries,
 		retryIntervalSeconds:      retryIntervalSeconds,
 		minAmount:                 minAmount,
+		MetricsDenom:              metricsDenom,
+		MetricsExponent:           metricsExponent,
 	}, nil
 }
 

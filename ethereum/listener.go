@@ -139,6 +139,9 @@ func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m
 
 	account := common.HexToAddress(e.minterAddress)
 
+	exponent := big.NewInt(int64(e.MetricsExponent))                                      // ex: 18
+	scaleFactor := new(big.Float).SetInt(new(big.Int).Exp(big.NewInt(10), exponent, nil)) // ex: 10^18
+
 	defer func() {
 		if client != nil {
 			client.Close()
@@ -151,6 +154,7 @@ func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m
 	for {
 		timer := time.NewTimer(time.Duration(queryRate) * time.Second)
 		select {
+		// don't wait the "queryRate" amount of time if this is the first time running
 		case <-first:
 			timer.Stop()
 			if createClient {
@@ -167,10 +171,11 @@ func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m
 				createClient = true
 				continue
 			}
-			floatBalance := new(big.Float).SetInt(balance)
-			float64Value, _ := floatBalance.Float64()
 
-			m.SetWalletBalance(e.name, e.minterAddress, float64Value)
+			balanceBigFloat := new(big.Float).SetInt(balance)
+			balanceScaled, _ := new(big.Float).Quo(balanceBigFloat, scaleFactor).Float64()
+
+			m.SetWalletBalance(e.name, e.minterAddress, e.MetricsDenom, balanceScaled)
 
 			createClient = false
 		case <-timer.C:
@@ -188,10 +193,11 @@ func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m
 				createClient = true
 				continue
 			}
-			floatBalance := new(big.Float).SetInt(balance)
-			float64Value, _ := floatBalance.Float64()
 
-			m.SetWalletBalance(e.name, e.minterAddress, float64Value)
+			balanceBigFloat := new(big.Float).SetInt(balance)
+			balanceScaled, _ := new(big.Float).Quo(balanceBigFloat, scaleFactor).Float64()
+
+			m.SetWalletBalance(e.name, e.minterAddress, e.MetricsDenom, balanceScaled)
 
 			createClient = false
 		case <-ctx.Done():

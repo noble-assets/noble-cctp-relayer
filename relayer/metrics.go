@@ -18,7 +18,7 @@ func InitPromMetrics(port int16) *PromMetrics {
 
 	// labels
 	var (
-		walletLabels = []string{"chain", "address"}
+		walletLabels = []string{"chain", "address", "denom"}
 	)
 
 	m := &PromMetrics{
@@ -39,6 +39,6 @@ func InitPromMetrics(port int16) *PromMetrics {
 	return m
 }
 
-func (m *PromMetrics) SetWalletBalance(chain, address string, balance float64) {
-	m.WalletBalance.WithLabelValues(chain, address).Set(balance)
+func (m *PromMetrics) SetWalletBalance(chain, address, denom string, balance float64) {
+	m.WalletBalance.WithLabelValues(chain, address, denom).Set(balance)
 }
