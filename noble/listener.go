@@ -58,23 +58,19 @@ func (n *Noble) StartListener(
 			case <-first:
 				timer.Stop()
 				chainTip = n.latestBlock
-				if err == nil {
-					if chainTip >= currentBlock {
-						for i := currentBlock; i <= chainTip; i++ {
-							blockQueue <- i
-						}
-						currentBlock = chainTip + 1
+				if chainTip >= currentBlock {
+					for i := currentBlock; i <= chainTip; i++ {
+						blockQueue <- i
 					}
+					currentBlock = chainTip + 1
 				}
 			case <-timer.C:
 				chainTip = n.latestBlock
-				if err == nil {
-					if chainTip >= currentBlock {
-						for i := currentBlock; i <= chainTip; i++ {
-							blockQueue <- i
-						}
-						currentBlock = chainTip + 1
+				if chainTip >= currentBlock {
+					for i := currentBlock; i <= chainTip; i++ {
+						blockQueue <- i
 					}
+					currentBlock = chainTip + 1
 				}
 			case <-ctx.Done():
 				timer.Stop()
@@ -115,7 +111,43 @@ func (n *Noble) StartListener(
 		}()
 	}
 
+	go n.flushMechanism(ctx, logger, blockQueue)
+
 	<-ctx.Done()
+}
+
+func (n *Noble) flushMechanism(
+	ctx context.Context,
+	logger log.Logger,
+	blockQueue chan uint64,
+) {
+	for {
+		timer := time.NewTimer(5 * time.Minute)
+		select {
+		case <-timer.C:
+			latestBlock := n.latestBlock
+
+			if n.lastFlushedBlock == 0 {
+				n.lastFlushedBlock = latestBlock
+			}
+			lastFlushedBlock := n.lastFlushedBlock
+
+			flushStart := lastFlushedBlock - n.lookbackPeriod
+
+			logger.Info(fmt.Sprintf("flushing... start-block: %d end-block: %d", flushStart, latestBlock))
+
+			for i := flushStart; i <= latestBlock; i++ {
+				blockQueue <- i
+			}
+			n.lastFlushedBlock = latestBlock
+
+			logger.Info("flush complete")
+
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		}
+	}
 }
 
 func (n *Noble) TrackLatestBlockHeight(ctx context.Context, logger log.Logger, loop time.Duration) {

@@ -272,6 +272,7 @@ func (e *Ethereum) flushMechanism(
 
 		// if main websocket stream is disconnected, stop flush. It will be restarted once websocket is reconnected
 		case <-sub.Err():
+			timer.Stop()
 			logger.Info("websocket disconnected, stopping flush mechanism. Will restart after websocket is re-established")
 			return
 		case <-ctx.Done():
