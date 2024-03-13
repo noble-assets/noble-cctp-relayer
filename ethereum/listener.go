@@ -62,6 +62,8 @@ func (e *Ethereum) startListenerRoutines(
 
 	sub := e.queryAndConsume(ctx, logger, processingQueue)
 	go e.flushMechanism(ctx, logger, processingQueue, sub)
+
+	<-sub.Err()
 }
 
 func (e *Ethereum) queryAndConsume(
