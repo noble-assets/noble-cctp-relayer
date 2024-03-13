@@ -54,6 +54,11 @@ func TestEthBurnToNobleMint(t *testing.T) {
 	ethChain, err := ethCfg.Chain("eth")
 	require.NoError(t, err)
 
+	err = nobleChain.InitializeClients(ctx, a.Logger)
+	require.NoError(t, err)
+	err = ethChain.InitializeClients(ctx, a.Logger)
+	require.NoError(t, err)
+
 	var burnAmount = big.NewInt(1)
 
 	fmt.Println("Starting relayer...")

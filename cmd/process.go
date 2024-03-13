@@ -54,6 +54,16 @@ func Start(a *AppState) *cobra.Command {
 					os.Exit(1)
 				}
 
+				logger = logger.With("name", c.Name(), "domain", c.Domain())
+
+				if err := c.InitializeClients(cmd.Context(), logger); err != nil {
+					logger.Error("error initializing client", "err", err)
+					os.Exit(1)
+				}
+
+				updateLatestHeight := 1 * time.Second
+				go c.TrackLatestBlockHeight(cmd.Context(), logger, updateLatestHeight)
+
 				if err := c.InitializeBroadcaster(cmd.Context(), logger, sequenceMap); err != nil {
 					logger.Error("Error initializing broadcaster", "err: ", err)
 					os.Exit(1)
@@ -75,6 +85,11 @@ func Start(a *AppState) *cobra.Command {
 			}
 
 			<-cmd.Context().Done()
+			// clean up
+			for _, c := range registeredDomains {
+				fmt.Printf("\n%s: latest-block: %d last-flushed-block: %d", c.Name(), c.LatestBlock(), c.LastFlushedBlock())
+				c.CloseClients()
+			}
 		},
 	}
 

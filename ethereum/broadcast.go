@@ -40,6 +40,8 @@ func (e *Ethereum) Broadcast(
 	sequenceMap *types.SequenceMap,
 ) error {
 
+	logger = logger.With("chain", e.name, "chain_id", e.chainID, "domain", e.domain)
+
 	// set up eth client
 	client, err := ethclient.Dial(e.rpcURL)
 	if err != nil {

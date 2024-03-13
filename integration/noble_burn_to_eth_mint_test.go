@@ -60,6 +60,11 @@ func TestNobleBurnToEthMint(t *testing.T) {
 	ethChain, err := ethCfg.Chain("eth")
 	require.NoError(t, err)
 
+	err = nobleChain.InitializeClients(ctx, a.Logger)
+	require.NoError(t, err)
+	err = ethChain.InitializeClients(ctx, a.Logger)
+	require.NoError(t, err)
+
 	fmt.Println("Starting relayer...")
 
 	registeredDomains := make(map[types.Domain]types.Chain)

@@ -2,12 +2,17 @@ package ethereum
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"embed"
 	"encoding/hex"
+	"fmt"
 	"strings"
 	"sync"
 
+	"cosmossdk.io/log"
+
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
@@ -17,6 +22,7 @@ var content embed.FS
 var _ types.Chain = (*Ethereum)(nil)
 
 type Ethereum struct {
+	// from conifg
 	name                      string
 	chainID                   int64
 	domain                    types.Domain
@@ -32,6 +38,12 @@ type Ethereum struct {
 	minAmount                 uint64
 
 	mu sync.Mutex
+
+	wsClient  *ethclient.Client
+	rpcClient *ethclient.Client
+
+	latestBlock      uint64
+	lastFlushedBlock uint64
 }
 
 func NewChain(
@@ -77,6 +89,14 @@ func (e *Ethereum) Domain() types.Domain {
 	return e.domain
 }
 
+func (e *Ethereum) LatestBlock() uint64 {
+	return e.latestBlock
+}
+
+func (e *Ethereum) LastFlushedBlock() uint64 {
+	return e.lastFlushedBlock
+}
+
 func (e *Ethereum) IsDestinationCaller(destinationCaller []byte) bool {
 	zeroByteArr := make([]byte, 32)
 
@@ -89,4 +109,28 @@ func (e *Ethereum) IsDestinationCaller(destinationCaller []byte) bool {
 	copy(decodedMinterPadded[12:], decodedMinter)
 
 	return bytes.Equal(destinationCaller, zeroByteArr) || bytes.Equal(destinationCaller, decodedMinterPadded)
+}
+
+func (e *Ethereum) InitializeClients(ctx context.Context, logger log.Logger) error {
+	var err error
+
+	e.wsClient, err = ethclient.DialContext(ctx, e.wsURL)
+	if err != nil {
+		return fmt.Errorf("unable to initialize websocket ethereum client; err: %w", err)
+	}
+
+	e.rpcClient, err = ethclient.DialContext(ctx, e.rpcURL)
+	if err != nil {
+		return fmt.Errorf("unable to initialize rpc ethereum client; err: %w", err)
+	}
+	return nil
+}
+
+func (e *Ethereum) CloseClients() {
+	if e.wsClient != nil {
+		e.wsClient.Close()
+	}
+	if e.rpcClient != nil {
+		e.rpcClient.Close()
+	}
 }

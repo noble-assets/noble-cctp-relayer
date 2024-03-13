@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sync"
 
+	"cosmossdk.io/log"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/bech32"
@@ -19,17 +20,15 @@ import (
 var _ types.Chain = (*Noble)(nil)
 
 type Noble struct {
-	cc      *cosmos.CosmosProvider
-	chainID string
-
-	privateKey    *secp256k1.PrivKey
-	minterAddress string
-	accountNumber uint64
-
-	startBlock     uint64
-	lookbackPeriod uint64
-	workers        uint32
-
+	// from config
+	chainID               string
+	rpcURL                string
+	privateKey            *secp256k1.PrivKey
+	minterAddress         string
+	accountNumber         uint64
+	startBlock            uint64
+	lookbackPeriod        uint64
+	workers               uint32
 	gasLimit              uint64
 	txMemo                string
 	maxRetries            int
@@ -38,6 +37,11 @@ type Noble struct {
 	minAmount             uint64
 
 	mu sync.Mutex
+
+	cc *cosmos.CosmosProvider
+
+	latestBlock      uint64
+	lastFlushedBlock uint64
 }
 
 func NewChain(
@@ -54,11 +58,6 @@ func NewChain(
 	blockQueueChannelSize uint64,
 	minAmount uint64,
 ) (*Noble, error) {
-	cc, err := cosmos.NewProvider(rpcURL)
-	if err != nil {
-		return nil, fmt.Errorf("unable to build cosmos provider for noble: %w", err)
-	}
-
 	keyBz, err := hex.DecodeString(privateKey)
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse noble private key: %w", err)
@@ -70,8 +69,8 @@ func NewChain(
 	minterAddress := sdk.MustBech32ifyAddressBytes("noble", address)
 
 	return &Noble{
-		cc:                    cc,
 		chainID:               chainID,
+		rpcURL:                rpcURL,
 		startBlock:            startBlock,
 		lookbackPeriod:        lookbackPeriod,
 		workers:               workers,
@@ -109,6 +108,14 @@ func (n *Noble) Domain() types.Domain {
 	return 4
 }
 
+func (n *Noble) LatestBlock() uint64 {
+	return n.latestBlock
+}
+
+func (n *Noble) LastFlushedBlock() uint64 {
+	return n.lastFlushedBlock
+}
+
 func (n *Noble) IsDestinationCaller(destinationCaller []byte) bool {
 	zeroByteArr := make([]byte, 32)
 
@@ -135,4 +142,19 @@ func decodeDestinationCaller(input []byte) (string, error) {
 		return "", errors.New("unable to encode destination caller")
 	}
 	return output, nil
+}
+
+func (n *Noble) InitializeClients(ctx context.Context, logger log.Logger) error {
+	var err error
+	n.cc, err = cosmos.NewProvider(n.rpcURL)
+	if err != nil {
+		return fmt.Errorf("unable to build cosmos provider for noble: %w", err)
+	}
+	return nil
+}
+
+func (n *Noble) CloseClients() {
+	if n.cc != nil && n.cc.RPCClient.IsRunning() {
+		n.cc.RPCClient.Stop()
+	}
 }

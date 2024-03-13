@@ -2,6 +2,7 @@ package types
 
 import (
 	"context"
+	"time"
 
 	"cosmossdk.io/log"
 )
@@ -14,9 +15,25 @@ type Chain interface {
 	// Domain returns the domain ID of the chain.
 	Domain() Domain
 
+	// LatestBlockain returns the last queired height of the chain
+	LatestBlock() uint64
+
+	// LastFlushedBlock returns the last block included in a flush. In the rare situation of a crash,
+	// this block is a good block to start at to catch up on any missed transactions.
+	LastFlushedBlock() uint64
+
 	// IsDestinationCaller returns true if the specified destination caller is the minter for the specified domain OR
 	// if destination caller is a zero byte array(left empty in deposit for burn message)
 	IsDestinationCaller(destinationCaller []byte) bool
+
+	// InitializeClients initializes the rpc and or websocket clients.
+	InitializeClients(
+		ctx context.Context,
+		logger log.Logger,
+	) error
+
+	// CloseClients is a cleanup function to close any open clients
+	CloseClients()
 
 	// InitializeBroadcaster initializes the minter account info for the chain.
 	InitializeBroadcaster(
@@ -39,4 +56,10 @@ type Chain interface {
 		msgs []*MessageState,
 		sequenceMap *SequenceMap,
 	) error
+
+	TrackLatestBlockHeight(
+		ctx context.Context,
+		logger log.Logger,
+		loop time.Duration,
+	)
 }
