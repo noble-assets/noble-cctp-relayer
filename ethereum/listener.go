@@ -132,7 +132,7 @@ func (e *Ethereum) StartListener(
 
 func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m *relayer.PromMetrics) {
 	logger = logger.With("metric", "wallet blance", "chain", e.name, "domain", e.domain)
-	queryRate := 30 // seconds
+	queryRate := 30 * time.Second
 
 	var err error
 	var client *ethclient.Client
@@ -152,7 +152,7 @@ func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m
 	first <- struct{}{}
 	createClient := true
 	for {
-		timer := time.NewTimer(time.Duration(queryRate) * time.Second)
+		timer := time.NewTimer(queryRate)
 		select {
 		// don't wait the "queryRate" amount of time if this is the first time running
 		case <-first:

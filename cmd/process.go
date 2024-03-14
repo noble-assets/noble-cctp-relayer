@@ -51,6 +51,7 @@ func Start(a *AppState) *cobra.Command {
 			port, err := cmd.Flags().GetInt16(flagMetricsPort)
 			if err != nil {
 				logger.Error("Invalid port", "error", err)
+				os.Exit(1)
 			}
 
 			metrics := relayer.InitPromMetrics(port)
