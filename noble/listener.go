@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"cosmossdk.io/log"
+	"github.com/strangelove-ventures/noble-cctp-relayer/relayer"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
@@ -176,4 +177,8 @@ func (n *Noble) TrackLatestBlockHeight(ctx context.Context, logger log.Logger, l
 			return
 		}
 	}
+}
+
+func (n *Noble) WalletBalanceMetric(ctx context.Context, logger log.Logger, m *relayer.PromMetrics) {
+	// Relaying is free. No need to track noble balance.
 }

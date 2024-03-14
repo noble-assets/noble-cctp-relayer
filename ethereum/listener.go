@@ -11,10 +11,12 @@ import (
 	"cosmossdk.io/log"
 	ethereum "github.com/ethereum/go-ethereum"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pascaldekloe/etherstream"
+	"github.com/strangelove-ventures/noble-cctp-relayer/relayer"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
@@ -299,6 +301,83 @@ func (e *Ethereum) TrackLatestBlockHeight(ctx context.Context, logger log.Logger
 			}
 			e.latestBlock = header.Number.Uint64()
 
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		}
+	}
+}
+
+func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m *relayer.PromMetrics) {
+	logger = logger.With("metric", "wallet blance", "chain", e.name, "domain", e.domain)
+	queryRate := 30 * time.Second
+
+	var err error
+	var client *ethclient.Client
+
+	account := common.HexToAddress(e.minterAddress)
+
+	exponent := big.NewInt(int64(e.MetricsExponent))                                      // ex: 18
+	scaleFactor := new(big.Float).SetInt(new(big.Int).Exp(big.NewInt(10), exponent, nil)) // ex: 10^18
+
+	defer func() {
+		if client != nil {
+			client.Close()
+		}
+	}()
+
+	first := make(chan struct{}, 1)
+	first <- struct{}{}
+	createClient := true
+	for {
+		timer := time.NewTimer(queryRate)
+		select {
+		// don't wait the "queryRate" amount of time if this is the first time running
+		case <-first:
+			timer.Stop()
+			if createClient {
+				client, err = ethclient.DialContext(ctx, e.rpcURL)
+				if err != nil {
+					logger.Error(fmt.Sprintf("error dialing eth client. Will try again in %d sec", queryRate), "error", err)
+					createClient = true
+					continue
+				}
+			}
+			balance, err := client.BalanceAt(ctx, account, nil)
+			if err != nil {
+				logger.Error(fmt.Sprintf("error querying balance. Will try again in %d sec", queryRate), "error", err)
+				createClient = true
+				continue
+			}
+
+			balanceBigFloat := new(big.Float).SetInt(balance)
+			balanceScaled, _ := new(big.Float).Quo(balanceBigFloat, scaleFactor).Float64()
+
+			m.SetWalletBalance(e.name, e.minterAddress, e.MetricsDenom, balanceScaled)
+
+			createClient = false
+		case <-timer.C:
+			if createClient {
+				client, err = ethclient.DialContext(ctx, e.rpcURL)
+				if err != nil {
+					logger.Error(fmt.Sprintf("error dialing eth client. Will try again in %d sec", queryRate), "error", err)
+					createClient = true
+					continue
+				}
+			}
+			balance, err := client.BalanceAt(ctx, account, nil)
+			if err != nil {
+				logger.Error(fmt.Sprintf("error querying balance. Will try again in %d sec", queryRate), "error", err)
+				createClient = true
+				continue
+			}
+
+			balanceBigFloat := new(big.Float).SetInt(balance)
+			balanceScaled, _ := new(big.Float).Quo(balanceBigFloat, scaleFactor).Float64()
+
+			m.SetWalletBalance(e.name, e.minterAddress, e.MetricsDenom, balanceScaled)
+
+			createClient = false
 		case <-ctx.Done():
 			timer.Stop()
 			return

@@ -9,14 +9,23 @@ Installation
 ```shell
 git clone https://github.com/strangelove-ventures/noble-cctp-relayer
 cd noble-cctp-relayer
-go install
+make install
 ```
 
 Running the relayer
 ```shell
 noble-cctp-relayer start --config ./config/sample-app-config.yaml
 ```
-Sample configs can be found in config/.
+Sample configs can be found in [config](config).
+### Promethius Metrics
+
+By default, metrics are exported at on port :2112/metrics (`http://localhost:2112/metrics`). You can customize the port using the `--metrics-port` flag. 
+
+| **Exported Metric**         | **Description**                                                                                                                                    | **Type** |
+|-----------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------|----------|
+| cctp_relayer_wallet_balance | Current balance of a relayer wallet in Wei.<br><br>Noble balances are not currently exported b/c `MsgReceiveMessage` is free to submit on Noble.   | Gauge    |
+
+
 ### API
 Simple API to query message state cache
 ```shell
@@ -50,7 +59,3 @@ abigen --abi ethereum/abi/MessageTransmitter.json --pkg contracts- --type Messag
 
 ### Useful links
 [Goerli USDC faucet](https://usdcfaucet.com/)
-
-[Goerli ETH faucet](https://goerlifaucet.com/)
-
-

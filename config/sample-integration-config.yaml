@@ -60,6 +60,26 @@ testnet:
     token-messenger-address: "0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5"
     destination-caller: ""
 
+  polygon:
+    chain-id: "80001"
+    domain: 7
+    address: ""
+    private-key: ""
+    rpc: ""
+    usdc-token-address: "0x9999f7fea5938fd3b1e26a12c3f2fb024e194f97"
+    token-messenger-address: "0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5"
+    destination-caller: ""
+
+  base:
+    chain-id: "84532"
+    domain: 6
+    address: ""
+    private-key: ""
+    rpc: ""
+    usdc-token-address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
+    token-messenger-address: "0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5"
+    destination-caller: ""
+
 mainnet:
   noble:
     chain-id: "noble-1"
@@ -109,3 +129,22 @@ mainnet:
     token-messenger-address: "0x2B4069517957735bE00ceE0fadAE88a26365528f"
     destination-caller: ""
 
+  polygon:
+    chain-id: "137"
+    domain: 7
+    address: ""
+    private-key: ""
+    rpc: ""
+    usdc-token-address: "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359"
+    token-messenger-address: "0x9daF8c91AEFAE50b9c0E69629D3F6Ca40cA3B3FE"
+    destination-caller: ""
+
+  base:
+    chain-id: "8453"
+    domain: 6
+    address: ""
+    private-key: ""
+    rpc: ""
+    usdc-token-address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+    token-messenger-address: "0x1682Ae6375C4E4A97e4B583BC394c861A46D8962"
+    destination-caller: ""
