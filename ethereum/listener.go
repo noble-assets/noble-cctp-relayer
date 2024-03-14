@@ -60,22 +60,31 @@ func (e *Ethereum) startListenerRoutines(
 	processingQueue chan *types.TxState,
 ) {
 
-	sub := e.queryAndConsume(ctx, logger, processingQueue)
+	// start main stream (does not account for lookback period)
+	stream, sub, history := e.startMainStream(ctx, logger)
+	go e.consumeStream(ctx, logger, processingQueue, stream, sub)
+	consumeHistroy(logger, history, processingQueue)
+
+	// query history pertaining to lookback period
+	if e.lookbackPeriod != 0 {
+		latestBlock := e.latestBlock
+		start := latestBlock - e.lookbackPeriod
+		end := latestBlock
+		logger.Info(fmt.Sprintf("starting lookback of %d blocks", e.lookbackPeriod))
+		e.getAndConsumeHistory(ctx, logger, processingQueue, start, end)
+		logger.Info(fmt.Sprintf("finished lookback of %d blocks", e.lookbackPeriod))
+	}
+
 	go e.flushMechanism(ctx, logger, processingQueue, sub)
 
-	<-sub.Err()
 }
 
-func (e *Ethereum) queryAndConsume(
+func (e *Ethereum) startMainStream(
 	ctx context.Context,
 	logger log.Logger,
-	processingQueue chan *types.TxState,
-
-) (sub ethereum.Subscription) {
+) (stream <-chan ethtypes.Log, sub ethereum.Subscription, history []ethtypes.Log) {
 
 	var err error
-	var stream <-chan ethtypes.Log
-	var history []ethtypes.Log
 
 	etherReader := etherstream.Reader{Backend: e.wsClient}
 
@@ -85,7 +94,7 @@ func (e *Ethereum) queryAndConsume(
 
 	latestBlock := e.latestBlock
 
-	// start initial stream ignoring lookback period
+	// start initial stream (lookback period handled separately)
 	logger.Info(fmt.Sprintf("Starting Ethereum listener at block %d", e.startBlock))
 
 	query := ethereum.FilterQuery{
@@ -108,32 +117,45 @@ func (e *Ethereum) queryAndConsume(
 		break
 	}
 
-	go e.consumeStream(ctx, logger, processingQueue, stream, sub)
-	consumeHistroy(logger, history, processingQueue)
+	return stream, sub, history
+}
 
-	if e.lookbackPeriod == 0 {
-		return sub
+func (e *Ethereum) getAndConsumeHistory(
+	ctx context.Context,
+	logger log.Logger,
+	processingQueue chan *types.TxState,
+	start, end uint64) {
+
+	var toUnSub ethereum.Subscription
+	var history []ethtypes.Log
+	var err error
+
+	// handle historical queries in chunks (some websockets only allow small history queries)
+	chunkSize := uint64(100)
+	chunk := 1
+	totalChunksNeeded := (end - start) / chunkSize
+	if (end-start)%chunkSize > 0 || totalChunksNeeded == 0 {
+		totalChunksNeeded++
 	}
 
-	// handle lookback period in chunks (some websockets only allow small history queries)
-	chunkSize := uint64(100)
-	var toUnSub ethereum.Subscription
-
-	for start := (latestBlock - e.lookbackPeriod); start < latestBlock; start += chunkSize {
-		end := start + chunkSize
-		if end > latestBlock {
-			end = latestBlock
+	for start < end {
+		fromBlock := start
+		toBlock := start + chunkSize
+		if toBlock > end {
+			toBlock = end
 		}
 
-		logger.Info(fmt.Sprintf("getting history in chunks: start-block: %d end-block: %d", start, end))
+		logger.Debug(fmt.Sprintf("looking back in chunks of %d: chunk: %d/%d start-block: %d end-block: %d", chunkSize, chunk, totalChunksNeeded, fromBlock, toBlock))
 
-		query = ethereum.FilterQuery{
+		etherReader := etherstream.Reader{Backend: e.wsClient}
+
+		query := ethereum.FilterQuery{
 			Addresses: []common.Address{messageTransmitterAddress},
 			Topics:    [][]common.Hash{{messageSent.ID}},
-			FromBlock: big.NewInt(int64(start)),
-			ToBlock:   big.NewInt(int64(end)),
+			FromBlock: big.NewInt(int64(fromBlock)),
+			ToBlock:   big.NewInt(int64(toBlock)),
 		}
-		queryAttempt = 1
+		queryAttempt := 1
 		for {
 			_, toUnSub, history, err = etherReader.QueryWithHistory(ctx, &query)
 			if err != nil {
@@ -146,11 +168,10 @@ func (e *Ethereum) queryAndConsume(
 		}
 		toUnSub.Unsubscribe()
 		consumeHistroy(logger, history, processingQueue)
+
+		start += chunkSize
+		chunk++
 	}
-
-	logger.Info("done querying lookback period. All caught up")
-
-	return sub
 }
 
 // consumeHistroy consumes the hisroty from a QueryWithHistory() go-ethereum call.
@@ -226,50 +247,22 @@ func (e *Ethereum) flushMechanism(
 	sub ethereum.Subscription,
 ) {
 
-	var toUnSub ethereum.Subscription
-	var history []ethtypes.Log
-	var err error
-
-	etherReader := etherstream.Reader{Backend: e.wsClient}
-	chunkSize := uint64(100)
 	for {
 		timer := time.NewTimer(5 * time.Minute)
 		select {
 		case <-timer.C:
-			if e.lastFlushedBlock == 0 {
-				e.lastFlushedBlock = e.latestBlock
-			}
-
 			latestBlock := e.latestBlock
 
-			for start := (e.lastFlushedBlock - e.lookbackPeriod); start < latestBlock; start += chunkSize {
-				end := start + chunkSize
-				if end > latestBlock {
-					end = latestBlock
-				}
-
-				logger.Info(fmt.Sprintf("flushing... querying history in chunks: start-block: %d end-block: %d", start, end))
-
-				query := ethereum.FilterQuery{
-					Addresses: []common.Address{messageTransmitterAddress},
-					Topics:    [][]common.Hash{{messageSent.ID}},
-					FromBlock: big.NewInt(int64(start)),
-					ToBlock:   big.NewInt(int64(end)),
-				}
-				queryAttempt := 1
-				for {
-					_, toUnSub, history, err = etherReader.QueryWithHistory(ctx, &query)
-					if err != nil {
-						logger.Error("unable to query history during flush", "err", err)
-						queryAttempt++
-						time.Sleep(1 * time.Second)
-						continue
-					}
-					break
-				}
-				toUnSub.Unsubscribe()
-				consumeHistroy(logger, history, processingQueue)
+			if e.lastFlushedBlock == 0 {
+				e.lastFlushedBlock = latestBlock
 			}
+
+			start := e.lastFlushedBlock - e.lookbackPeriod
+
+			logger.Info(fmt.Sprintf("flush started from %d to %d", start, latestBlock))
+
+			e.getAndConsumeHistory(ctx, logger, processingQueue, start, latestBlock)
+
 			logger.Info("flush complete")
 
 		// if main websocket stream is disconnected, stop flush. It will be restarted once websocket is reconnected
@@ -302,6 +295,7 @@ func (e *Ethereum) TrackLatestBlockHeight(ctx context.Context, logger log.Logger
 			header, err := e.rpcClient.HeaderByNumber(ctx, nil)
 			if err != nil {
 				logger.Error("Error getting lastest block height:", err)
+				continue
 			}
 			e.latestBlock = header.Number.Uint64()
 

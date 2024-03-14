@@ -134,7 +134,7 @@ func (n *Noble) flushMechanism(
 
 			flushStart := lastFlushedBlock - n.lookbackPeriod
 
-			logger.Info(fmt.Sprintf("flushing... start-block: %d end-block: %d", flushStart, latestBlock))
+			logger.Info(fmt.Sprintf("flush started from: %d to: %d", flushStart, latestBlock))
 
 			for i := flushStart; i <= latestBlock; i++ {
 				blockQueue <- i
