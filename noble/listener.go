@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"cosmossdk.io/log"
+	"github.com/strangelove-ventures/noble-cctp-relayer/relayer"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
@@ -129,4 +130,8 @@ func (n *Noble) chainTip(ctx context.Context) (uint64, error) {
 		return 0, fmt.Errorf("unable to query status for noble: %w", err)
 	}
 	return uint64(res.SyncInfo.LatestBlockHeight), nil
+}
+
+func (n *Noble) WalletBalanceMetric(ctx context.Context, logger log.Logger, m *relayer.PromMetrics) {
+	// Relaying is free. No need to track noble balance.
 }

@@ -58,6 +58,8 @@ func TestNobleBurnToEthDeployed(t *testing.T) {
 	// ethConfig := cfg["arbitrum"]
 	// ethConfig := cfg["avalanche"]
 	// ethConfig := cfg["optimism"]
+	// ethConfig := cfg["polygon"]
+	// ethConfig := cfg["base"]
 
 	destAddress := ethConfig.Address
 
@@ -198,6 +200,8 @@ func TestEthBurnToNobleDeployed(t *testing.T) {
 	// ethConfig := cfg["arbitrum"]
 	// ethConfig := cfg["avalanche"]
 	// ethConfig := cfg["optimism"]
+	// ethConfig := cfg["polygon"]
+	// ethConfig := cfg["base"]
 
 	// -- DEST CHAIN --
 	nobleCfg := cfg["noble"]

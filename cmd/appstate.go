@@ -14,7 +14,6 @@ type AppState struct {
 
 	ConfigPath string
 
-	// Depreciated in favor of LogLevel
 	Debug bool
 
 	LogLevel string
@@ -48,7 +47,7 @@ func (a *AppState) InitLogger() {
 		level = zerolog.ErrorLevel
 	}
 
-	// a.Debug is Depreciatred!
+	// a.Debug ovverrides a.loglevel
 	if a.Debug {
 		a.Logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.DebugLevel))
 	} else {

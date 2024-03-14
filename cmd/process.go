@@ -16,6 +16,7 @@ import (
 	"github.com/strangelove-ventures/noble-cctp-relayer/circle"
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/noble"
+	"github.com/strangelove-ventures/noble-cctp-relayer/relayer"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
@@ -47,6 +48,14 @@ func Start(a *AppState) *cobra.Command {
 
 			registeredDomains := make(map[types.Domain]types.Chain)
 
+			port, err := cmd.Flags().GetInt16(flagMetricsPort)
+			if err != nil {
+				logger.Error("Invalid port", "error", err)
+				os.Exit(1)
+			}
+
+			metrics := relayer.InitPromMetrics(port)
+
 			for name, cfg := range cfg.Chains {
 				c, err := cfg.Chain(name)
 				if err != nil {
@@ -55,11 +64,12 @@ func Start(a *AppState) *cobra.Command {
 				}
 
 				if err := c.InitializeBroadcaster(cmd.Context(), logger, sequenceMap); err != nil {
-					logger.Error("Error initializing broadcaster", "err: ", err)
+					logger.Error("Error initializing broadcaster", "error", err)
 					os.Exit(1)
 				}
 
 				go c.StartListener(cmd.Context(), logger, processingQueue)
+				go c.WalletBalanceMetric(cmd.Context(), a.Logger, metrics)
 
 				if _, ok := registeredDomains[c.Domain()]; ok {
 					logger.Error("Duplicate domain found", "domain", c.Domain(), "name:", c.Name())

@@ -21,6 +21,9 @@ type ChainConfig struct {
 
 	MinMintAmount uint64 `yaml:"min-mint-amount"`
 
+	MetricsDenom    string `yaml:"metrics-denom"`
+	MetricsExponent int    `yaml:"metrics-exponent"`
+
 	// TODO move to keyring
 	MinterPrivateKey string `yaml:"minter-private-key"`
 }
@@ -39,5 +42,7 @@ func (c *ChainConfig) Chain(name string) (types.Chain, error) {
 		c.BroadcastRetries,
 		c.BroadcastRetryInterval,
 		c.MinMintAmount,
+		c.MetricsDenom,
+		c.MetricsExponent,
 	)
 }
