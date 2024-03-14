@@ -73,7 +73,11 @@ func Start(a *AppState) *cobra.Command {
 				updateLatestHeight := 1 * time.Second
 				go c.TrackLatestBlockHeight(cmd.Context(), logger, updateLatestHeight)
 
-				time.Sleep(5 * time.Second)
+				// wait until height is available
+				for c.LatestBlock() == 0 {
+					time.Sleep(1 * time.Second)
+				}
+
 				if err := c.InitializeBroadcaster(cmd.Context(), logger, sequenceMap); err != nil {
 					logger.Error("Error initializing broadcaster", "error", err)
 					os.Exit(1)

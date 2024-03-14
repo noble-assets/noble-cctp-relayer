@@ -11,7 +11,6 @@ import (
 	"cosmossdk.io/log"
 	ethereum "github.com/ethereum/go-ethereum"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethclient"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -69,7 +68,7 @@ func (e *Ethereum) startListenerRoutines(
 
 	// query history pertaining to lookback period
 	if e.lookbackPeriod != 0 {
-		latestBlock := e.latestBlock
+		latestBlock := e.LatestBlock()
 		start := latestBlock - e.lookbackPeriod
 		end := latestBlock
 		logger.Info(fmt.Sprintf("starting lookback of %d blocks", e.lookbackPeriod))
@@ -91,10 +90,10 @@ func (e *Ethereum) startMainStream(
 	etherReader := etherstream.Reader{Backend: e.wsClient}
 
 	if e.startBlock == 0 {
-		e.startBlock = e.latestBlock
+		e.startBlock = e.LatestBlock()
 	}
 
-	latestBlock := e.latestBlock
+	latestBlock := e.LatestBlock()
 
 	// start initial stream (lookback period handled separately)
 	logger.Info(fmt.Sprintf("Starting Ethereum listener at block %d", e.startBlock))
@@ -253,7 +252,7 @@ func (e *Ethereum) flushMechanism(
 		timer := time.NewTimer(5 * time.Minute)
 		select {
 		case <-timer.C:
-			latestBlock := e.latestBlock
+			latestBlock := e.LatestBlock()
 
 			if e.lastFlushedBlock == 0 {
 				e.lastFlushedBlock = latestBlock
@@ -264,6 +263,8 @@ func (e *Ethereum) flushMechanism(
 			logger.Info(fmt.Sprintf("flush started from %d to %d", start, latestBlock))
 
 			e.getAndConsumeHistory(ctx, logger, processingQueue, start, latestBlock)
+
+			e.lastFlushedBlock = latestBlock
 
 			logger.Info("flush complete")
 
@@ -287,7 +288,9 @@ func (e *Ethereum) TrackLatestBlockHeight(ctx context.Context, logger log.Logger
 	if err != nil {
 		logger.Error("Error getting lastest block height:", err)
 	}
-	e.latestBlock = header.Number.Uint64()
+	if err == nil {
+		e.SetLatestBlock(header.Number.Uint64())
+	}
 
 	// then start loop on a timer
 	for {
@@ -299,7 +302,7 @@ func (e *Ethereum) TrackLatestBlockHeight(ctx context.Context, logger log.Logger
 				logger.Error("Error getting lastest block height:", err)
 				continue
 			}
-			e.latestBlock = header.Number.Uint64()
+			e.SetLatestBlock(header.Number.Uint64())
 
 		case <-ctx.Done():
 			timer.Stop()
@@ -312,41 +315,22 @@ func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m
 	logger = logger.With("metric", "wallet blance", "chain", e.name, "domain", e.domain)
 	queryRate := 30 * time.Second
 
-	var err error
-	var client *ethclient.Client
-
 	account := common.HexToAddress(e.minterAddress)
 
 	exponent := big.NewInt(int64(e.MetricsExponent))                                      // ex: 18
 	scaleFactor := new(big.Float).SetInt(new(big.Int).Exp(big.NewInt(10), exponent, nil)) // ex: 10^18
 
-	defer func() {
-		if client != nil {
-			client.Close()
-		}
-	}()
-
 	first := make(chan struct{}, 1)
 	first <- struct{}{}
-	createClient := true
 	for {
 		timer := time.NewTimer(queryRate)
 		select {
 		// don't wait the "queryRate" amount of time if this is the first time running
 		case <-first:
 			timer.Stop()
-			if createClient {
-				client, err = ethclient.DialContext(ctx, e.rpcURL)
-				if err != nil {
-					logger.Error(fmt.Sprintf("error dialing eth client. Will try again in %d sec", queryRate), "error", err)
-					createClient = true
-					continue
-				}
-			}
-			balance, err := client.BalanceAt(ctx, account, nil)
+			balance, err := e.rpcClient.BalanceAt(ctx, account, nil)
 			if err != nil {
 				logger.Error(fmt.Sprintf("error querying balance. Will try again in %d sec", queryRate), "error", err)
-				createClient = true
 				continue
 			}
 
@@ -354,21 +338,10 @@ func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m
 			balanceScaled, _ := new(big.Float).Quo(balanceBigFloat, scaleFactor).Float64()
 
 			m.SetWalletBalance(e.name, e.minterAddress, e.MetricsDenom, balanceScaled)
-
-			createClient = false
 		case <-timer.C:
-			if createClient {
-				client, err = ethclient.DialContext(ctx, e.rpcURL)
-				if err != nil {
-					logger.Error(fmt.Sprintf("error dialing eth client. Will try again in %d sec", queryRate), "error", err)
-					createClient = true
-					continue
-				}
-			}
-			balance, err := client.BalanceAt(ctx, account, nil)
+			balance, err := e.rpcClient.BalanceAt(ctx, account, nil)
 			if err != nil {
 				logger.Error(fmt.Sprintf("error querying balance. Will try again in %d sec", queryRate), "error", err)
-				createClient = true
 				continue
 			}
 
@@ -377,7 +350,6 @@ func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m
 
 			m.SetWalletBalance(e.name, e.minterAddress, e.MetricsDenom, balanceScaled)
 
-			createClient = false
 		case <-ctx.Done():
 			timer.Stop()
 			return

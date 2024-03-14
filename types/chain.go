@@ -19,6 +19,9 @@ type Chain interface {
 	// LatestBlockain returns the last queired height of the chain
 	LatestBlock() uint64
 
+	// SetLatestBlock sets the latest block
+	SetLatestBlock(block uint64)
+
 	// LastFlushedBlock returns the last block included in a flush. In the rare situation of a crash,
 	// this block is a good block to start at to catch up on any missed transactions.
 	LastFlushedBlock() uint64

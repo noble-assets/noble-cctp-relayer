@@ -109,7 +109,16 @@ func (n *Noble) Domain() types.Domain {
 }
 
 func (n *Noble) LatestBlock() uint64 {
-	return n.latestBlock
+	n.mu.Lock()
+	block := n.latestBlock
+	n.mu.Unlock()
+	return block
+}
+
+func (n *Noble) SetLatestBlock(block uint64) {
+	n.mu.Lock()
+	n.latestBlock = block
+	n.mu.Unlock()
 }
 
 func (n *Noble) LastFlushedBlock() uint64 {

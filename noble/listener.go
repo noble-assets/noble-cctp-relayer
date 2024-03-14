@@ -18,7 +18,7 @@ func (n *Noble) StartListener(
 	logger = logger.With("chain", n.Name(), "chain_id", n.chainID, "domain", n.Domain())
 
 	if n.startBlock == 0 {
-		n.startBlock = n.latestBlock
+		n.startBlock = n.LatestBlock()
 	}
 
 	logger.Info(fmt.Sprintf("Starting Noble listener at block %d looking back %d blocks",
@@ -35,7 +35,7 @@ func (n *Noble) StartListener(
 	// enqueue block heights
 	currentBlock := n.startBlock
 	lookback := n.lookbackPeriod
-	chainTip := n.latestBlock
+	chainTip := n.LatestBlock()
 
 	if n.blockQueueChannelSize == 0 {
 		n.blockQueueChannelSize = defaultBlockQueueChannelSize
@@ -58,7 +58,7 @@ func (n *Noble) StartListener(
 			select {
 			case <-first:
 				timer.Stop()
-				chainTip = n.latestBlock
+				chainTip = n.LatestBlock()
 				if chainTip >= currentBlock {
 					for i := currentBlock; i <= chainTip; i++ {
 						blockQueue <- i
@@ -66,7 +66,7 @@ func (n *Noble) StartListener(
 					currentBlock = chainTip + 1
 				}
 			case <-timer.C:
-				chainTip = n.latestBlock
+				chainTip = n.LatestBlock()
 				if chainTip >= currentBlock {
 					for i := currentBlock; i <= chainTip; i++ {
 						blockQueue <- i
@@ -126,7 +126,7 @@ func (n *Noble) flushMechanism(
 		timer := time.NewTimer(5 * time.Minute)
 		select {
 		case <-timer.C:
-			latestBlock := n.latestBlock
+			latestBlock := n.LatestBlock()
 
 			if n.lastFlushedBlock == 0 {
 				n.lastFlushedBlock = latestBlock
@@ -159,7 +159,7 @@ func (n *Noble) TrackLatestBlockHeight(ctx context.Context, logger log.Logger, l
 	if err != nil {
 		logger.Error("unable to query Nobles latest height", "err", err)
 	}
-	n.latestBlock = uint64(res.SyncInfo.LatestBlockHeight)
+	n.SetLatestBlock(uint64(res.SyncInfo.LatestBlockHeight))
 
 	// then start loop on a timer
 	for {
@@ -171,7 +171,7 @@ func (n *Noble) TrackLatestBlockHeight(ctx context.Context, logger log.Logger, l
 				logger.Error("unable to query Nobles latest height", "err", err)
 				continue
 			}
-			n.latestBlock = uint64(res.SyncInfo.LatestBlockHeight)
+			n.SetLatestBlock(uint64(res.SyncInfo.LatestBlockHeight))
 		case <-ctx.Done():
 			timer.Stop()
 			return

@@ -96,7 +96,16 @@ func (e *Ethereum) Domain() types.Domain {
 }
 
 func (e *Ethereum) LatestBlock() uint64 {
-	return e.latestBlock
+	e.mu.Lock()
+	block := e.latestBlock
+	e.mu.Unlock()
+	return block
+}
+
+func (e *Ethereum) SetLatestBlock(block uint64) {
+	e.mu.Lock()
+	e.latestBlock = block
+	e.mu.Unlock()
 }
 
 func (e *Ethereum) LastFlushedBlock() uint64 {
