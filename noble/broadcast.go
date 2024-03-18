@@ -67,7 +67,7 @@ func (n *Noble) Broadcast(
 		}
 
 		// Log retry information
-		logger.Error("Broadcasting to noble failed. Retrying...", "error", err, "interval_seconds", n.retryIntervalSeconds)
+		logger.Error(fmt.Sprintf("Broadcasting to noble failed. Attempt %d/%d Retrying...", attempt, n.maxRetries), "error", err, "interval_seconds", n.retryIntervalSeconds, "src-tx", msgs[0].SourceTxHash)
 		time.Sleep(time.Duration(n.retryIntervalSeconds) * time.Second)
 	}
 
@@ -99,7 +99,12 @@ func (n *Noble) attemptBroadcast(
 
 		if used {
 			msg.Status = types.Complete
-			logger.Info(fmt.Sprintf("Noble cctp minter nonce %d already used", msg.Nonce))
+			// bm, _ := new(cctptypes.BurnMessage).Parse(msg.MsgBody)
+			// x, err := hex.DecodeString(string(bm.MintRecipient))
+			// fmt.Println("err", err)
+			// y := common.HexToAddress(string(x))
+			// fmt.Println("ERRR", err)
+			logger.Info(fmt.Sprintf("Noble cctp minter nonce %d already used.", msg.Nonce), "src-tx", msg.SourceTxHash)
 			continue
 		}
 

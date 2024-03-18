@@ -101,6 +101,7 @@ func Start(a *AppState) *cobra.Command {
 
 			<-cmd.Context().Done()
 			// clean up
+			time.Sleep(20 * time.Millisecond)
 			for _, c := range registeredDomains {
 				fmt.Printf("\n%s: latest-block: %d last-flushed-block: %d", c.Name(), c.LatestBlock(), c.LastFlushedBlock())
 				c.CloseClients()

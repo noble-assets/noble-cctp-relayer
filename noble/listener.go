@@ -91,7 +91,7 @@ func (n *Noble) StartListener(
 					block := <-blockQueue
 					res, err := n.cc.RPCClient.TxSearch(ctx, fmt.Sprintf("tx.height=%d", block), false, nil, nil, "")
 					if err != nil || res == nil {
-						logger.Debug(fmt.Sprintf("unable to query Noble block %d", block), "error:", err)
+						logger.Debug(fmt.Sprintf("unable to query Noble block %d. Will retry.", block), "error:", err)
 						blockQueue <- block
 						continue
 					}

@@ -151,7 +151,7 @@ func (e *Ethereum) attemptBroadcast(
 		if response.Uint64() == uint64(1) {
 			// nonce has already been used, mark as complete
 			logger.Debug(fmt.Sprintf("This source domain/nonce has already been used: %d %d",
-				msg.SourceDomain, msg.Nonce))
+				msg.SourceDomain, msg.Nonce), "src-tx", msg.SourceTxHash, "reviever")
 			msg.Status = types.Complete
 			return nil
 		}
