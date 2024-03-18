@@ -37,9 +37,11 @@ type errSignal struct {
 func (e *Ethereum) StartListener(
 	ctx context.Context,
 	logger log.Logger,
-	processingQueue chan *types.TxState,
+	processingQueue_ chan *types.TxState,
 ) {
 	logger = logger.With("chain", e.name, "chain_id", e.chainID, "domain", e.domain)
+
+	processingQueue = processingQueue_
 
 	messageTransmitter, err := content.ReadFile("abi/MessageTransmitter.json")
 	if err != nil {
@@ -55,16 +57,17 @@ func (e *Ethereum) StartListener(
 	messageSent = messageTransmitterABI.Events["MessageSent"]
 	messageTransmitterAddress = common.HexToAddress(e.messageTransmitterAddress)
 
-	e.startListenerRoutines(ctx, logger)
+	e.startListenerRoutines(ctx, logger, processingQueue)
 }
 
 // startListenerRoutines starts the ethereum websocket subscription, queries history pertaining to the lookback period,
 // and starts the reoccurring flush
-
+//
 // If an error occurs in websocket strea, this function will handle relevant sub routines and then re-run iteself.
 func (e *Ethereum) startListenerRoutines(
 	ctx context.Context,
 	logger log.Logger,
+	processingQueue chan *types.TxState,
 ) {
 
 	sig := &errSignal{
@@ -104,7 +107,7 @@ func (e *Ethereum) startListenerRoutines(
 		// restart
 		e.startBlock = e.lastFlushedBlock
 		time.Sleep(10 * time.Millisecond)
-		e.startListenerRoutines(ctx, logger)
+		e.startListenerRoutines(ctx, logger, processingQueue)
 		return
 	}
 

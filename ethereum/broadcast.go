@@ -14,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum/contracts"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
@@ -42,14 +41,7 @@ func (e *Ethereum) Broadcast(
 
 	logger = logger.With("chain", e.name, "chain_id", e.chainID, "domain", e.domain)
 
-	// set up eth client
-	client, err := ethclient.Dial(e.rpcURL)
-	if err != nil {
-		return fmt.Errorf("unable to dial ethereum client: %w", err)
-	}
-	defer client.Close()
-
-	backend := NewContractBackendWrapper(client)
+	backend := NewContractBackendWrapper(e.rpcClient)
 
 	auth, err := bind.NewKeyedTransactorWithChainID(e.privateKey, big.NewInt(e.chainID))
 	if err != nil {
