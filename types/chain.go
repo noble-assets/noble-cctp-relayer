@@ -51,6 +51,7 @@ type Chain interface {
 		ctx context.Context,
 		logger log.Logger,
 		processingQueue chan *TxState,
+		flushInterval time.Duration,
 	)
 
 	// Broadcast broadcasts CCTP mint messages to the chain.

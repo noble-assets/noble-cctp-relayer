@@ -54,6 +54,14 @@ func Start(a *AppState) *cobra.Command {
 				os.Exit(1)
 			}
 
+			flushInterval, err := cmd.Flags().GetDuration(flagFlushInterval)
+			if err != nil {
+				logger.Error("invalid flush interval", "error", err)
+			}
+			if flushInterval == 0 {
+				logger.Info("flush interval not set. Use the --flush-interval flag to set a reoccurring flush")
+			}
+
 			metrics := relayer.InitPromMetrics(port)
 
 			for name, cfg := range cfg.Chains {
@@ -83,7 +91,7 @@ func Start(a *AppState) *cobra.Command {
 					os.Exit(1)
 				}
 
-				go c.StartListener(cmd.Context(), logger, processingQueue)
+				go c.StartListener(cmd.Context(), logger, processingQueue, flushInterval)
 				go c.WalletBalanceMetric(cmd.Context(), a.Logger, metrics)
 
 				if _, ok := registeredDomains[c.Domain()]; ok {

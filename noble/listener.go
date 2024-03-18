@@ -10,10 +10,13 @@ import (
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
+var flushInterval time.Duration
+
 func (n *Noble) StartListener(
 	ctx context.Context,
 	logger log.Logger,
 	processingQueue chan *types.TxState,
+	flushInterval_ time.Duration,
 ) {
 	logger = logger.With("chain", n.Name(), "chain_id", n.chainID, "domain", n.Domain())
 
@@ -112,7 +115,9 @@ func (n *Noble) StartListener(
 		}()
 	}
 
-	go n.flushMechanism(ctx, logger, blockQueue)
+	if flushInterval > 0 {
+		go n.flushMechanism(ctx, logger, blockQueue)
+	}
 
 	<-ctx.Done()
 }
@@ -122,11 +127,25 @@ func (n *Noble) flushMechanism(
 	logger log.Logger,
 	blockQueue chan uint64,
 ) {
+
+	logger.Debug(fmt.Sprintf("flush mechanism started. Will flush every %v", flushInterval))
+
 	for {
-		timer := time.NewTimer(5 * time.Minute)
+		timer := time.NewTimer(flushInterval)
 		select {
 		case <-timer.C:
 			latestBlock := n.LatestBlock()
+
+			// test to see that the rpc is available before attempting flush
+			res, err := n.cc.RPCClient.Status(ctx)
+			if err != nil {
+				logger.Error(fmt.Sprintf("skipping flush... error reaching out to rpc, will retry flush in %v", flushInterval))
+				continue
+			}
+			if res.SyncInfo.CatchingUp {
+				logger.Error(fmt.Sprintf("skipping flush... rpc still catching, will retry flush in %v", flushInterval))
+				continue
+			}
 
 			if n.lastFlushedBlock == 0 {
 				n.lastFlushedBlock = latestBlock

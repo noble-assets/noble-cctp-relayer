@@ -24,6 +24,7 @@ var (
 	messageSent               abi.Event
 	messageTransmitterAddress common.Address
 	processingQueue           chan *types.TxState
+	flushInterval             time.Duration
 )
 
 // errSignal allows broadcasting an error value to multiple receivers.
@@ -38,10 +39,12 @@ func (e *Ethereum) StartListener(
 	ctx context.Context,
 	logger log.Logger,
 	processingQueue_ chan *types.TxState,
+	flushInterval_ time.Duration,
 ) {
 	logger = logger.With("chain", e.name, "chain_id", e.chainID, "domain", e.domain)
 
 	processingQueue = processingQueue_
+	flushInterval = flushInterval_
 
 	messageTransmitter, err := content.ReadFile("abi/MessageTransmitter.json")
 	if err != nil {
@@ -57,17 +60,16 @@ func (e *Ethereum) StartListener(
 	messageSent = messageTransmitterABI.Events["MessageSent"]
 	messageTransmitterAddress = common.HexToAddress(e.messageTransmitterAddress)
 
-	e.startListenerRoutines(ctx, logger, processingQueue)
+	e.startListenerRoutines(ctx, logger)
 }
 
 // startListenerRoutines starts the ethereum websocket subscription, queries history pertaining to the lookback period,
 // and starts the reoccurring flush
 //
-// If an error occurs in websocket strea, this function will handle relevant sub routines and then re-run iteself.
+// If an error occurs in websocket stream, this function will handle relevant sub routines and then re-run itself.
 func (e *Ethereum) startListenerRoutines(
 	ctx context.Context,
 	logger log.Logger,
-	processingQueue chan *types.TxState,
 ) {
 
 	sig := &errSignal{
@@ -78,7 +80,7 @@ func (e *Ethereum) startListenerRoutines(
 	stream, sub, history := e.startMainStream(ctx, logger)
 
 	go e.consumeStream(ctx, logger, stream, sig)
-	consumeHistroy(logger, history)
+	consumeHistory(logger, history)
 
 	// get history from start-lookback up until latest block
 	latestBlock := e.LatestBlock()
@@ -92,7 +94,9 @@ func (e *Ethereum) startListenerRoutines(
 
 	logger.Info("finished getting history")
 
-	go e.flushMechanism(ctx, logger, sig)
+	if flushInterval > 0 {
+		go e.flushMechanism(ctx, logger, sig)
+	}
 
 	// listen for errors in the main websocket stream
 	// if error occurs, trigger sig.Ready
@@ -107,7 +111,7 @@ func (e *Ethereum) startListenerRoutines(
 		// restart
 		e.startBlock = e.lastFlushedBlock
 		time.Sleep(10 * time.Millisecond)
-		e.startListenerRoutines(ctx, logger, processingQueue)
+		e.startListenerRoutines(ctx, logger)
 		return
 	}
 
@@ -196,16 +200,16 @@ func (e *Ethereum) getAndConsumeHistory(
 			break
 		}
 		toUnSub.Unsubscribe()
-		consumeHistroy(logger, history)
+		consumeHistory(logger, history)
 
 		start += chunkSize
 		chunk++
 	}
 }
 
-// consumeHistroy consumes the hisroty from a QueryWithHistory() go-ethereum call.
+// consumeHistory consumes the history from a QueryWithHistory() go-ethereum call.
 // it passes messages to the processingQueue
-func consumeHistroy(
+func consumeHistory(
 	logger log.Logger,
 	history []ethtypes.Log,
 ) {
@@ -268,9 +272,10 @@ func (e *Ethereum) flushMechanism(
 	logger log.Logger,
 	sig *errSignal,
 ) {
+	logger.Debug(fmt.Sprintf("flush mechanism started. Will flush every %v", flushInterval))
 
 	for {
-		timer := time.NewTimer(5 * time.Minute)
+		timer := time.NewTimer(flushInterval)
 		select {
 		case <-timer.C:
 			latestBlock := e.LatestBlock()
@@ -307,7 +312,7 @@ func (e *Ethereum) TrackLatestBlockHeight(ctx context.Context, logger log.Logger
 	// first time
 	header, err := e.rpcClient.HeaderByNumber(ctx, nil)
 	if err != nil {
-		logger.Error(fmt.Sprintf("error getting lastest block height. Will retry in %.2f second:", loop.Seconds()), "err", err)
+		logger.Error(fmt.Sprintf("error getting latest block height. Will retry in %.2f second:", loop.Seconds()), "err", err)
 	}
 	if err == nil {
 		e.SetLatestBlock(header.Number.Uint64())
@@ -320,7 +325,7 @@ func (e *Ethereum) TrackLatestBlockHeight(ctx context.Context, logger log.Logger
 		case <-timer.C:
 			header, err := e.rpcClient.HeaderByNumber(ctx, nil)
 			if err != nil {
-				logger.Debug(fmt.Sprintf("error getting lastest block height. Will retry in %.2f second:", loop.Seconds()), "err", err)
+				logger.Debug(fmt.Sprintf("error getting latest block height. Will retry in %.2f second:", loop.Seconds()), "err", err)
 				continue
 			}
 			e.SetLatestBlock(header.Number.Uint64())
@@ -333,7 +338,7 @@ func (e *Ethereum) TrackLatestBlockHeight(ctx context.Context, logger log.Logger
 }
 
 func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m *relayer.PromMetrics) {
-	logger = logger.With("metric", "wallet blance", "chain", e.name, "domain", e.domain)
+	logger = logger.With("metric", "wallet blannce", "chain", e.name, "domain", e.domain)
 	queryRate := 30 * time.Second
 
 	account := common.HexToAddress(e.minterAddress)
