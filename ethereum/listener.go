@@ -147,13 +147,15 @@ func (e *Ethereum) getAndConsumeHistory(
 	var history []ethtypes.Log
 	var err error
 
-	// handle historical queries in chunks (some websockets only allow small history queries)
-	chunkSize := uint64(100)
-	chunk := 1
-	totalChunksNeeded := (end - start) / chunkSize
-	if (end-start)%chunkSize > 0 || totalChunksNeeded == 0 {
-		totalChunksNeeded++
+	if start > end {
+		logger.Error(fmt.Sprintf("Unable to get history from %d to %d where the start block is greater than the end block", start, end))
+		return
 	}
+
+	// handle historical queries in chunks (some websockets only allow small history queries)
+	const chunkSize = uint64(100)
+	chunk := 1
+	totalChunksNeeded := (end - start + chunkSize - 1) / chunkSize
 
 	for start < end {
 		fromBlock := start

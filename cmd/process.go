@@ -81,8 +81,17 @@ func Start(a *AppState) *cobra.Command {
 				go c.TrackLatestBlockHeight(cmd.Context(), logger)
 
 				// wait until height is available
-				for c.LatestBlock() == 0 {
-					time.Sleep(1 * time.Second)
+				maxRetries := 45
+				for i := 0; i < maxRetries; i++ {
+					if c.LatestBlock() == 0 {
+						time.Sleep(1 * time.Second)
+					} else {
+						break
+					}
+					if i == maxRetries-1 {
+						logger.Error("Unable to get height")
+						os.Exit(1)
+					}
 				}
 
 				if err := c.InitializeBroadcaster(cmd.Context(), logger, sequenceMap); err != nil {
@@ -106,13 +115,14 @@ func Start(a *AppState) *cobra.Command {
 				go StartProcessor(cmd.Context(), a, registeredDomains, processingQueue, sequenceMap)
 			}
 
+			defer func() {
+				for _, c := range registeredDomains {
+					fmt.Printf("\n%s: latest-block: %d last-flushed-block: %d", c.Name(), c.LatestBlock(), c.LastFlushedBlock())
+					c.CloseClients()
+				}
+			}()
+
 			<-cmd.Context().Done()
-			// clean up
-			time.Sleep(20 * time.Millisecond)
-			for _, c := range registeredDomains {
-				fmt.Printf("\n%s: latest-block: %d last-flushed-block: %d", c.Name(), c.LatestBlock(), c.LastFlushedBlock())
-				c.CloseClients()
-			}
 		},
 	}
 
