@@ -60,7 +60,7 @@ func (n *Noble) Broadcast(
 	txBuilder := sdkContext.TxConfig.NewTxBuilder()
 
 	// sign and broadcast txn
-	for attempt := 0; attempt <= n.maxRetries; attempt++ {
+	for attempt := 1; attempt <= n.maxRetries; attempt++ {
 		err := n.attemptBroadcast(ctx, logger, msgs, sequenceMap, sdkContext, txBuilder)
 		if err == nil {
 			return nil
