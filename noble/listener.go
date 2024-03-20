@@ -20,6 +20,8 @@ func (n *Noble) StartListener(
 ) {
 	logger = logger.With("chain", n.Name(), "chain_id", n.chainID, "domain", n.Domain())
 
+	flushInterval = flushInterval_
+
 	if n.startBlock == 0 {
 		n.startBlock = n.LatestBlock()
 	}
