@@ -94,7 +94,7 @@ func (n *Noble) StartListener(
 					block := <-blockQueue
 					res, err := n.cc.RPCClient.TxSearch(ctx, fmt.Sprintf("tx.height=%d", block), false, nil, nil, "")
 					if err != nil || res == nil {
-						logger.Debug(fmt.Sprintf("unable to query Noble block %d. Will retry.", block), "error:", err)
+						logger.Debug(fmt.Sprintf("Unable to query Noble block %d. Will retry.", block), "error:", err)
 						blockQueue <- block
 						continue
 					}
@@ -102,7 +102,7 @@ func (n *Noble) StartListener(
 					for _, tx := range res.Txs {
 						parsedMsgs, err := txToMessageState(tx)
 						if err != nil {
-							logger.Error("unable to parse Noble log to message state", "err", err.Error())
+							logger.Error("Unable to parse Noble log to message state", "err", err.Error())
 							continue
 						}
 						for _, parsedMsg := range parsedMsgs {
@@ -128,7 +128,7 @@ func (n *Noble) flushMechanism(
 	blockQueue chan uint64,
 ) {
 
-	logger.Debug(fmt.Sprintf("flush mechanism started. Will flush every %v", flushInterval))
+	logger.Debug(fmt.Sprintf("Flush mechanism started. Will flush every %v", flushInterval))
 
 	for {
 		timer := time.NewTimer(flushInterval)
@@ -139,11 +139,11 @@ func (n *Noble) flushMechanism(
 			// test to see that the rpc is available before attempting flush
 			res, err := n.cc.RPCClient.Status(ctx)
 			if err != nil {
-				logger.Error(fmt.Sprintf("skipping flush... error reaching out to rpc, will retry flush in %v", flushInterval))
+				logger.Error(fmt.Sprintf("Skipping flush... error reaching out to rpc, will retry flush in %v", flushInterval))
 				continue
 			}
 			if res.SyncInfo.CatchingUp {
-				logger.Error(fmt.Sprintf("skipping flush... rpc still catching, will retry flush in %v", flushInterval))
+				logger.Error(fmt.Sprintf("Skipping flush... rpc still catching, will retry flush in %v", flushInterval))
 				continue
 			}
 
@@ -154,14 +154,14 @@ func (n *Noble) flushMechanism(
 
 			flushStart := lastFlushedBlock - n.lookbackPeriod
 
-			logger.Info(fmt.Sprintf("flush started from: %d to: %d", flushStart, latestBlock))
+			logger.Info(fmt.Sprintf("Flush started from: %d to: %d", flushStart, latestBlock))
 
 			for i := flushStart; i <= latestBlock; i++ {
 				blockQueue <- i
 			}
 			n.lastFlushedBlock = latestBlock
 
-			logger.Info("flush complete")
+			logger.Info("Flush complete")
 
 		case <-ctx.Done():
 			timer.Stop()
@@ -170,24 +170,24 @@ func (n *Noble) flushMechanism(
 	}
 }
 
-func (n *Noble) TrackLatestBlockHeight(ctx context.Context, logger log.Logger, loop time.Duration) {
+func (n *Noble) TrackLatestBlockHeight(ctx context.Context, logger log.Logger) {
 	logger.With("routine", "TrackLatestBlockHeight", "chain", n.Name(), "domain", n.Domain())
 
 	// first time
 	res, err := n.cc.RPCClient.Status(ctx)
 	if err != nil {
-		logger.Error("unable to query Nobles latest height", "err", err)
+		logger.Error("Unable to query Nobles latest height", "err", err)
 	}
 	n.SetLatestBlock(uint64(res.SyncInfo.LatestBlockHeight))
 
 	// then start loop on a timer
 	for {
-		timer := time.NewTimer(loop)
+		timer := time.NewTimer(6 * time.Second)
 		select {
 		case <-timer.C:
 			res, err := n.cc.RPCClient.Status(ctx)
 			if err != nil {
-				logger.Error("unable to query Nobles latest height", "err", err)
+				logger.Error("Unable to query Nobles latest height", "err", err)
 				continue
 			}
 			n.SetLatestBlock(uint64(res.SyncInfo.LatestBlockHeight))

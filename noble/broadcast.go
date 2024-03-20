@@ -99,11 +99,6 @@ func (n *Noble) attemptBroadcast(
 
 		if used {
 			msg.Status = types.Complete
-			// bm, _ := new(cctptypes.BurnMessage).Parse(msg.MsgBody)
-			// x, err := hex.DecodeString(string(bm.MintRecipient))
-			// fmt.Println("err", err)
-			// y := common.HexToAddress(string(x))
-			// fmt.Println("ERRR", err)
 			logger.Info(fmt.Sprintf("Noble cctp minter nonce %d already used.", msg.Nonce), "src-tx", msg.SourceTxHash)
 			continue
 		}

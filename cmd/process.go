@@ -78,8 +78,7 @@ func Start(a *AppState) *cobra.Command {
 					os.Exit(1)
 				}
 
-				updateLatestHeight := 1 * time.Second
-				go c.TrackLatestBlockHeight(cmd.Context(), logger, updateLatestHeight)
+				go c.TrackLatestBlockHeight(cmd.Context(), logger)
 
 				// wait until height is available
 				for c.LatestBlock() == 0 {

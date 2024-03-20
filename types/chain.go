@@ -65,7 +65,6 @@ type Chain interface {
 	TrackLatestBlockHeight(
 		ctx context.Context,
 		logger log.Logger,
-		loop time.Duration,
 	)
 
 	WalletBalanceMetric(

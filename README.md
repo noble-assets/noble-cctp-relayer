@@ -17,7 +17,16 @@ Running the relayer
 noble-cctp-relayer start --config ./config/sample-app-config.yaml
 ```
 Sample configs can be found in [config](config).
-### Promethius Metrics
+
+### Flush Interval
+
+Using the `--flush-interval` flag will run a flush on all paths every `duration`; ex `--flush-interval 5m`
+
+The relayer will keep track of the latest flushed block. The first time the flush is run, the flush will start at the chains latest height - lookback period and flush up until height of the chain when the flush started. It will then store the height the flush ended on.
+
+After that, it will flush from the last stored height - lookback period up until the latest height of the chain.
+
+### Prometheus Metrics
 
 By default, metrics are exported at on port :2112/metrics (`http://localhost:2112/metrics`). You can customize the port using the `--metrics-port` flag. 
 

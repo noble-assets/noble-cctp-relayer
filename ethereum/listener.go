@@ -30,9 +30,6 @@ var (
 // errSignal allows broadcasting an error value to multiple receivers.
 type errSignal struct {
 	Ready chan struct{}
-
-	Err  error
-	Next *errSignal
 }
 
 func (e *Ethereum) StartListener(
@@ -48,12 +45,12 @@ func (e *Ethereum) StartListener(
 
 	messageTransmitter, err := content.ReadFile("abi/MessageTransmitter.json")
 	if err != nil {
-		logger.Error("unable to read MessageTransmitter abi", "err", err)
+		logger.Error("Unable to read MessageTransmitter abi", "err", err)
 		os.Exit(1)
 	}
 	messageTransmitterABI, err = abi.JSON(bytes.NewReader(messageTransmitter))
 	if err != nil {
-		logger.Error("unable to parse MessageTransmitter abi", "err", err)
+		logger.Error("Unable to parse MessageTransmitter abi", "err", err)
 		os.Exit(1)
 	}
 
@@ -82,17 +79,17 @@ func (e *Ethereum) startListenerRoutines(
 	go e.consumeStream(ctx, logger, stream, sig)
 	consumeHistory(logger, history)
 
-	// get history from start-lookback up until latest block
+	// get history from (start block - lookback) up until latest block
 	latestBlock := e.LatestBlock()
 	start := latestBlock
 	if e.startBlock != 0 {
 		start = e.startBlock
 	}
 	startLookback := start - e.lookbackPeriod
-	logger.Info(fmt.Sprintf("getting history from %d: starting at:%d and looking back %d blocks", startLookback, start, e.lookbackPeriod))
+	logger.Info(fmt.Sprintf("Getting history from %d: starting at: %d looking back %d blocks", startLookback, start, e.lookbackPeriod))
 	e.getAndConsumeHistory(ctx, logger, startLookback, latestBlock)
 
-	logger.Info("finished getting history")
+	logger.Info("Finished getting history")
 
 	if flushInterval > 0 {
 		go e.flushMechanism(ctx, logger, sig)
@@ -105,7 +102,7 @@ func (e *Ethereum) startListenerRoutines(
 	case <-ctx.Done():
 		return
 	case err := <-sub.Err():
-		logger.Error("websocket disconnected. Reconnecting...", "err", err)
+		logger.Error("Websocket disconnected. Reconnecting...", "err", err)
 		close(sig.Ready)
 
 		// restart
@@ -143,7 +140,7 @@ func (e *Ethereum) startMainStream(
 		// https://github.com/ethereum/go-ethereum/issues/15063
 		stream, sub, history, err = etherReader.QueryWithHistory(ctx, &query)
 		if err != nil {
-			logger.Error("unable to subscribe to logs", "attempt", queryAttempt, "err", err)
+			logger.Error("Unable to subscribe to logs", "attempt", queryAttempt, "err", err)
 			queryAttempt++
 			time.Sleep(1 * time.Second)
 			continue
@@ -178,7 +175,7 @@ func (e *Ethereum) getAndConsumeHistory(
 			toBlock = end
 		}
 
-		logger.Debug(fmt.Sprintf("looking back in chunks of %d: chunk: %d/%d start-block: %d end-block: %d", chunkSize, chunk, totalChunksNeeded, fromBlock, toBlock))
+		logger.Debug(fmt.Sprintf("Looking back in chunks of %d: chunk: %d/%d start-block: %d end-block: %d", chunkSize, chunk, totalChunksNeeded, fromBlock, toBlock))
 
 		etherReader := etherstream.Reader{Backend: e.wsClient}
 
@@ -192,7 +189,8 @@ func (e *Ethereum) getAndConsumeHistory(
 		for {
 			_, toUnSub, history, err = etherReader.QueryWithHistory(ctx, &query)
 			if err != nil {
-				logger.Error("unable to query history from %d to %d. attempt: %d", start, end, queryAttempt)
+				// TODO: add metrics for this log
+				logger.Error(fmt.Sprintf("Unable to query history from %d to %d. attempt: %d", start, end, queryAttempt), "err", err)
 				queryAttempt++
 				time.Sleep(1 * time.Second)
 				continue
@@ -233,14 +231,14 @@ func (e *Ethereum) consumeStream(
 	stream <-chan ethtypes.Log,
 	sig *errSignal,
 ) {
-	logger.Debug("consuming incoming messages")
+	logger.Info("Starting consumption of incoming stream")
 	var txState *types.TxState
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-sig.Ready:
-			logger.Debug("websocket disconnected...stopped consuming stream")
+			logger.Debug("Websocket disconnected... Stopped consuming stream. Will restart after websocket is re-established")
 			return
 		case streamLog := <-stream:
 			parsedMsg, err := types.EvmLogToMessageState(messageTransmitterABI, messageSent, &streamLog)
@@ -272,7 +270,7 @@ func (e *Ethereum) flushMechanism(
 	logger log.Logger,
 	sig *errSignal,
 ) {
-	logger.Debug(fmt.Sprintf("flush mechanism started. Will flush every %v", flushInterval))
+	logger.Info(fmt.Sprintf("Starting flush mechanism. Will flush every %v", flushInterval))
 
 	for {
 		timer := time.NewTimer(flushInterval)
@@ -286,18 +284,18 @@ func (e *Ethereum) flushMechanism(
 
 			start := e.lastFlushedBlock - e.lookbackPeriod
 
-			logger.Info(fmt.Sprintf("flush started from %d to %d", start, latestBlock))
+			logger.Info(fmt.Sprintf("Flush started from %d to %d", start, latestBlock))
 
 			e.getAndConsumeHistory(ctx, logger, start, latestBlock)
 
 			e.lastFlushedBlock = latestBlock
 
-			logger.Info("flush complete")
+			logger.Info("Flush complete")
 
 		// if main websocket stream is disconnected, stop flush. It will be restarted once websocket is reconnected
 		case <-sig.Ready:
 			timer.Stop()
-			logger.Debug("websocket disconnected. Flush stopped. Will restart after websocket is re-established")
+			logger.Debug("Websocket disconnected... Flush stopped. Will restart after websocket is re-established")
 			return
 		case <-ctx.Done():
 			timer.Stop()
@@ -306,33 +304,31 @@ func (e *Ethereum) flushMechanism(
 	}
 }
 
-func (e *Ethereum) TrackLatestBlockHeight(ctx context.Context, logger log.Logger, loop time.Duration) {
+func (e *Ethereum) TrackLatestBlockHeight(ctx context.Context, logger log.Logger) {
 	logger.With("routine", "TrackLatestBlockHeight", "chain", e.name, "domain", e.domain)
 
-	// first time
-	header, err := e.rpcClient.HeaderByNumber(ctx, nil)
+	headers := make(chan *ethtypes.Header)
+
+	sub, err := e.wsClient.SubscribeNewHead(ctx, headers)
 	if err != nil {
-		logger.Error(fmt.Sprintf("error getting latest block height. Will retry in %.2f second:", loop.Seconds()), "err", err)
-	}
-	if err == nil {
-		e.SetLatestBlock(header.Number.Uint64())
+		logger.Error("Failed to connect to websocket to track height. Will retry...", "err", err)
+		time.Sleep(1 * time.Second)
+		e.TrackLatestBlockHeight(ctx, logger)
+		return
 	}
 
-	// then start loop on a timer
+	logger.Info("Height tracking websocket subscritpiton connected")
+
 	for {
-		timer := time.NewTimer(loop)
 		select {
-		case <-timer.C:
-			header, err := e.rpcClient.HeaderByNumber(ctx, nil)
-			if err != nil {
-				logger.Debug(fmt.Sprintf("error getting latest block height. Will retry in %.2f second:", loop.Seconds()), "err", err)
-				continue
-			}
-			e.SetLatestBlock(header.Number.Uint64())
-
 		case <-ctx.Done():
-			timer.Stop()
 			return
+		case err := <-sub.Err():
+			logger.Error("Height tracker websocket subscritpiton error. Attempting to reconnect...", "err", err)
+			e.TrackLatestBlockHeight(ctx, logger)
+			return
+		case header := <-headers:
+			e.SetLatestBlock(header.Number.Uint64())
 		}
 	}
 }
@@ -356,7 +352,7 @@ func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m
 			timer.Stop()
 			balance, err := e.rpcClient.BalanceAt(ctx, account, nil)
 			if err != nil {
-				logger.Error(fmt.Sprintf("error querying balance. Will try again in %.2f sec", queryRate.Seconds()), "error", err)
+				logger.Error(fmt.Sprintf("Error querying balance. Will try again in %.2f sec", queryRate.Seconds()), "error", err)
 				continue
 			}
 
@@ -367,7 +363,7 @@ func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m
 		case <-timer.C:
 			balance, err := e.rpcClient.BalanceAt(ctx, account, nil)
 			if err != nil {
-				logger.Error(fmt.Sprintf("error querying balance. Will try again in %.2f sec", queryRate.Seconds()), "error", err)
+				logger.Error(fmt.Sprintf("Error querying balance. Will try again in %.2f sec", queryRate.Seconds()), "error", err)
 				continue
 			}
 
