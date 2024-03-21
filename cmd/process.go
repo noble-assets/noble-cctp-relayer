@@ -54,6 +54,14 @@ func Start(a *AppState) *cobra.Command {
 				os.Exit(1)
 			}
 
+			flushInterval, err := cmd.Flags().GetDuration(flagFlushInterval)
+			if err != nil {
+				logger.Error("invalid flush interval", "error", err)
+			}
+			if flushInterval == 0 {
+				logger.Info("flush interval not set. Use the --flush-interval flag to set a reoccurring flush")
+			}
+
 			metrics := relayer.InitPromMetrics(port)
 
 			for name, cfg := range cfg.Chains {
@@ -63,12 +71,35 @@ func Start(a *AppState) *cobra.Command {
 					os.Exit(1)
 				}
 
+				logger = logger.With("name", c.Name(), "domain", c.Domain())
+
+				if err := c.InitializeClients(cmd.Context(), logger); err != nil {
+					logger.Error("error initializing client", "err", err)
+					os.Exit(1)
+				}
+
+				go c.TrackLatestBlockHeight(cmd.Context(), logger)
+
+				// wait until height is available
+				maxRetries := 45
+				for i := 0; i < maxRetries; i++ {
+					if c.LatestBlock() == 0 {
+						time.Sleep(1 * time.Second)
+					} else {
+						break
+					}
+					if i == maxRetries-1 {
+						logger.Error("Unable to get height")
+						os.Exit(1)
+					}
+				}
+
 				if err := c.InitializeBroadcaster(cmd.Context(), logger, sequenceMap); err != nil {
 					logger.Error("Error initializing broadcaster", "error", err)
 					os.Exit(1)
 				}
 
-				go c.StartListener(cmd.Context(), logger, processingQueue)
+				go c.StartListener(cmd.Context(), logger, processingQueue, flushInterval)
 				go c.WalletBalanceMetric(cmd.Context(), a.Logger, metrics)
 
 				if _, ok := registeredDomains[c.Domain()]; ok {
@@ -83,6 +114,13 @@ func Start(a *AppState) *cobra.Command {
 			for i := 0; i < int(cfg.ProcessorWorkerCount); i++ {
 				go StartProcessor(cmd.Context(), a, registeredDomains, processingQueue, sequenceMap)
 			}
+
+			defer func() {
+				for _, c := range registeredDomains {
+					fmt.Printf("\n%s: latest-block: %d last-flushed-block: %d", c.Name(), c.LatestBlock(), c.LastFlushedBlock())
+					c.CloseClients()
+				}
+			}()
 
 			<-cmd.Context().Done()
 		},

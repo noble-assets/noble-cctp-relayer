@@ -60,6 +60,11 @@ func TestNobleBurnToEthMint(t *testing.T) {
 	ethChain, err := ethCfg.Chain("eth")
 	require.NoError(t, err)
 
+	err = nobleChain.InitializeClients(ctx, a.Logger)
+	require.NoError(t, err)
+	err = ethChain.InitializeClients(ctx, a.Logger)
+	require.NoError(t, err)
+
 	fmt.Println("Starting relayer...")
 
 	registeredDomains := make(map[types.Domain]types.Chain)
@@ -72,7 +77,7 @@ func TestNobleBurnToEthMint(t *testing.T) {
 
 	processingQueue := make(chan *types.TxState, 10)
 
-	go nobleChain.StartListener(ctx, a.Logger, processingQueue)
+	go nobleChain.StartListener(ctx, a.Logger, processingQueue, 0)
 	go cmd.StartProcessor(ctx, a, registeredDomains, processingQueue, sequenceMap)
 
 	ethDestinationAddress, _, err := generateEthWallet()

@@ -26,7 +26,7 @@ func TestStartListener(t *testing.T) {
 
 	processingQueue := make(chan *types.TxState, 10000)
 
-	go n.StartListener(ctx, a.Logger, processingQueue)
+	go n.StartListener(ctx, a.Logger, processingQueue, 0)
 
 	time.Sleep(20 * time.Second)
 

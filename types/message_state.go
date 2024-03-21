@@ -79,7 +79,7 @@ func EvmLogToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log)
 		return messageState, nil
 	}
 
-	return nil, fmt.Errorf("unable to parse tx into message, tx hash %s", log.TxHash.Hex())
+	return nil, fmt.Errorf("unable to parse tx into message, err: %w", err)
 }
 
 // Equal checks if two MessageState instances are equal

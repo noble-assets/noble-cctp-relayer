@@ -14,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum/contracts"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
@@ -40,14 +39,9 @@ func (e *Ethereum) Broadcast(
 	sequenceMap *types.SequenceMap,
 ) error {
 
-	// set up eth client
-	client, err := ethclient.Dial(e.rpcURL)
-	if err != nil {
-		return fmt.Errorf("unable to dial ethereum client: %w", err)
-	}
-	defer client.Close()
+	logger = logger.With("chain", e.name, "chain_id", e.chainID, "domain", e.domain)
 
-	backend := NewContractBackendWrapper(client)
+	backend := NewContractBackendWrapper(e.rpcClient)
 
 	auth, err := bind.NewKeyedTransactorWithChainID(e.privateKey, big.NewInt(e.chainID))
 	if err != nil {
@@ -149,7 +143,7 @@ func (e *Ethereum) attemptBroadcast(
 		if response.Uint64() == uint64(1) {
 			// nonce has already been used, mark as complete
 			logger.Debug(fmt.Sprintf("This source domain/nonce has already been used: %d %d",
-				msg.SourceDomain, msg.Nonce))
+				msg.SourceDomain, msg.Nonce), "src-tx", msg.SourceTxHash, "reviever")
 			msg.Status = types.Complete
 			return nil
 		}

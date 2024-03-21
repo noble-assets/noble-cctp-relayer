@@ -60,14 +60,14 @@ func (n *Noble) Broadcast(
 	txBuilder := sdkContext.TxConfig.NewTxBuilder()
 
 	// sign and broadcast txn
-	for attempt := 0; attempt <= n.maxRetries; attempt++ {
+	for attempt := 1; attempt <= n.maxRetries; attempt++ {
 		err := n.attemptBroadcast(ctx, logger, msgs, sequenceMap, sdkContext, txBuilder)
 		if err == nil {
 			return nil
 		}
 
 		// Log retry information
-		logger.Error("Broadcasting to noble failed. Retrying...", "error", err, "interval_seconds", n.retryIntervalSeconds)
+		logger.Error(fmt.Sprintf("Broadcasting to noble failed. Attempt %d/%d Retrying...", attempt, n.maxRetries), "error", err, "interval_seconds", n.retryIntervalSeconds, "src-tx", msgs[0].SourceTxHash)
 		time.Sleep(time.Duration(n.retryIntervalSeconds) * time.Second)
 	}
 
@@ -99,7 +99,7 @@ func (n *Noble) attemptBroadcast(
 
 		if used {
 			msg.Status = types.Complete
-			logger.Info(fmt.Sprintf("Noble cctp minter nonce %d already used", msg.Nonce))
+			logger.Info(fmt.Sprintf("Noble cctp minter nonce %d already used.", msg.Nonce), "src-tx", msg.SourceTxHash)
 			continue
 		}
 

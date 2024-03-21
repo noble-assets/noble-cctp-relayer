@@ -10,20 +10,20 @@ import (
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
+var flushInterval time.Duration
+
 func (n *Noble) StartListener(
 	ctx context.Context,
 	logger log.Logger,
 	processingQueue chan *types.TxState,
+	flushInterval_ time.Duration,
 ) {
 	logger = logger.With("chain", n.Name(), "chain_id", n.chainID, "domain", n.Domain())
 
+	flushInterval = flushInterval_
+
 	if n.startBlock == 0 {
-		// get the latest block
-		chainTip, err := n.chainTip(ctx)
-		if err != nil {
-			panic(fmt.Errorf("unable to get chain tip for noble: %w", err))
-		}
-		n.startBlock = chainTip
+		n.startBlock = n.LatestBlock()
 	}
 
 	logger.Info(fmt.Sprintf("Starting Noble listener at block %d looking back %d blocks",
@@ -40,7 +40,7 @@ func (n *Noble) StartListener(
 	// enqueue block heights
 	currentBlock := n.startBlock
 	lookback := n.lookbackPeriod
-	chainTip, err := n.chainTip(ctx)
+	chainTip := n.LatestBlock()
 
 	if n.blockQueueChannelSize == 0 {
 		n.blockQueueChannelSize = defaultBlockQueueChannelSize
@@ -63,24 +63,20 @@ func (n *Noble) StartListener(
 			select {
 			case <-first:
 				timer.Stop()
-				chainTip, err = n.chainTip(ctx)
-				if err == nil {
-					if chainTip >= currentBlock {
-						for i := currentBlock; i <= chainTip; i++ {
-							blockQueue <- i
-						}
-						currentBlock = chainTip + 1
+				chainTip = n.LatestBlock()
+				if chainTip >= currentBlock {
+					for i := currentBlock; i <= chainTip; i++ {
+						blockQueue <- i
 					}
+					currentBlock = chainTip + 1
 				}
 			case <-timer.C:
-				chainTip, err = n.chainTip(ctx)
-				if err == nil {
-					if chainTip >= currentBlock {
-						for i := currentBlock; i <= chainTip; i++ {
-							blockQueue <- i
-						}
-						currentBlock = chainTip + 1
+				chainTip = n.LatestBlock()
+				if chainTip >= currentBlock {
+					for i := currentBlock; i <= chainTip; i++ {
+						blockQueue <- i
 					}
+					currentBlock = chainTip + 1
 				}
 			case <-ctx.Done():
 				timer.Stop()
@@ -100,7 +96,7 @@ func (n *Noble) StartListener(
 					block := <-blockQueue
 					res, err := n.cc.RPCClient.TxSearch(ctx, fmt.Sprintf("tx.height=%d", block), false, nil, nil, "")
 					if err != nil || res == nil {
-						logger.Debug(fmt.Sprintf("unable to query Noble block %d", block), "error:", err)
+						logger.Debug(fmt.Sprintf("Unable to query Noble block %d. Will retry.", block), "error:", err)
 						blockQueue <- block
 						continue
 					}
@@ -108,7 +104,7 @@ func (n *Noble) StartListener(
 					for _, tx := range res.Txs {
 						parsedMsgs, err := txToMessageState(tx)
 						if err != nil {
-							logger.Error("unable to parse Noble log to message state", "err", err.Error())
+							logger.Error("Unable to parse Noble log to message state", "err", err.Error())
 							continue
 						}
 						for _, parsedMsg := range parsedMsgs {
@@ -121,15 +117,87 @@ func (n *Noble) StartListener(
 		}()
 	}
 
+	if flushInterval > 0 {
+		go n.flushMechanism(ctx, logger, blockQueue)
+	}
+
 	<-ctx.Done()
 }
 
-func (n *Noble) chainTip(ctx context.Context) (uint64, error) {
+func (n *Noble) flushMechanism(
+	ctx context.Context,
+	logger log.Logger,
+	blockQueue chan uint64,
+) {
+
+	logger.Debug(fmt.Sprintf("Flush mechanism started. Will flush every %v", flushInterval))
+
+	for {
+		timer := time.NewTimer(flushInterval)
+		select {
+		case <-timer.C:
+			latestBlock := n.LatestBlock()
+
+			// test to see that the rpc is available before attempting flush
+			res, err := n.cc.RPCClient.Status(ctx)
+			if err != nil {
+				logger.Error(fmt.Sprintf("Skipping flush... error reaching out to rpc, will retry flush in %v", flushInterval))
+				continue
+			}
+			if res.SyncInfo.CatchingUp {
+				logger.Error(fmt.Sprintf("Skipping flush... rpc still catching, will retry flush in %v", flushInterval))
+				continue
+			}
+
+			if n.lastFlushedBlock == 0 {
+				n.lastFlushedBlock = latestBlock
+			}
+			lastFlushedBlock := n.lastFlushedBlock
+
+			flushStart := lastFlushedBlock - n.lookbackPeriod
+
+			logger.Info(fmt.Sprintf("Flush started from: %d to: %d", flushStart, latestBlock))
+
+			for i := flushStart; i <= latestBlock; i++ {
+				blockQueue <- i
+			}
+			n.lastFlushedBlock = latestBlock
+
+			logger.Info("Flush complete")
+
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		}
+	}
+}
+
+func (n *Noble) TrackLatestBlockHeight(ctx context.Context, logger log.Logger) {
+	logger.With("routine", "TrackLatestBlockHeight", "chain", n.Name(), "domain", n.Domain())
+
+	// first time
 	res, err := n.cc.RPCClient.Status(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("unable to query status for noble: %w", err)
+		logger.Error("Unable to query Nobles latest height", "err", err)
 	}
-	return uint64(res.SyncInfo.LatestBlockHeight), nil
+	n.SetLatestBlock(uint64(res.SyncInfo.LatestBlockHeight))
+
+	// then start loop on a timer
+	for {
+		timer := time.NewTimer(6 * time.Second)
+		select {
+		case <-timer.C:
+			res, err := n.cc.RPCClient.Status(ctx)
+			if err != nil {
+				logger.Error("Unable to query Nobles latest height", "err", err)
+				continue
+			}
+			n.SetLatestBlock(uint64(res.SyncInfo.LatestBlockHeight))
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		}
+	}
 }
 
 func (n *Noble) WalletBalanceMetric(ctx context.Context, logger log.Logger, m *relayer.PromMetrics) {

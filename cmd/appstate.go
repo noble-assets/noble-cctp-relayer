@@ -63,10 +63,10 @@ func (a *AppState) loadConfigFile() {
 	}
 	config, err := ParseConfig(a.ConfigPath)
 	if err != nil {
-		a.Logger.Error("unable to parse config file", "location", a.ConfigPath, "err", err)
+		a.Logger.Error("Unable to parse config file", "location", a.ConfigPath, "err", err)
 		os.Exit(1)
 	}
-	a.Logger.Info("successfully parsed config file", "location", a.ConfigPath)
+	a.Logger.Info("Successfully parsed config file", "location", a.ConfigPath)
 	a.Config = config
 
 }
