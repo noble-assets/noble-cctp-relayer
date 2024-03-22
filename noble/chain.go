@@ -125,19 +125,19 @@ func (n *Noble) LastFlushedBlock() uint64 {
 	return n.lastFlushedBlock
 }
 
-func (n *Noble) IsDestinationCaller(destinationCaller []byte) bool {
+func (n *Noble) IsDestinationCaller(destinationCaller []byte) (isCaller bool, readableAddress string) {
 	zeroByteArr := make([]byte, 32)
 
 	if bytes.Equal(destinationCaller, zeroByteArr) {
-		return true
+		return true, ""
 	}
 
 	bech32DestinationCaller, err := decodeDestinationCaller(destinationCaller)
 	if err != nil {
-		return false
+		return false, bech32DestinationCaller
 	}
 
-	return bech32DestinationCaller == n.minterAddress
+	return bech32DestinationCaller == n.minterAddress, bech32DestinationCaller
 }
 
 // DecodeDestinationCaller transforms an encoded Noble cctp address into a noble bech32 address

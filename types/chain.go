@@ -27,8 +27,9 @@ type Chain interface {
 	LastFlushedBlock() uint64
 
 	// IsDestinationCaller returns true if the specified destination caller is the minter for the specified domain OR
-	// if destination caller is a zero byte array(left empty in deposit for burn message)
-	IsDestinationCaller(destinationCaller []byte) bool
+	// if destination caller is a zero byte array(left empty in deposit for burn message). It also returns a human readable
+	// version of the destination caller address provided in the message.
+	IsDestinationCaller(destinationCaller []byte) (isCaller bool, readableAddress string)
 
 	// InitializeClients initializes the rpc and or websocket clients.
 	InitializeClients(

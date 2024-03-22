@@ -112,20 +112,24 @@ func (e *Ethereum) LastFlushedBlock() uint64 {
 	return e.lastFlushedBlock
 }
 
-func (e *Ethereum) IsDestinationCaller(destinationCaller []byte) bool {
+func (e *Ethereum) IsDestinationCaller(destinationCaller []byte) (isCaller bool, readableAddress string) {
 	zeroByteArr := make([]byte, 32)
 
 	decodedMinter, err := hex.DecodeString(strings.ReplaceAll(e.minterAddress, "0x", ""))
 	if err != nil && bytes.Equal(destinationCaller, zeroByteArr) {
-		return true
+		return true, ""
 	}
 
 	decodedMinterPadded := make([]byte, 32)
 	copy(decodedMinterPadded[12:], decodedMinter)
 
-	return bytes.Equal(destinationCaller, zeroByteArr) || bytes.Equal(destinationCaller, decodedMinterPadded)
-}
+	encodedCaller := "0x" + hex.EncodeToString(destinationCaller)[24:]
 
+	if bytes.Equal(destinationCaller, zeroByteArr) || bytes.Equal(destinationCaller, decodedMinterPadded) {
+		return true, encodedCaller
+	}
+	return false, encodedCaller
+}
 func (e *Ethereum) InitializeClients(ctx context.Context, logger log.Logger) error {
 	var err error
 
