@@ -336,7 +336,7 @@ func (e *Ethereum) TrackLatestBlockHeight(ctx context.Context, logger log.Logger
 
 func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m *relayer.PromMetrics) {
 	logger = logger.With("metric", "wallet blannce", "chain", e.name, "domain", e.domain)
-	queryRate := 30 * time.Second
+	queryRate := 5 * time.Minute
 
 	account := common.HexToAddress(e.minterAddress)
 
