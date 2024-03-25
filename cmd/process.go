@@ -257,7 +257,7 @@ func filterInvalidDestinationCallers(registeredDomains map[types.Domain]types.Ch
 		logger.Error("No chain registered for domain", "domain", msg.DestDomain)
 		return true
 	}
-	validCaller := chain.IsDestinationCaller(msg.DestinationCaller)
+	validCaller, address := chain.IsDestinationCaller(msg.DestinationCaller)
 
 	if validCaller {
 		// we do not want to filter this message if valid caller
@@ -265,7 +265,7 @@ func filterInvalidDestinationCallers(registeredDomains map[types.Domain]types.Ch
 	}
 
 	logger.Info(fmt.Sprintf("Filtered tx %s from %d to %d due to destination caller: %s)",
-		msg.SourceTxHash, msg.SourceDomain, msg.DestDomain, msg.DestinationCaller))
+		msg.SourceTxHash, msg.SourceDomain, msg.DestDomain, address))
 	return true
 }
 
