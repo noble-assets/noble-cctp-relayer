@@ -305,8 +305,10 @@ func (e *Ethereum) flushMechanism(
 	}
 }
 
-func (e *Ethereum) TrackLatestBlockHeight(ctx context.Context, logger log.Logger) {
+func (e *Ethereum) TrackLatestBlockHeight(ctx context.Context, logger log.Logger, m *relayer.PromMetrics) {
 	logger.With("routine", "TrackLatestBlockHeight", "chain", e.name, "domain", e.domain)
+
+	d := fmt.Sprint(e.domain)
 
 	headers := make(chan *ethtypes.Header)
 
@@ -314,28 +316,31 @@ func (e *Ethereum) TrackLatestBlockHeight(ctx context.Context, logger log.Logger
 	if err != nil {
 		logger.Error("Failed to connect to websocket to track height. Will retry...", "err", err)
 		time.Sleep(1 * time.Second)
-		e.TrackLatestBlockHeight(ctx, logger)
+		e.TrackLatestBlockHeight(ctx, logger, m)
 		return
 	}
 
-	logger.Info("Height tracking websocket subscritpiton connected")
+	logger.Info("Height tracking websocket subscription connected")
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case err := <-sub.Err():
-			logger.Error("Height tracker websocket subscritpiton error. Attempting to reconnect...", "err", err)
-			e.TrackLatestBlockHeight(ctx, logger)
+			logger.Error("Height tracker websocket subscription error. Attempting to reconnect...", "err", err)
+			e.TrackLatestBlockHeight(ctx, logger, m)
 			return
 		case header := <-headers:
 			e.SetLatestBlock(header.Number.Uint64())
+			if m != nil {
+				m.SetLatestHeight(e.name, d, header.Number.Int64())
+			}
 		}
 	}
 }
 
 func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m *relayer.PromMetrics) {
-	logger = logger.With("metric", "wallet blannce", "chain", e.name, "domain", e.domain)
+	logger = logger.With("metric", "wallet balance", "chain", e.name, "domain", e.domain)
 	queryRate := 5 * time.Minute
 
 	account := common.HexToAddress(e.minterAddress)
@@ -360,7 +365,9 @@ func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m
 			balanceBigFloat := new(big.Float).SetInt(balance)
 			balanceScaled, _ := new(big.Float).Quo(balanceBigFloat, scaleFactor).Float64()
 
-			m.SetWalletBalance(e.name, e.minterAddress, e.MetricsDenom, balanceScaled)
+			if m != nil {
+				m.SetWalletBalance(e.name, e.minterAddress, e.MetricsDenom, balanceScaled)
+			}
 		case <-timer.C:
 			balance, err := e.rpcClient.BalanceAt(ctx, account, nil)
 			if err != nil {
@@ -371,7 +378,9 @@ func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m
 			balanceBigFloat := new(big.Float).SetInt(balance)
 			balanceScaled, _ := new(big.Float).Quo(balanceBigFloat, scaleFactor).Float64()
 
-			m.SetWalletBalance(e.name, e.minterAddress, e.MetricsDenom, balanceScaled)
+			if m != nil {
+				m.SetWalletBalance(e.name, e.minterAddress, e.MetricsDenom, balanceScaled)
+			}
 
 		case <-ctx.Done():
 			timer.Stop()
