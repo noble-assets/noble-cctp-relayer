@@ -103,6 +103,11 @@ func (n *Noble) attemptBroadcast(
 			continue
 		}
 
+		// check if another worker already broadcasted tx due to flush
+		if msg.Status == types.Complete {
+			continue
+		}
+
 		attestationBytes, err := hex.DecodeString(msg.Attestation[2:])
 		if err != nil {
 			return fmt.Errorf("unable to decode message attestation")

@@ -56,16 +56,17 @@ func (e *Ethereum) Broadcast(
 	var broadcastErrors error
 MsgLoop:
 	for _, msg := range msgs {
-		if msg.Status == types.Complete {
-			continue MsgLoop
-		}
-
 		attestationBytes, err := hex.DecodeString(msg.Attestation[2:])
 		if err != nil {
 			return errors.New("unable to decode message attestation")
 		}
 
 		for attempt := 0; attempt <= e.maxRetries; attempt++ {
+			// check if another worker already broadcasted tx due to flush
+			if msg.Status == types.Complete {
+				continue MsgLoop
+			}
+
 			if err := e.attemptBroadcast(
 				ctx,
 				logger,
@@ -139,7 +140,6 @@ func (e *Ethereum) attemptBroadcast(
 	if nonceErr != nil {
 		logger.Debug("Error querying whether nonce was used.   Continuing...", "error:", nonceErr)
 	} else {
-		fmt.Printf("received used nonce response: %d\n", response)
 		if response.Uint64() == uint64(1) {
 			// nonce has already been used, mark as complete
 			logger.Debug(fmt.Sprintf("This source domain/nonce has already been used: %d %d",
