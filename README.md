@@ -36,6 +36,13 @@ By default, metrics are exported at on port :2112/metrics (`http://localhost:211
 | cctp_relayer_chain_latest_height    | Current height of the chain.                                                                                                                       | Gauge    |
 | cctp_relayer_broadcast_errors_total | The total number of failed broadcasts. Note: this is AFTER is retires `broadcast-retries` (config setting) number of times.                        | Counter  |
 
+### Noble Key
+
+The noble private key you input into the config must be hex encoded. The easiest way to get this is via a chain binary:
+
+`nobled keys export <KEY_NAME> --unarmored-hex --unsafe`
+
+
 ### API
 Simple API to query message state cache
 ```shell
@@ -67,4 +74,5 @@ abigen --abi ethereum/abi/MessageTransmitter.json --pkg contracts- --type Messag
 
 ### Useful links
 [USDC faucet](https://usdcfaucet.com/)
+
 [Circle Docs/Contract Addresses](https://developers.circle.com/stablecoins/docs/evm-smart-contracts)
