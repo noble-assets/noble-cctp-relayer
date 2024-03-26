@@ -34,7 +34,7 @@ By default, metrics are exported at on port :2112/metrics (`http://localhost:211
 |-------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------|----------|
 | cctp_relayer_wallet_balance         | Current balance of a relayer wallet in Wei.<br><br>Noble balances are not currently exported b/c `MsgReceiveMessage` is free to submit on Noble.   | Gauge    |
 | cctp_relayer_chain_latest_height    | Current height of the chain.                                                                                                                       | Gauge    |
-| cctp_relayer_broadcast_errors_total | The total number of failed broadcasts. Note: this is AFTER is retires `broadcast-retries` (config setting) number of times.                        | Counter  |
+| cctp_relayer_broadcast_errors_total | The total number of failed broadcasts. Note: this is AFTER it retries `broadcast-retries` (config setting) number of times.                        | Counter  |
 
 ### Noble Key
 
