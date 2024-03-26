@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum/contracts"
+	"github.com/strangelove-ventures/noble-cctp-relayer/relayer"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
@@ -37,6 +38,7 @@ func (e *Ethereum) Broadcast(
 	logger log.Logger,
 	msgs []*types.MessageState,
 	sequenceMap *types.SequenceMap,
+	m *relayer.PromMetrics,
 ) error {
 
 	logger = logger.With("chain", e.name, "chain_id", e.chainID, "domain", e.domain)
@@ -85,8 +87,11 @@ MsgLoop:
 				time.Sleep(time.Duration(e.retryIntervalSeconds) * time.Second)
 			}
 		}
+
 		// retried max times with failure
-		msg.Status = types.Failed
+		if m != nil {
+			m.IncBroadcastErrors(e.name, fmt.Sprint(e.domain))
+		}
 		broadcastErrors = errors.Join(broadcastErrors, errors.New("reached max number of broadcast attempts"))
 	}
 	return broadcastErrors

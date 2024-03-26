@@ -30,10 +30,11 @@ After that, it will flush from the last stored height - lookback period up until
 
 By default, metrics are exported at on port :2112/metrics (`http://localhost:2112/metrics`). You can customize the port using the `--metrics-port` flag. 
 
-| **Exported Metric**         | **Description**                                                                                                                                    | **Type** |
-|-----------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------|----------|
-| cctp_relayer_wallet_balance | Current balance of a relayer wallet in Wei.<br><br>Noble balances are not currently exported b/c `MsgReceiveMessage` is free to submit on Noble.   | Gauge    |
-
+| **Exported Metric**                 | **Description**                                                                                                                                    | **Type** |
+|-------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------|----------|
+| cctp_relayer_wallet_balance         | Current balance of a relayer wallet in Wei.<br><br>Noble balances are not currently exported b/c `MsgReceiveMessage` is free to submit on Noble.   | Gauge    |
+| cctp_relayer_chain_latest_height    | Current height of the chain.                                                                                                                       | Gauge    |
+| cctp_relayer_broadcast_errors_total | The total number of failed broadcasts. Note: this is AFTER is retires `broadcast-retries` (config setting) number of times.                        | Counter  |
 
 ### API
 Simple API to query message state cache
@@ -42,20 +43,18 @@ Simple API to query message state cache
 localhost:8000/tx/<hash, including the 0x prefix>
 # All messages for a tx hash and domain 0 (Ethereum)
 localhost:8000/tx/<hash>?domain=0
-# All messages for a tx hash and a given type ('mint' or 'forward')
-localhost:8000/tx/<hash>?type=forward
 ```
 
 ### State
 
-| IrisLookupId | Type    | Status   | SourceDomain | DestDomain | SourceTxHash  | DestTxHash | MsgSentBytes | Created | Updated |
-|:-------------|:--------|:---------|:-------------|:-----------|:--------------|:-----------|:-------------|:--------|:--------|
-| 0x123        | Mint    | Created  | 0            | 4          | 0x123         | ABC123     | bytes...     | date    | date    |
-| 0x123        | Forward | Pending  | 0            | 4          | 0x123         | ABC123     | bytes...     | date    | date    |
-| 0x123        | Mint    | Attested | 0            | 4          | 0x123         | ABC123     | bytes...     | date    | date    |
-| 0x123        | Forward | Complete | 0            | 4          | 0x123         | ABC123     | bytes...     | date    | date    |
-| 0x123        | Mint    | Failed   | 0            | 4          | 0x123         | ABC123     | bytes...     | date    | date    |
-| 0x123        | Mint    | Filtered | 0            | 4          | 0x123         | ABC123     | bytes...     | date    | date    |
+| IrisLookupId | Status   | SourceDomain | DestDomain | SourceTxHash  | DestTxHash | MsgSentBytes | Created | Updated |
+|:-------------|:---------|:-------------|:-----------|:--------------|:-----------|:-------------|:--------|:--------|
+| 0x123        | Created  | 0            | 4          | 0x123         | ABC123     | bytes...     | date    | date    |
+| 0x123        | Pending  | 0            | 4          | 0x123         | ABC123     | bytes...     | date    | date    |
+| 0x123        | Attested | 0            | 4          | 0x123         | ABC123     | bytes...     | date    | date    |
+| 0x123        | Complete | 0            | 4          | 0x123         | ABC123     | bytes...     | date    | date    |
+| 0x123        | Failed   | 0            | 4          | 0x123         | ABC123     | bytes...     | date    | date    |
+| 0x123        | Filtered | 0            | 4          | 0x123         | ABC123     | bytes...     | date    | date    |
 
 ### Generating Go ABI bindings
 
@@ -67,4 +66,5 @@ abigen --abi ethereum/abi/MessageTransmitter.json --pkg contracts- --type Messag
 ```
 
 ### Useful links
-[Goerli USDC faucet](https://usdcfaucet.com/)
+[USDC faucet](https://usdcfaucet.com/)
+[Circle Docs/Contract Addresses](https://developers.circle.com/stablecoins/docs/evm-smart-contracts)

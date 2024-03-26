@@ -1,5 +1,5 @@
 # This file is for integration testing on deployed relayers
-# use this file inconjunction with: integration/deployed_relayer_test.go
+# use this file in conjunction with: integration/deployed_relayer_test.go
 
 # "destination-caller": address of the relayer you are testing. Only a relayer with this
 # address can pick up the transaction.

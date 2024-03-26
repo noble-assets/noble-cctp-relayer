@@ -19,6 +19,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	xauthsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	xauthtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
+	"github.com/strangelove-ventures/noble-cctp-relayer/relayer"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
@@ -47,6 +48,7 @@ func (n *Noble) Broadcast(
 	logger log.Logger,
 	msgs []*types.MessageState,
 	sequenceMap *types.SequenceMap,
+	m *relayer.PromMetrics,
 ) error {
 	// set up sdk context
 	interfaceRegistry := codectypes.NewInterfaceRegistry()
@@ -76,7 +78,9 @@ func (n *Noble) Broadcast(
 			msg.Status = types.Failed
 		}
 	}
-
+	if m != nil {
+		m.IncBroadcastErrors(n.Name(), fmt.Sprint(n.Domain()))
+	}
 	return errors.New("reached max number of broadcast attempts")
 }
 

@@ -172,8 +172,10 @@ func (n *Noble) flushMechanism(
 	}
 }
 
-func (n *Noble) TrackLatestBlockHeight(ctx context.Context, logger log.Logger) {
+func (n *Noble) TrackLatestBlockHeight(ctx context.Context, logger log.Logger, m *relayer.PromMetrics) {
 	logger.With("routine", "TrackLatestBlockHeight", "chain", n.Name(), "domain", n.Domain())
+
+	d := fmt.Sprint(n.Domain())
 
 	// first time
 	res, err := n.cc.RPCClient.Status(ctx)
@@ -181,6 +183,9 @@ func (n *Noble) TrackLatestBlockHeight(ctx context.Context, logger log.Logger) {
 		logger.Error("Unable to query Nobles latest height", "err", err)
 	}
 	n.SetLatestBlock(uint64(res.SyncInfo.LatestBlockHeight))
+	if m != nil {
+		m.SetLatestHeight(n.Name(), d, res.SyncInfo.LatestBlockHeight)
+	}
 
 	// then start loop on a timer
 	for {
@@ -193,6 +198,9 @@ func (n *Noble) TrackLatestBlockHeight(ctx context.Context, logger log.Logger) {
 				continue
 			}
 			n.SetLatestBlock(uint64(res.SyncInfo.LatestBlockHeight))
+			if m != nil {
+				m.SetLatestHeight(n.Name(), d, res.SyncInfo.LatestBlockHeight)
+			}
 		case <-ctx.Done():
 			timer.Stop()
 			return

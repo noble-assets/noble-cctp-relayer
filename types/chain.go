@@ -61,16 +61,18 @@ type Chain interface {
 		logger log.Logger,
 		msgs []*MessageState,
 		sequenceMap *SequenceMap,
+		metrics *relayer.PromMetrics,
 	) error
 
 	TrackLatestBlockHeight(
 		ctx context.Context,
 		logger log.Logger,
+		metrics *relayer.PromMetrics,
 	)
 
 	WalletBalanceMetric(
 		ctx context.Context,
 		logger log.Logger,
-		metric *relayer.PromMetrics,
+		metrics *relayer.PromMetrics,
 	)
 }
