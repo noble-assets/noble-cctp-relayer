@@ -15,7 +15,6 @@ type PromMetrics struct {
 	BroadcastErrors *prometheus.CounterVec
 }
 
-// cctp_relayer_broadcast_errors_total
 func InitPromMetrics(port int16) *PromMetrics {
 	reg := prometheus.NewRegistry()
 
