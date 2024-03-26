@@ -24,7 +24,7 @@ func TestProcessNewLog(t *testing.T) {
 	sequenceMap := types.NewSequenceMap()
 	processingQueue = make(chan *types.TxState, 10)
 
-	go cmd.StartProcessor(context.TODO(), a, registeredDomains, processingQueue, sequenceMap)
+	go cmd.StartProcessor(context.TODO(), a, registeredDomains, processingQueue, sequenceMap, nil)
 
 	emptyBz := make([]byte, 32)
 	expectedState := &types.TxState{
@@ -56,7 +56,7 @@ func TestProcessDisabledCctpRoute(t *testing.T) {
 	sequenceMap := types.NewSequenceMap()
 	processingQueue = make(chan *types.TxState, 10)
 
-	go cmd.StartProcessor(context.TODO(), a, registeredDomains, processingQueue, sequenceMap)
+	go cmd.StartProcessor(context.TODO(), a, registeredDomains, processingQueue, sequenceMap, nil)
 
 	emptyBz := make([]byte, 32)
 	expectedState := &types.TxState{
@@ -89,7 +89,7 @@ func TestProcessInvalidDestinationCaller(t *testing.T) {
 	sequenceMap := types.NewSequenceMap()
 	processingQueue = make(chan *types.TxState, 10)
 
-	go cmd.StartProcessor(context.TODO(), a, registeredDomains, processingQueue, sequenceMap)
+	go cmd.StartProcessor(context.TODO(), a, registeredDomains, processingQueue, sequenceMap, nil)
 
 	nonEmptyBytes := make([]byte, 31)
 	nonEmptyBytes = append(nonEmptyBytes, 0x1)

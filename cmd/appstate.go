@@ -25,7 +25,7 @@ func NewAppState() *AppState {
 	return &AppState{}
 }
 
-// InitAppState checks if a logger and config are presant. If not, it adds them to the Appstate
+// InitAppState checks if a logger and config are present. If not, it adds them to the AppState
 func (a *AppState) InitAppState() {
 	if a.Logger == nil {
 		a.InitLogger()

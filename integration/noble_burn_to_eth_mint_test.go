@@ -78,7 +78,7 @@ func TestNobleBurnToEthMint(t *testing.T) {
 	processingQueue := make(chan *types.TxState, 10)
 
 	go nobleChain.StartListener(ctx, a.Logger, processingQueue, 0)
-	go cmd.StartProcessor(ctx, a, registeredDomains, processingQueue, sequenceMap)
+	go cmd.StartProcessor(ctx, a, registeredDomains, processingQueue, sequenceMap, nil)
 
 	ethDestinationAddress, _, err := generateEthWallet()
 	require.NoError(t, err)

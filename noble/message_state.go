@@ -73,8 +73,6 @@ func txToMessageState(tx *ctypes.ResultTx) ([]*types.MessageState, error) {
 					}
 
 					messageStates = append(messageStates, messageState)
-
-					fmt.Printf("Appended transfer from 4 to %d\n", msg.DestinationDomain)
 				}
 			}
 			if !parsed {

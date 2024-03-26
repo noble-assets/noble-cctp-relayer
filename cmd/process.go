@@ -56,10 +56,10 @@ func Start(a *AppState) *cobra.Command {
 
 			flushInterval, err := cmd.Flags().GetDuration(flagFlushInterval)
 			if err != nil {
-				logger.Error("invalid flush interval", "error", err)
+				logger.Error("Invalid flush interval", "error", err)
 			}
 			if flushInterval == 0 {
-				logger.Info("flush interval not set. Use the --flush-interval flag to set a reoccurring flush")
+				logger.Info("Flush interval not set. Use the --flush-interval flag to set a reoccurring flush")
 			}
 
 			metrics := relayer.InitPromMetrics(port)
@@ -74,11 +74,11 @@ func Start(a *AppState) *cobra.Command {
 				logger = logger.With("name", c.Name(), "domain", c.Domain())
 
 				if err := c.InitializeClients(cmd.Context(), logger); err != nil {
-					logger.Error("error initializing client", "err", err)
+					logger.Error("Error initializing client", "err", err)
 					os.Exit(1)
 				}
 
-				go c.TrackLatestBlockHeight(cmd.Context(), logger)
+				go c.TrackLatestBlockHeight(cmd.Context(), logger, metrics)
 
 				// wait until height is available
 				maxRetries := 45
@@ -112,7 +112,7 @@ func Start(a *AppState) *cobra.Command {
 
 			// spin up Processor worker pool
 			for i := 0; i < int(cfg.ProcessorWorkerCount); i++ {
-				go StartProcessor(cmd.Context(), a, registeredDomains, processingQueue, sequenceMap)
+				go StartProcessor(cmd.Context(), a, registeredDomains, processingQueue, sequenceMap, metrics)
 			}
 
 			defer func() {
@@ -136,6 +136,7 @@ func StartProcessor(
 	registeredDomains map[types.Domain]types.Chain,
 	processingQueue chan *types.TxState,
 	sequenceMap *types.SequenceMap,
+	metrics *relayer.PromMetrics,
 ) {
 	logger := a.Logger
 	cfg := a.Config
@@ -211,8 +212,8 @@ func StartProcessor(
 				continue
 			}
 
-			if err := chain.Broadcast(ctx, logger, msgs, sequenceMap); err != nil {
-				logger.Error("unable to mint one or more transfers", "error(s)", err, "total_transfers", len(msgs), "name", chain.Name(), "domain", domain)
+			if err := chain.Broadcast(ctx, logger, msgs, sequenceMap, metrics); err != nil {
+				logger.Error("Unable to mint one or more transfers", "error(s)", err, "total_transfers", len(msgs), "name", chain.Name(), "domain", domain)
 				requeue = true
 				continue
 			}
@@ -282,7 +283,7 @@ func filterLowTransfers(cfg *types.Config, logger log.Logger, msg *types.Message
 	if msg.DestDomain == types.Domain(4) {
 		nobleCfg, ok := cfg.Chains["noble"].(*noble.ChainConfig)
 		if !ok {
-			logger.Info("chain named 'noble' not found in config, filtering transaction")
+			logger.Info("Chain named 'noble' not found in config, filtering transaction")
 			return true
 		}
 		minBurnAmount = nobleCfg.MinMintAmount
@@ -322,7 +323,7 @@ func startApi(a *AppState) {
 
 	err := router.SetTrustedProxies(cfg.Api.TrustedProxies) // vpn.primary.strange.love
 	if err != nil {
-		logger.Error("unable to set trusted proxies on API server: " + err.Error())
+		logger.Error("Unable to set trusted proxies on API server: " + err.Error())
 		os.Exit(1)
 	}
 

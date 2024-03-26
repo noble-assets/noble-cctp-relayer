@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum/contracts"
+	"github.com/strangelove-ventures/noble-cctp-relayer/relayer"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
@@ -37,6 +38,7 @@ func (e *Ethereum) Broadcast(
 	logger log.Logger,
 	msgs []*types.MessageState,
 	sequenceMap *types.SequenceMap,
+	m *relayer.PromMetrics,
 ) error {
 
 	logger = logger.With("chain", e.name, "chain_id", e.chainID, "domain", e.domain)
@@ -56,16 +58,17 @@ func (e *Ethereum) Broadcast(
 	var broadcastErrors error
 MsgLoop:
 	for _, msg := range msgs {
-		if msg.Status == types.Complete {
-			continue MsgLoop
-		}
-
 		attestationBytes, err := hex.DecodeString(msg.Attestation[2:])
 		if err != nil {
 			return errors.New("unable to decode message attestation")
 		}
 
 		for attempt := 0; attempt <= e.maxRetries; attempt++ {
+			// check if another worker already broadcasted tx due to flush
+			if msg.Status == types.Complete {
+				continue MsgLoop
+			}
+
 			if err := e.attemptBroadcast(
 				ctx,
 				logger,
@@ -85,8 +88,11 @@ MsgLoop:
 				time.Sleep(time.Duration(e.retryIntervalSeconds) * time.Second)
 			}
 		}
+
 		// retried max times with failure
-		msg.Status = types.Failed
+		if m != nil {
+			m.IncBroadcastErrors(e.name, fmt.Sprint(e.domain))
+		}
 		broadcastErrors = errors.Join(broadcastErrors, errors.New("reached max number of broadcast attempts"))
 	}
 	return broadcastErrors
@@ -139,7 +145,6 @@ func (e *Ethereum) attemptBroadcast(
 	if nonceErr != nil {
 		logger.Debug("Error querying whether nonce was used.   Continuing...", "error:", nonceErr)
 	} else {
-		fmt.Printf("received used nonce response: %d\n", response)
 		if response.Uint64() == uint64(1) {
 			// nonce has already been used, mark as complete
 			logger.Debug(fmt.Sprintf("This source domain/nonce has already been used: %d %d",
