@@ -1,0 +1,23 @@
+name: chores
+
+on:
+  pull_request:
+
+jobs:
+  link-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: gaurav-nelson/github-action-markdown-link-check@1.0.15
+
+  typos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run codespell
+        continue-on-error: true
+        run: |
+          # .codespellrc is used
+          sudo apt-get install codespell -y
+          codespell -w --config .codespellrc
+          exit $?

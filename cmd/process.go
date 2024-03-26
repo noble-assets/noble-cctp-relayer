@@ -269,7 +269,7 @@ func filterInvalidDestinationCallers(registeredDomains map[types.Domain]types.Ch
 	return true
 }
 
-// filterLowTransfers returns true if the amount being transfered to the destination chain is lower than the min-mint-amount configured
+// filterLowTransfers returns true if the amount being transferred to the destination chain is lower than the min-mint-amount configured
 func filterLowTransfers(cfg *types.Config, logger log.Logger, msg *types.MessageState) bool {
 	bm, err := new(cctptypes.BurnMessage).Parse(msg.MsgBody)
 	if err != nil {
@@ -277,7 +277,7 @@ func filterLowTransfers(cfg *types.Config, logger log.Logger, msg *types.Message
 		return true
 	}
 
-	// TODO: not assume that "noble" is domain 4, add "domain" to the noble chain conifg
+	// TODO: not assume that "noble" is domain 4, add "domain" to the noble chain config
 	var minBurnAmount uint64
 	if msg.DestDomain == types.Domain(4) {
 		nobleCfg, ok := cfg.Chains["noble"].(*noble.ChainConfig)

@@ -28,7 +28,7 @@ func txToMessageState(tx *ctypes.ResultTx) ([]*types.MessageState, error) {
 			for _, attr := range event.Attributes {
 				decodedKey, err := base64.StdEncoding.DecodeString(attr.Key)
 				if err != nil {
-					parseErrs = errors.Join(parseErrs, fmt.Errorf("failed to decode attribue key: %w", err))
+					parseErrs = errors.Join(parseErrs, fmt.Errorf("failed to decode attribute key: %w", err))
 				}
 				if string(decodedKey) == "message" {
 					// fmt.Printf("Saw message attribute %s - %d\n", tx.Hash, i)

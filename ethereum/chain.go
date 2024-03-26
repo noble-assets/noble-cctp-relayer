@@ -22,7 +22,7 @@ var content embed.FS
 var _ types.Chain = (*Ethereum)(nil)
 
 type Ethereum struct {
-	// from conifg
+	// from config
 	name                      string
 	chainID                   int64
 	domain                    types.Domain

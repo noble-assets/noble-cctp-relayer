@@ -29,7 +29,7 @@ func TestStateHandling(t *testing.T) {
 
 	loadedMsg.Msgs[0].Status = Complete
 
-	// Becasue it is a pointer, no need to re-store to state
+	// Because it is a pointer, no need to re-store to state
 	// message status should be updated with out re-storing.
 	loadedMsg2, _ := stateMap.Load(txHash)
 	require.Equal(t, Complete, loadedMsg2.Msgs[0].Status)

@@ -318,14 +318,14 @@ func (e *Ethereum) TrackLatestBlockHeight(ctx context.Context, logger log.Logger
 		return
 	}
 
-	logger.Info("Height tracking websocket subscritpiton connected")
+	logger.Info("Height tracking websocket subscription connected")
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case err := <-sub.Err():
-			logger.Error("Height tracker websocket subscritpiton error. Attempting to reconnect...", "err", err)
+			logger.Error("Height tracker websocket subscription error. Attempting to reconnect...", "err", err)
 			e.TrackLatestBlockHeight(ctx, logger)
 			return
 		case header := <-headers:

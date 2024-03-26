@@ -117,7 +117,7 @@ func TestProcessInvalidDestinationCaller(t *testing.T) {
 	require.Equal(t, types.Filtered, actualState.Msgs[0].Status)
 }
 
-// we want to filter out the transaction if the route is not enalbed
+// we want to filter out the transaction if the route is not enabled
 func TestFilterDisabledCCTPRoutes(t *testing.T) {
 
 	logger := log.NewLogger(os.Stdout, log.LevelOption(zerolog.DebugLevel))

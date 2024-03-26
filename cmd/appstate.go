@@ -47,7 +47,7 @@ func (a *AppState) InitLogger() {
 		level = zerolog.ErrorLevel
 	}
 
-	// a.Debug ovverrides a.loglevel
+	// a.Debug overrides a.loglevel
 	if a.Debug {
 		a.Logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.DebugLevel))
 	} else {
