@@ -27,8 +27,9 @@ const (
 type Domain uint32
 
 type TxState struct {
-	TxHash string
-	Msgs   []*MessageState
+	TxHash       string
+	Msgs         []*MessageState
+	RetryAttempt int
 }
 
 type MessageState struct {
