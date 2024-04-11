@@ -279,16 +279,20 @@ func (e *Ethereum) flushMechanism(
 		case <-timer.C:
 			latestBlock := e.LatestBlock()
 
+			// initialize first lastFlushedBlock if not set
 			if e.lastFlushedBlock == 0 {
-				e.lastFlushedBlock = latestBlock
+				e.lastFlushedBlock = latestBlock - e.lookbackPeriod
 			}
 
-			start := e.lastFlushedBlock - e.lookbackPeriod
+			// start from lastFlushedBlock
+			start := e.lastFlushedBlock
 
 			logger.Info(fmt.Sprintf("Flush started from %d to %d", start, latestBlock))
 
+			// consume from lastFlushedBlock to the latestBlock
 			e.getAndConsumeHistory(ctx, logger, processingQueue, messageSent, messageTransmitterAddress, messageTransmitterABI, start, latestBlock)
 
+			// update lastFlushedBlock to the last block it flushed
 			e.lastFlushedBlock = latestBlock
 
 			logger.Info("Flush complete")
