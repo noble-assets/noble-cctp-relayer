@@ -68,5 +68,18 @@ func (a *AppState) loadConfigFile() {
 	}
 	a.Logger.Info("Successfully parsed config file", "location", a.ConfigPath)
 	a.Config = config
+	a.validateConfig()
+}
 
+// validateConfig checks the AppState Config for any invalid settings.
+func (a *AppState) validateConfig() {
+	if a.Config.Circle.AttestationBaseUrl == "" {
+		a.Logger.Error("AttestationBaseUrl is required in the config")
+		os.Exit(1)
+	}
+
+	if a.Config.Circle.FetchRetryInterval == 0 {
+		a.Logger.Error("FetchRetryInterval must be greater than zero in the config")
+		os.Exit(1)
+	}
 }
