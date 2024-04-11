@@ -310,31 +310,32 @@ func (e *Ethereum) TrackLatestBlockHeight(ctx context.Context, logger log.Logger
 
 	d := fmt.Sprint(e.domain)
 
-	headers := make(chan *ethtypes.Header)
-
-	sub, err := e.wsClient.SubscribeNewHead(ctx, headers)
-	if err != nil {
-		logger.Error("Failed to connect to websocket to track height. Will retry...", "err", err)
-		time.Sleep(1 * time.Second)
-		e.TrackLatestBlockHeight(ctx, logger, m)
-		return
+	// helper function to query latest height and set metric
+	queryHeightAndSetMetric := func() {
+		// first time
+		res, err := e.rpcClient.BlockNumber(ctx)
+		if err != nil {
+			logger.Error("Unable to query latest height", "err", err)
+		} else {
+			e.SetLatestBlock(res)
+			if m != nil {
+				m.SetLatestHeight(e.name, d, int64(res))
+			}
+		}
 	}
 
-	logger.Info("Height tracking websocket subscription connected")
+	// initial query
+	queryHeightAndSetMetric()
 
+	// then start loop on a timer
 	for {
+		timer := time.NewTimer(30 * time.Second)
 		select {
+		case <-timer.C:
+			queryHeightAndSetMetric()
 		case <-ctx.Done():
+			timer.Stop()
 			return
-		case err := <-sub.Err():
-			logger.Error("Height tracker websocket subscription error. Attempting to reconnect...", "err", err)
-			e.TrackLatestBlockHeight(ctx, logger, m)
-			return
-		case header := <-headers:
-			e.SetLatestBlock(header.Number.Uint64())
-			if m != nil {
-				m.SetLatestHeight(e.name, d, header.Number.Int64())
-			}
 		}
 	}
 }
@@ -348,40 +349,29 @@ func (e *Ethereum) WalletBalanceMetric(ctx context.Context, logger log.Logger, m
 	exponent := big.NewInt(int64(e.MetricsExponent))                                      // ex: 18
 	scaleFactor := new(big.Float).SetInt(new(big.Int).Exp(big.NewInt(10), exponent, nil)) // ex: 10^18
 
-	first := make(chan struct{}, 1)
-	first <- struct{}{}
+	// helper function to query balance and set metric
+	queryBalanceAndSetMetric := func() {
+		balance, err := e.rpcClient.BalanceAt(ctx, account, nil)
+		if err != nil {
+			logger.Error(fmt.Sprintf("Error querying balance. Will try again in %.2f sec", queryRate.Seconds()), "error", err)
+		} else {
+			balanceBigFloat := new(big.Float).SetInt(balance)
+			balanceScaled, _ := new(big.Float).Quo(balanceBigFloat, scaleFactor).Float64()
+
+			if m != nil {
+				m.SetWalletBalance(e.name, e.minterAddress, e.MetricsDenom, balanceScaled)
+			}
+		}
+	}
+
+	// initial query
+	queryBalanceAndSetMetric()
+
 	for {
 		timer := time.NewTimer(queryRate)
 		select {
-		// don't wait the "queryRate" amount of time if this is the first time running
-		case <-first:
-			timer.Stop()
-			balance, err := e.rpcClient.BalanceAt(ctx, account, nil)
-			if err != nil {
-				logger.Error(fmt.Sprintf("Error querying balance. Will try again in %.2f sec", queryRate.Seconds()), "error", err)
-				continue
-			}
-
-			balanceBigFloat := new(big.Float).SetInt(balance)
-			balanceScaled, _ := new(big.Float).Quo(balanceBigFloat, scaleFactor).Float64()
-
-			if m != nil {
-				m.SetWalletBalance(e.name, e.minterAddress, e.MetricsDenom, balanceScaled)
-			}
 		case <-timer.C:
-			balance, err := e.rpcClient.BalanceAt(ctx, account, nil)
-			if err != nil {
-				logger.Error(fmt.Sprintf("Error querying balance. Will try again in %.2f sec", queryRate.Seconds()), "error", err)
-				continue
-			}
-
-			balanceBigFloat := new(big.Float).SetInt(balance)
-			balanceScaled, _ := new(big.Float).Quo(balanceBigFloat, scaleFactor).Float64()
-
-			if m != nil {
-				m.SetWalletBalance(e.name, e.minterAddress, e.MetricsDenom, balanceScaled)
-			}
-
+			queryBalanceAndSetMetric()
 		case <-ctx.Done():
 			timer.Stop()
 			return
