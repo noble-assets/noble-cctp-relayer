@@ -161,7 +161,7 @@ func TestNobleBurnToEthDeployed(t *testing.T) {
 
 	rpcResponse, err := cc.RPCClient.BroadcastTxSync(context.Background(), txBytes)
 	require.Nil(t, err)
-	fmt.Printf("Deposit for Burn broadcasted: https://testnet.mintscan.io/noble-testnet/txs/%s\n", rpcResponse.Hash.String())
+	fmt.Printf("Deposit for Burn broadcasted: https://mintscan.io/noble-testnet/txs/%s\n", rpcResponse.Hash.String())
 
 	fmt.Println("Waiting for circle to approve and destination wallet to receive funds...")
 	var newEthBalance uint64
