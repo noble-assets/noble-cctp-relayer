@@ -177,30 +177,28 @@ func (n *Noble) TrackLatestBlockHeight(ctx context.Context, logger log.Logger, m
 
 	d := fmt.Sprint(n.Domain())
 
-	// first time
-	res, err := n.cc.RPCClient.Status(ctx)
-	if err != nil {
-		logger.Error("Unable to query Nobles latest height", "err", err)
+	// inner function to update block height
+	updateBlockHeight := func() {
+		res, err := n.cc.RPCClient.Status(ctx)
+		if err != nil {
+			logger.Error("Unable to query Nobles latest height", "err", err)
+		} else {
+			n.SetLatestBlock(uint64(res.SyncInfo.LatestBlockHeight))
+			if m != nil {
+				m.SetLatestHeight(n.Name(), d, res.SyncInfo.LatestBlockHeight)
+			}
+		}
 	}
-	n.SetLatestBlock(uint64(res.SyncInfo.LatestBlockHeight))
-	if m != nil {
-		m.SetLatestHeight(n.Name(), d, res.SyncInfo.LatestBlockHeight)
-	}
+
+	// initial call
+	updateBlockHeight()
 
 	// then start loop on a timer
 	for {
 		timer := time.NewTimer(6 * time.Second)
 		select {
 		case <-timer.C:
-			res, err := n.cc.RPCClient.Status(ctx)
-			if err != nil {
-				logger.Error("Unable to query Nobles latest height", "err", err)
-				continue
-			}
-			n.SetLatestBlock(uint64(res.SyncInfo.LatestBlockHeight))
-			if m != nil {
-				m.SetLatestHeight(n.Name(), d, res.SyncInfo.LatestBlockHeight)
-			}
+			updateBlockHeight()
 		case <-ctx.Done():
 			timer.Stop()
 			return
