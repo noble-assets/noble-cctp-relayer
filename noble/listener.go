@@ -89,8 +89,7 @@ func (n *Noble) StartListener(
 				select {
 				case <-ctx.Done():
 					return
-				default:
-					block := <-blockQueue
+				case block := <-blockQueue:
 					res, err := n.cc.RPCClient.TxSearch(ctx, fmt.Sprintf("tx.height=%d", block), false, nil, nil, "")
 					if err != nil || res == nil {
 						logger.Debug(fmt.Sprintf("Unable to query Noble block %d. Will retry.", block), "error:", err)
