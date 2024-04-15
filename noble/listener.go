@@ -56,28 +56,25 @@ func (n *Noble) StartListener(
 
 	// listen for new blocks
 	go func() {
-		first := make(chan struct{}, 1)
-		first <- struct{}{}
+		// inner function to queue blocks
+		queueBlocks := func() {
+			chainTip = n.LatestBlock()
+			if chainTip >= currentBlock {
+				for i := currentBlock; i <= chainTip; i++ {
+					blockQueue <- i
+				}
+				currentBlock = chainTip + 1
+			}
+		}
+
+		// initial queue
+		queueBlocks()
+
 		for {
 			timer := time.NewTimer(6 * time.Second)
 			select {
-			case <-first:
-				timer.Stop()
-				chainTip = n.LatestBlock()
-				if chainTip >= currentBlock {
-					for i := currentBlock; i <= chainTip; i++ {
-						blockQueue <- i
-					}
-					currentBlock = chainTip + 1
-				}
 			case <-timer.C:
-				chainTip = n.LatestBlock()
-				if chainTip >= currentBlock {
-					for i := currentBlock; i <= chainTip; i++ {
-						blockQueue <- i
-					}
-					currentBlock = chainTip + 1
-				}
+				queueBlocks()
 			case <-ctx.Done():
 				timer.Stop()
 				return
