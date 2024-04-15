@@ -73,6 +73,8 @@ abigen --abi ethereum/abi/MessageTransmitter.json --pkg contracts- --type Messag
 ```
 
 ### Useful links
+[Relayer Flow Charts](./docs/flows.md)
+
 [USDC faucet](https://usdcfaucet.com/)
 
 [Circle Docs/Contract Addresses](https://developers.circle.com/stablecoins/docs/evm-smart-contracts)
