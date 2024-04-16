@@ -56,28 +56,25 @@ func (n *Noble) StartListener(
 
 	// listen for new blocks
 	go func() {
-		first := make(chan struct{}, 1)
-		first <- struct{}{}
+		// inner function to queue blocks
+		queueBlocks := func() {
+			chainTip = n.LatestBlock()
+			if chainTip >= currentBlock {
+				for i := currentBlock; i <= chainTip; i++ {
+					blockQueue <- i
+				}
+				currentBlock = chainTip + 1
+			}
+		}
+
+		// initial queue
+		queueBlocks()
+
 		for {
 			timer := time.NewTimer(6 * time.Second)
 			select {
-			case <-first:
-				timer.Stop()
-				chainTip = n.LatestBlock()
-				if chainTip >= currentBlock {
-					for i := currentBlock; i <= chainTip; i++ {
-						blockQueue <- i
-					}
-					currentBlock = chainTip + 1
-				}
 			case <-timer.C:
-				chainTip = n.LatestBlock()
-				if chainTip >= currentBlock {
-					for i := currentBlock; i <= chainTip; i++ {
-						blockQueue <- i
-					}
-					currentBlock = chainTip + 1
-				}
+				queueBlocks()
 			case <-ctx.Done():
 				timer.Stop()
 				return
@@ -92,8 +89,7 @@ func (n *Noble) StartListener(
 				select {
 				case <-ctx.Done():
 					return
-				default:
-					block := <-blockQueue
+				case block := <-blockQueue:
 					res, err := n.cc.RPCClient.TxSearch(ctx, fmt.Sprintf("tx.height=%d", block), false, nil, nil, "")
 					if err != nil || res == nil {
 						logger.Debug(fmt.Sprintf("Unable to query Noble block %d. Will retry.", block), "error:", err)
@@ -177,30 +173,28 @@ func (n *Noble) TrackLatestBlockHeight(ctx context.Context, logger log.Logger, m
 
 	d := fmt.Sprint(n.Domain())
 
-	// first time
-	res, err := n.cc.RPCClient.Status(ctx)
-	if err != nil {
-		logger.Error("Unable to query Nobles latest height", "err", err)
+	// inner function to update block height
+	updateBlockHeight := func() {
+		res, err := n.cc.RPCClient.Status(ctx)
+		if err != nil {
+			logger.Error("Unable to query Nobles latest height", "err", err)
+		} else {
+			n.SetLatestBlock(uint64(res.SyncInfo.LatestBlockHeight))
+			if m != nil {
+				m.SetLatestHeight(n.Name(), d, res.SyncInfo.LatestBlockHeight)
+			}
+		}
 	}
-	n.SetLatestBlock(uint64(res.SyncInfo.LatestBlockHeight))
-	if m != nil {
-		m.SetLatestHeight(n.Name(), d, res.SyncInfo.LatestBlockHeight)
-	}
+
+	// initial call
+	updateBlockHeight()
 
 	// then start loop on a timer
 	for {
 		timer := time.NewTimer(6 * time.Second)
 		select {
 		case <-timer.C:
-			res, err := n.cc.RPCClient.Status(ctx)
-			if err != nil {
-				logger.Error("Unable to query Nobles latest height", "err", err)
-				continue
-			}
-			n.SetLatestBlock(uint64(res.SyncInfo.LatestBlockHeight))
-			if m != nil {
-				m.SetLatestHeight(n.Name(), d, res.SyncInfo.LatestBlockHeight)
-			}
+			updateBlockHeight()
 		case <-ctx.Done():
 			timer.Stop()
 			return
