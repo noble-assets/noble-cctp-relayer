@@ -118,7 +118,10 @@ func Start(a *AppState) *cobra.Command {
 			defer func() {
 				for _, c := range registeredDomains {
 					fmt.Printf("\n%s: latest-block: %d last-flushed-block: %d", c.Name(), c.LatestBlock(), c.LastFlushedBlock())
-					c.CloseClients()
+					err := c.CloseClients()
+					if err != nil {
+						logger.Error("Error closing clients", "error", err)
+					}
 				}
 			}()
 
@@ -330,7 +333,11 @@ func startApi(a *AppState) {
 	}
 
 	router.GET("/tx/:txHash", getTxByHash)
-	router.Run("localhost:8000")
+	err = router.Run("localhost:8000")
+	if err != nil {
+		logger.Error("Unable to start API server: " + err.Error())
+		os.Exit(1)
+	}
 }
 
 func getTxByHash(c *gin.Context) {

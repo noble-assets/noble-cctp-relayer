@@ -38,7 +38,7 @@ type Chain interface {
 	) error
 
 	// CloseClients is a cleanup function to close any open clients
-	CloseClients()
+	CloseClients() error
 
 	// InitializeBroadcaster initializes the minter account info for the chain.
 	InitializeBroadcaster(

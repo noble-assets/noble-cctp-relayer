@@ -162,9 +162,12 @@ func (n *Noble) attemptBroadcast(
 		Sequence:      uint64(accountSequence),
 	}
 
-	txBuilder.SetSignatures(sigV2)
+	err := txBuilder.SetSignatures(sigV2)
+	if err != nil {
+		return fmt.Errorf("failed to set signatures: %w", err)
+	}
 
-	sigV2, err := clientTx.SignWithPrivKey(
+	sigV2, err = clientTx.SignWithPrivKey(
 		sdkContext.TxConfig.SignModeHandler().DefaultMode(),
 		signerData,
 		txBuilder,

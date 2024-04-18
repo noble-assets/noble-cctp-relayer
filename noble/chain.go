@@ -162,8 +162,12 @@ func (n *Noble) InitializeClients(ctx context.Context, logger log.Logger) error 
 	return nil
 }
 
-func (n *Noble) CloseClients() {
+func (n *Noble) CloseClients() error {
 	if n.cc != nil && n.cc.RPCClient.IsRunning() {
-		n.cc.RPCClient.Stop()
+		err := n.cc.RPCClient.Stop()
+		if err != nil {
+			return fmt.Errorf("error stopping noble rpc client: %w", err)
+		}
 	}
+	return nil
 }

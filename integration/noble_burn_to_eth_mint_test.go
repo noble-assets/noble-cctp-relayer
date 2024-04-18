@@ -165,7 +165,9 @@ func TestNobleBurnToEthMint(t *testing.T) {
 		Sequence:      uint64(accountSequence),
 	}
 
-	txBuilder.SetSignatures(sigV2)
+	err = txBuilder.SetSignatures(sigV2)
+	require.Nil(t, err)
+
 	sigV2, err = clientTx.SignWithPrivKey(
 		sdkContext.TxConfig.SignModeHandler().DefaultMode(),
 		signerData,

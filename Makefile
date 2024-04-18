@@ -17,20 +17,20 @@ GOBIN := $(GOPATH)/bin
 ###############################################################################
 ###                          Formatting & Linting                           ###
 ###############################################################################
-.PHONY: format lint
+.PHONY: lint lint-fix
 
-gofumpt_cmd=mvdan.cc/gofumpt
-golangci_lint_cmd=github.com/golangci/golangci-lint/cmd/golangci-lint
-
-format:
-	@echo "🤖 Running formatter..."
-	@go run $(gofumpt_cmd) -l -w .
-	@echo "✅ Completed formatting!"
+golangci_lint_cmd=golangci-lint
+golangci_version=v1.55.2
 
 lint:
-	@echo "🤖 Running linter..."
-	@go run $(golangci_lint_cmd) run --timeout=10m
-	@echo "✅ Completed linting!"
+	@echo "--> Running linter"
+	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(golangci_version)
+	@$(golangci_lint_cmd) run ./... --timeout 15m
+
+lint-fix:
+	@echo "--> Running linter and fixing issues"
+	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(golangci_version)
+	@$(golangci_lint_cmd) run ./... --fix --timeout 15m
 
 
 ###############################################################################

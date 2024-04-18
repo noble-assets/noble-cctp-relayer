@@ -145,11 +145,12 @@ func (e *Ethereum) InitializeClients(ctx context.Context, logger log.Logger) err
 	return nil
 }
 
-func (e *Ethereum) CloseClients() {
+func (e *Ethereum) CloseClients() error {
 	if e.wsClient != nil {
 		e.wsClient.Close()
 	}
 	if e.rpcClient != nil {
 		e.rpcClient.Close()
 	}
+	return nil
 }
