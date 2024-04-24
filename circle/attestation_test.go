@@ -33,14 +33,14 @@ func TestAttestationNotFound(t *testing.T) {
 }
 
 func TestAttestationWithoutEndingSlash(t *testing.T) {
-	startUrl := cfg.Circle.AttestationBaseURL
-	cfg.Circle.AttestationBaseURL = startUrl[:len(startUrl)-1]
+	startURL := cfg.Circle.AttestationBaseURL
+	cfg.Circle.AttestationBaseURL = startURL[:len(startURL)-1]
 
 	resp := circle.CheckAttestation(cfg.Circle.AttestationBaseURL, logger, "85bbf7e65a5992e6317a61f005e06d9972a033d71b514be183b179e1b47723fe", "", 0, 4)
 	require.NotNil(t, resp)
 	require.Equal(t, "complete", resp.Status)
 
-	cfg.Circle.AttestationBaseURL = startUrl
+	cfg.Circle.AttestationBaseURL = startURL
 }
 
 func TestAttestationWithLeading0x(t *testing.T) {
