@@ -56,7 +56,7 @@ linters-settings:
       - prefix(github.com/cosmos)
       - prefix(github.com/cosmos/cosmos-sdk)
       - prefix(cosmossdk.io)
-      - prefix(github.com/strangelove-ventures/poa)
+      - prefix(github.com/strangelove-ventures/noble-cctp-relayer)
   gosec:
     excludes:
       - G404
