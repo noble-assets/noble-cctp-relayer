@@ -34,7 +34,6 @@ $ %s v`,
 			appName, appName,
 		)),
 		RunE: func(cmd *cobra.Command, args []string) error {
-
 			jsn, err := cmd.Flags().GetBool(flagJSON)
 			if err != nil {
 				return err
@@ -62,6 +61,5 @@ $ %s v`,
 			return err
 		},
 	}
-	addJsonFlag(versionCmd)
-	return versionCmd
+	return addJSONFlag(versionCmd)
 }

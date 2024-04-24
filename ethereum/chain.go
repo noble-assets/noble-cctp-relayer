@@ -10,9 +10,10 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/ethclient"
+
 	"cosmossdk.io/log"
 
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 

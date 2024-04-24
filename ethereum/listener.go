@@ -8,13 +8,14 @@ import (
 	"os"
 	"time"
 
-	"cosmossdk.io/log"
 	ethereum "github.com/ethereum/go-ethereum"
-	ethtypes "github.com/ethereum/go-ethereum/core/types"
-
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/pascaldekloe/etherstream"
+
+	"cosmossdk.io/log"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/relayer"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
@@ -99,9 +100,7 @@ func (e *Ethereum) startMainStream(
 	logger log.Logger,
 	messageSent abi.Event,
 	messageTransmitterAddress common.Address,
-
 ) (stream <-chan ethtypes.Log, sub ethereum.Subscription, history []ethtypes.Log) {
-
 	var err error
 
 	etherReader := etherstream.Reader{Backend: e.wsClient}
@@ -142,7 +141,6 @@ func (e *Ethereum) getAndConsumeHistory(
 	messageTransmitterAddress common.Address,
 	messageTransmitterABI abi.ABI,
 	start, end uint64) {
-
 	var toUnSub ethereum.Subscription
 	var history []ethtypes.Log
 	var err error
@@ -203,7 +201,8 @@ func consumeHistory(
 	messageSent abi.Event,
 	messageTransmitterABI abi.ABI,
 ) {
-	for _, historicalLog := range history {
+	for i := range history {
+		historicalLog := history[i]
 		parsedMsg, err := types.EvmLogToMessageState(messageTransmitterABI, messageSent, &historicalLog)
 		if err != nil {
 			logger.Error("Unable to parse history log into MessageState, skipping", "tx hash", historicalLog.TxHash.Hex(), "err", err)
@@ -243,14 +242,15 @@ func (e *Ethereum) consumeStream(
 				continue
 			}
 			logger.Info(fmt.Sprintf("New stream msg from %d with tx hash %s", parsedMsg.SourceDomain, parsedMsg.SourceTxHash))
-			if txState == nil {
+
+			switch {
+			case txState == nil:
 				txState = &types.TxState{TxHash: parsedMsg.SourceTxHash, Msgs: []*types.MessageState{parsedMsg}}
-			} else if parsedMsg.SourceTxHash != txState.TxHash {
+			case parsedMsg.SourceTxHash != txState.TxHash:
 				processingQueue <- txState
 				txState = &types.TxState{TxHash: parsedMsg.SourceTxHash, Msgs: []*types.MessageState{parsedMsg}}
-			} else {
+			default:
 				txState.Msgs = append(txState.Msgs, parsedMsg)
-
 			}
 		default:
 			if txState != nil {

@@ -11,9 +11,10 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/joho/godotenv"
+	"github.com/stretchr/testify/require"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum/contracts"
 	testutil "github.com/strangelove-ventures/noble-cctp-relayer/test_util"
-	"github.com/stretchr/testify/require"
 )
 
 func TestEthUsedNonce(t *testing.T) {

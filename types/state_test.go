@@ -12,7 +12,7 @@ func TestStateHandling(t *testing.T) {
 	txHash := "123456789"
 	msg := MessageState{
 		SourceTxHash: txHash,
-		IrisLookupId: "123",
+		IrisLookupID: "123",
 		Status:       Filtered,
 		MsgSentBytes: []byte("i like turtles"),
 	}
@@ -37,7 +37,7 @@ func TestStateHandling(t *testing.T) {
 	// even though loadedMsg is a pointer, if we add to the array, we need to re-store in cache.
 	msg2 := MessageState{
 		SourceTxHash: txHash,
-		IrisLookupId: "123",
+		IrisLookupID: "123",
 		Status:       Filtered,
 		MsgSentBytes: []byte("mock bytes 2"),
 	}
@@ -46,5 +46,5 @@ func TestStateHandling(t *testing.T) {
 	stateMap.Store(txHash, loadedMsg)
 
 	loadedMsg3, _ := stateMap.Load(txHash)
-	require.Equal(t, 2, len(loadedMsg3.Msgs))
+	require.Len(t, loadedMsg3.Msgs, 2)
 }

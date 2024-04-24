@@ -1,16 +1,20 @@
-package integration_testing
+package integration_test
 
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
 	"math/big"
 	"strconv"
 	"testing"
 	"time"
 
-	"cosmossdk.io/math"
 	nobletypes "github.com/circlefin/noble-cctp/x/cctp/types"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/stretchr/testify/require"
+
 	sdkClient "github.com/cosmos/cosmos-sdk/client"
 	clientTx "github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -20,14 +24,12 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	xauthsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	xauthtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
+
+	"cosmossdk.io/math"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/cosmos"
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum/contracts"
-	"github.com/stretchr/testify/require"
 )
 
 // The tests in this file are meant to test an actively deployed relayer.
@@ -65,25 +67,25 @@ func TestNobleBurnToEthDeployed(t *testing.T) {
 
 	var burnAmount = math.NewInt(1)
 
-	fmt.Printf("\nPath: %d -> %d\n", nobleCfg.Domain, ethConfig.Domain)
+	t.Logf("Path: %d -> %d", nobleCfg.Domain, ethConfig.Domain)
 
-	fmt.Println("Source Address: ", nobleCfg.Address)
-	cc, err := cosmos.NewProvider(nobleCfg.Rpc)
+	t.Logf("Source Address: %s", nobleCfg.Address)
+	cc, err := cosmos.NewProvider(nobleCfg.RPC)
 	require.NoError(t, err)
 	originalNobleBalance, err := getNobleAccountBalance(ctx, cc, nobleCfg.Address, uusdcDenom)
 	require.NoError(t, err)
-	fmt.Println("Source Balance: ", originalNobleBalance)
+	t.Logf("Source Balance: %d", originalNobleBalance)
 
-	fmt.Println("Deposit Address: ", destAddress)
+	t.Logf("Deposit Address: %s", destAddress)
 
 	// Get original usdc balance on Eth to verify that funds are deposited later
-	client, _ := ethclient.Dial(ethConfig.Rpc)
+	client, _ := ethclient.Dial(ethConfig.RPC)
 	defer client.Close()
 	ogBalance, err := getEthBalance(client, ethConfig.UsdcTokenAddress, destAddress)
 	require.NoError(t, err)
-	fmt.Println("Destination Balance: ", ogBalance)
+	t.Logf("Destination Balance: %d", ogBalance)
 
-	fmt.Println("Burn Amount: ", burnAmount.String())
+	t.Logf("Burn Amount: %s", burnAmount.String())
 
 	// set up sdk context
 	interfaceRegistry := codectypes.NewInterfaceRegistry()
@@ -98,7 +100,7 @@ func TestNobleBurnToEthDeployed(t *testing.T) {
 	keyBz, _ := hex.DecodeString(nobleCfg.PrivateKey)
 	privKey := secp256k1.PrivKey{Key: keyBz}
 	nobleAddress, err := bech32.ConvertAndEncode("noble", privKey.PubKey().Address())
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// destination address
 	mintRecipient := make([]byte, 32)
@@ -118,13 +120,13 @@ func TestNobleBurnToEthDeployed(t *testing.T) {
 	)
 
 	err = txBuilder.SetMsgs(burnMsg)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	txBuilder.SetGasLimit(200000)
 
 	// sign + broadcast txn
 	accountNumber, accountSequence, err := getNobleAccountNumberSequenceGRPC(cc, nobleAddress)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	sigV2 := signing.SignatureV2{
 		PubKey: privKey.PubKey(),
@@ -132,17 +134,17 @@ func TestNobleBurnToEthDeployed(t *testing.T) {
 			SignMode:  sdkContext.TxConfig.SignModeHandler().DefaultMode(),
 			Signature: nil,
 		},
-		Sequence: uint64(accountSequence),
+		Sequence: accountSequence,
 	}
 
 	signerData := xauthsigning.SignerData{
-		ChainID:       nobleCfg.ChainId,
-		AccountNumber: uint64(accountNumber),
-		Sequence:      uint64(accountSequence),
+		ChainID:       nobleCfg.ChainID,
+		AccountNumber: accountNumber,
+		Sequence:      accountSequence,
 	}
 
 	err = txBuilder.SetSignatures(sigV2)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	sigV2, err = clientTx.SignWithPrivKey(
 		sdkContext.TxConfig.SignModeHandler().DefaultMode(),
@@ -150,28 +152,29 @@ func TestNobleBurnToEthDeployed(t *testing.T) {
 		txBuilder,
 		&privKey,
 		sdkContext.TxConfig,
-		uint64(accountSequence),
+		accountSequence,
 	)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	err = txBuilder.SetSignatures(sigV2)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Generated Protobuf-encoded bytes.
 	txBytes, err := sdkContext.TxConfig.TxEncoder()(txBuilder.GetTx())
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	rpcResponse, err := cc.RPCClient.BroadcastTxSync(context.Background(), txBytes)
-	require.Nil(t, err)
-	fmt.Printf("Deposit for Burn broadcasted: https://mintscan.io/noble-testnet/txs/%s\n", rpcResponse.Hash.String())
+	require.NoError(t, err)
+	t.Logf("Deposit for Burn broadcasted: https://mintscan.io/noble-testnet/txs/%s", rpcResponse.Hash.String())
 
-	fmt.Println("Waiting for circle to approve and destination wallet to receive funds...")
+	t.Log("Waiting for circle to approve and destination wallet to receive funds...")
 	var newEthBalance uint64
 	for i := 0; i < 120; i++ {
 		newEthBalance, err = getEthBalance(client, ethConfig.UsdcTokenAddress, destAddress)
+
 		require.NoError(t, err)
 		if ogBalance+burnAmount.Uint64() == newEthBalance {
-			fmt.Println("Successfully minted into " + destAddress)
+			t.Log("Successfully minted into " + destAddress)
 			break
 		}
 		time.Sleep(3 * time.Second)
@@ -179,10 +182,10 @@ func TestNobleBurnToEthDeployed(t *testing.T) {
 
 	newNobleBal, err := getNobleAccountBalance(ctx, cc, nobleCfg.Address, uusdcDenom)
 	require.NoError(t, err)
-	fmt.Println("Source Balance: ", newNobleBal)
+	t.Log("Source Balance: ", newNobleBal)
 
 	// verify eth balance
-	fmt.Println("Destination Balance: ", newEthBalance)
+	t.Logf("Destination Balance: %d", newEthBalance)
 	require.Equal(t, ogBalance+burnAmount.Uint64(), newEthBalance)
 }
 
@@ -190,7 +193,6 @@ func TestNobleBurnToEthDeployed(t *testing.T) {
 func TestEthBurnToNobleDeployed(t *testing.T) {
 	c, err := ParseIntegration("../.ignore/integration.yaml")
 	require.NoError(t, err)
-
 	ctx := context.Background()
 
 	// -- NETWORK --
@@ -212,41 +214,41 @@ func TestEthBurnToNobleDeployed(t *testing.T) {
 
 	destAddress := nobleCfg.Address
 
-	fmt.Printf("\nPath: %d -> %d\n", ethConfig.Domain, nobleCfg.Domain)
+	t.Logf("Path: %d -> %d", ethConfig.Domain, nobleCfg.Domain)
 
-	fmt.Println("Source Address: ", ethConfig.Address)
+	t.Logf("Source Address: %s", ethConfig.Address)
 
-	client, err := ethclient.Dial(ethConfig.Rpc)
+	client, err := ethclient.Dial(ethConfig.RPC)
 	require.NoError(t, err)
 	defer client.Close()
 
 	originalEthBalance, err := getEthBalance(client, ethConfig.UsdcTokenAddress, ethConfig.Address)
 	require.NoError(t, err)
-	fmt.Println("Source Balance: ", originalEthBalance)
+	t.Logf("Source Balance: %d", originalEthBalance)
 
-	fmt.Println("Destination Address: ", destAddress)
+	t.Logf("Destination Address: %s", destAddress)
 
 	// Get original usdc balance on Noble to verify that funds are deposited later
-	cc, err := cosmos.NewProvider(nobleCfg.Rpc)
+	cc, err := cosmos.NewProvider(nobleCfg.RPC)
 	require.NoError(t, err)
 	originalNobleBalance, err := getNobleAccountBalance(ctx, cc, destAddress, uusdcDenom)
 	require.NoError(t, err)
-	fmt.Println("Destination Balance: ", originalNobleBalance)
+	t.Logf("Destination Balance: %d", originalNobleBalance)
 
-	fmt.Println("Burn Amount: ", burnAmount.String())
+	t.Logf("Burn Amount: %s", burnAmount.String())
 
 	privateKey, err := crypto.HexToECDSA(ethConfig.PrivateKey)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
-	i, err := strconv.ParseInt(ethConfig.ChainId, 10, 64)
+	i, err := strconv.ParseInt(ethConfig.ChainID, 10, 64)
 	require.NoError(t, err)
 	ethChainID := big.NewInt(i)
 
 	auth, err := bind.NewKeyedTransactorWithChainID(privateKey, ethChainID)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// deal w/ nonce
-	nextNonce, err := ethereum.GetEthereumAccountNonce(ethConfig.Rpc, ethConfig.Address)
+	nextNonce, err := ethereum.GetEthereumAccountNonce(ethConfig.RPC, ethConfig.Address)
 	require.NoError(t, err)
 	auth.Nonce = big.NewInt(nextNonce)
 
@@ -256,14 +258,14 @@ func TestEthBurnToNobleDeployed(t *testing.T) {
 
 	// contractValue := burnAmount
 	_, err = erc20.Approve(auth, common.HexToAddress(ethConfig.TokenMessengerAddress), burnAmount)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// wait for erc20 approval to be on chain
 	time.Sleep(10 * time.Second)
 
 	// create tokenMessenger
 	tokenMessenger, err := contracts.NewTokenMessenger(common.HexToAddress(ethConfig.TokenMessengerAddress), client)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	_, mintRecipientRaw, err := bech32.DecodeAndConvert(nobleCfg.Address)
 	require.NoError(t, err)
@@ -286,15 +288,15 @@ func TestEthBurnToNobleDeployed(t *testing.T) {
 	require.NoError(t, err)
 
 	time.Sleep(5 * time.Second)
-	fmt.Println("Deposit for Burn broadcasted. Tx Hash: ", tx.Hash().String())
+	t.Logf("Deposit for Burn broadcasted. Tx Hash: %s", tx.Hash().String())
 
 	var newBalance uint64
-	fmt.Println("Waiting for circle to approve and destination wallet to receive funds...")
+	t.Log("Waiting for circle to approve and destination wallet to receive funds...")
 	for i := 0; i < 250; i++ {
 		newBalance, err = getNobleAccountBalance(ctx, cc, destAddress, uusdcDenom)
 		require.NoError(t, err)
 		if originalNobleBalance+burnAmount.Uint64() == newBalance {
-			fmt.Println("Successfully minted at https://testnet.mintscan.io/noble-testnet/account/" + destAddress)
+			t.Logf("Successfully minted at https://testnet.mintscan.io/noble-testnet/account/" + destAddress)
 			break
 		}
 		time.Sleep(3 * time.Second)
@@ -302,9 +304,9 @@ func TestEthBurnToNobleDeployed(t *testing.T) {
 
 	newEthBalance, err := getEthBalance(client, ethConfig.UsdcTokenAddress, ethConfig.Address)
 	require.NoError(t, err)
-	fmt.Println("Source Balance: ", newEthBalance)
+	t.Logf("Source Balance: %d", newEthBalance)
 
-	fmt.Println("Destination Balance: ", newBalance)
+	t.Logf("Destination Balance: %d", newBalance)
 	// verify noble balance
 	require.Equal(t, originalNobleBalance+burnAmount.Uint64(), newBalance)
 }

@@ -1,15 +1,18 @@
-package integration_testing
+package integration_test
 
 import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
-	"fmt"
 	"testing"
 	"time"
 
-	"cosmossdk.io/math"
 	nobletypes "github.com/circlefin/noble-cctp/x/cctp/types"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/stretchr/testify/require"
+
 	sdkClient "github.com/cosmos/cosmos-sdk/client"
 	clientTx "github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -19,15 +22,14 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	xauthsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	xauthtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
+
+	"cosmossdk.io/math"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cosmos"
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/noble"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
-	"github.com/stretchr/testify/require"
 )
 
 // TestNobleBurnToEthMint broadcasts a depositForBurn on Noble of 1 cent
@@ -65,7 +67,7 @@ func TestNobleBurnToEthMint(t *testing.T) {
 	err = ethChain.InitializeClients(ctx, a.Logger)
 	require.NoError(t, err)
 
-	fmt.Println("Starting relayer...")
+	t.Log("Starting relayer...")
 
 	registeredDomains := make(map[types.Domain]types.Chain)
 	registeredDomains[0] = ethChain
@@ -82,9 +84,9 @@ func TestNobleBurnToEthMint(t *testing.T) {
 
 	ethDestinationAddress, _, err := generateEthWallet()
 	require.NoError(t, err)
-	fmt.Println("Generated dest wallet: ", ethDestinationAddress)
+	t.Logf("Generated dest wallet: %s", ethDestinationAddress)
 
-	fmt.Println("Minting on Ethereum to https://sepolia.etherscan.io/address/" + ethDestinationAddress)
+	t.Logf("Minting on Ethereum to https://sepolia.etherscan.io/address/%s", ethDestinationAddress)
 
 	// verify ethereum usdc amount
 	client, _ := ethclient.Dial(ethCfg.RPC)
@@ -108,7 +110,7 @@ func TestNobleBurnToEthMint(t *testing.T) {
 
 	privKey := secp256k1.PrivKey{Key: keyBz}
 	nobleAddress, err := bech32.ConvertAndEncode("noble", privKey.PubKey().Address())
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	mintRecipient := make([]byte, 32)
 	copy(mintRecipient[12:], common.FromHex(ethDestinationAddress))
@@ -119,7 +121,7 @@ func TestNobleBurnToEthMint(t *testing.T) {
 	callerPrivKey := ethCfg.MinterPrivateKey
 	privateKeyBytes := common.FromHex(callerPrivKey)
 	privateKey, err := crypto.ToECDSA(privateKeyBytes)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	pubKey := privateKey.Public()
 	publicKeyECDSA, ok := pubKey.(*ecdsa.PublicKey)
 	require.True(t, ok)
@@ -138,17 +140,17 @@ func TestNobleBurnToEthMint(t *testing.T) {
 	)
 
 	err = txBuilder.SetMsgs(burnMsg)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	txBuilder.SetGasLimit(nobleCfg.GasLimit)
 
 	// sign + broadcast txn
 	cc, err := cosmos.NewProvider(nobleCfg.RPC)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	accountNumber, accountSequence, err := getNobleAccountNumberSequenceGRPC(cc, nobleAddress)
 
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	sigV2 := signing.SignatureV2{
 		PubKey: privKey.PubKey(),
@@ -156,17 +158,17 @@ func TestNobleBurnToEthMint(t *testing.T) {
 			SignMode:  sdkContext.TxConfig.SignModeHandler().DefaultMode(),
 			Signature: nil,
 		},
-		Sequence: uint64(accountSequence),
+		Sequence: accountSequence,
 	}
 
 	signerData := xauthsigning.SignerData{
 		ChainID:       nobleCfg.ChainID,
-		AccountNumber: uint64(accountNumber),
-		Sequence:      uint64(accountSequence),
+		AccountNumber: accountNumber,
+		Sequence:      accountSequence,
 	}
 
 	err = txBuilder.SetSignatures(sigV2)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	sigV2, err = clientTx.SignWithPrivKey(
 		sdkContext.TxConfig.SignModeHandler().DefaultMode(),
@@ -174,28 +176,28 @@ func TestNobleBurnToEthMint(t *testing.T) {
 		txBuilder,
 		&privKey,
 		sdkContext.TxConfig,
-		uint64(accountSequence),
+		accountSequence,
 	)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	err = txBuilder.SetSignatures(sigV2)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Generated Protobuf-encoded bytes.
 	txBytes, err := sdkContext.TxConfig.TxEncoder()(txBuilder.GetTx())
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	rpcResponse, err := cc.RPCClient.BroadcastTxSync(context.Background(), txBytes)
-	require.Nil(t, err)
-	fmt.Printf("Update pending: https://testnet.mintscan.io/noble-testnet/txs/%s\n", rpcResponse.Hash.String())
+	require.NoError(t, err)
+	t.Logf("Update pending: https://testnet.mintscan.io/noble-testnet/txs/%s", rpcResponse.Hash.String())
 
-	fmt.Println("Checking eth wallet...")
+	t.Log("Checking eth wallet...")
 	var newBalance uint64
 	for i := 0; i < 60; i++ {
 		newBalance, err = getEthBalance(client, usdcTokenAddressSepolia, ethDestinationAddress)
 		require.NoError(t, err)
 		if originalEthBalance+burnAmount.Uint64() == newBalance {
-			fmt.Println("Successfully minted at https://sepolia.etherscan.io/address/" + ethDestinationAddress)
+			t.Logf("Successfully minted at https://sepolia.etherscan.io/address/%s", ethDestinationAddress)
 			break
 		}
 		time.Sleep(3 * time.Second)

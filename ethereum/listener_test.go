@@ -5,10 +5,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
 	testutil "github.com/strangelove-ventures/noble-cctp-relayer/test_util"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
-	"github.com/stretchr/testify/require"
 )
 
 // TODO: update test. This test is currently outdated as the RPC endpoints likely won't have this much history
@@ -34,16 +35,15 @@ func TestStartListener(t *testing.T) {
 	tx := <-processingQueue
 
 	expectedMsg := &types.MessageState{
-		IrisLookupId: "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
+		IrisLookupID: "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
 		Status:       "created",
 		SourceDomain: 0,
 		DestDomain:   4,
 		SourceTxHash: "0xe1d7729de300274ee3a2fd20ba179b14a8e3ffcd9d847c506b06760f0dad7802",
 	}
-	require.Equal(t, expectedMsg.IrisLookupId, tx.Msgs[0].IrisLookupId)
+	require.Equal(t, expectedMsg.IrisLookupID, tx.Msgs[0].IrisLookupID)
 	require.Equal(t, expectedMsg.Status, tx.Msgs[0].Status)
 	require.Equal(t, expectedMsg.SourceDomain, tx.Msgs[0].SourceDomain)
 	require.Equal(t, expectedMsg.DestDomain, tx.Msgs[0].DestDomain)
 	require.Equal(t, expectedMsg.SourceTxHash, tx.Msgs[0].SourceTxHash)
-
 }
