@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -47,7 +48,11 @@ func InitPromMetrics(port int16) *PromMetrics {
 	// Expose /metrics HTTP endpoint
 	go func() {
 		http.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{Registry: reg}))
-		log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
+		server := &http.Server{
+			Addr:        fmt.Sprintf(":%d", port),
+			ReadTimeout: 3 * time.Second,
+		}
+		log.Fatal(server.ListenAndServe())
 	}()
 
 	return m
