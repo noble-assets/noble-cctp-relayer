@@ -22,7 +22,17 @@ func CheckAttestation(attestationURL string, logger log.Logger, irisLookupID str
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, attestationURL+"0x"+irisLookupID, nil)
+	// append ending / if not present
+	if attestationURL[len(attestationURL)-1:] != "/" {
+		attestationURL += "/"
+	}
+
+	// add 0x prefix if not present
+	if len(irisLookupID) > 2 && irisLookupID[:2] != "0x" {
+		irisLookupID = "0x" + irisLookupID
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, attestationURL+irisLookupID, nil)
 	if err != nil {
 		logger.Debug("error creating request: " + err.Error())
 		return nil
