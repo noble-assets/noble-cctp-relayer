@@ -2,6 +2,7 @@ package cosmos
 
 import (
 	"github.com/circlefin/noble-cctp/x/cctp"
+
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/codec/types"
@@ -9,8 +10,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/module"
 	"github.com/cosmos/cosmos-sdk/x/auth"
 	"github.com/cosmos/cosmos-sdk/x/auth/tx"
-	// authz "github.com/cosmos/cosmos-sdk/x/authz/module"
-	//"github.com/cosmos/cosmos-sdk/x/bank"
 )
 
 var ModuleBasics = []module.AppModuleBasic{

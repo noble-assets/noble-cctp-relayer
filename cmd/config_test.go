@@ -3,10 +3,11 @@ package cmd_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd"
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/noble"
-	"github.com/stretchr/testify/require"
 )
 
 func TestConfig(t *testing.T) {

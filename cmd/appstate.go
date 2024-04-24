@@ -3,8 +3,10 @@ package cmd
 import (
 	"os"
 
-	"cosmossdk.io/log"
 	"github.com/rs/zerolog"
+
+	"cosmossdk.io/log"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
@@ -73,7 +75,7 @@ func (a *AppState) loadConfigFile() {
 
 // validateConfig checks the AppState Config for any invalid settings.
 func (a *AppState) validateConfig() {
-	if a.Config.Circle.AttestationBaseUrl == "" {
+	if a.Config.Circle.AttestationBaseURL == "" {
 		a.Logger.Error("AttestationBaseUrl is required in the config")
 		os.Exit(1)
 	}

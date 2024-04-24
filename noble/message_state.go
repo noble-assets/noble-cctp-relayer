@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"time"
 
-	ctypes "github.com/cometbft/cometbft/rpc/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+
+	ctypes "github.com/cometbft/cometbft/rpc/core/types"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
@@ -22,7 +24,6 @@ func txToMessageState(tx *ctypes.ResultTx) ([]*types.MessageState, error) {
 
 	for _, event := range tx.TxResult.Events {
 		if event.Type == "circle.cctp.v1.MessageSent" {
-			//fmt.Printf("Saw cctp message %s - %d:%d\n", tx., i, j)
 			var parsed bool
 			var parseErrs error
 			for _, attr := range event.Attributes {
@@ -31,7 +32,6 @@ func txToMessageState(tx *ctypes.ResultTx) ([]*types.MessageState, error) {
 					parseErrs = errors.Join(parseErrs, fmt.Errorf("failed to decode attribute key: %w", err))
 				}
 				if string(decodedKey) == "message" {
-					// fmt.Printf("Saw message attribute %s - %d\n", tx.Hash, i)
 					decodedValue, err := base64.StdEncoding.DecodeString(attr.Value)
 					if err != nil {
 						parseErrs = errors.Join(parseErrs, fmt.Errorf("error decoding attr.value: %w", err))
@@ -59,7 +59,7 @@ func txToMessageState(tx *ctypes.ResultTx) ([]*types.MessageState, error) {
 					now := time.Now()
 
 					messageState := &types.MessageState{
-						IrisLookupId:      hashedHexStr,
+						IrisLookupID:      hashedHexStr,
 						Status:            types.Created,
 						SourceDomain:      types.Domain(msg.SourceDomain),
 						DestDomain:        types.Domain(msg.DestinationDomain),
@@ -82,5 +82,4 @@ func txToMessageState(tx *ctypes.ResultTx) ([]*types.MessageState, error) {
 	}
 
 	return messageStates, nil
-
 }

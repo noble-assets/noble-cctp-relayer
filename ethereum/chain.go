@@ -10,9 +10,10 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/ethclient"
+
 	"cosmossdk.io/log"
 
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
@@ -145,11 +146,12 @@ func (e *Ethereum) InitializeClients(ctx context.Context, logger log.Logger) err
 	return nil
 }
 
-func (e *Ethereum) CloseClients() {
+func (e *Ethereum) CloseClients() error {
 	if e.wsClient != nil {
 		e.wsClient.Close()
 	}
 	if e.rpcClient != nil {
 		e.rpcClient.Close()
 	}
+	return nil
 }

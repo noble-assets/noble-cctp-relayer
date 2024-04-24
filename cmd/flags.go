@@ -22,10 +22,9 @@ func addAppPersistantFlags(cmd *cobra.Command, a *AppState) *cobra.Command {
 	cmd.PersistentFlags().Int16P(flagMetricsPort, "p", 2112, "customize Prometheus metrics port")
 	cmd.PersistentFlags().DurationP(flagFlushInterval, "i", 0, "how frequently should a flush routine be run")
 	return cmd
-
 }
 
-func addJsonFlag(cmd *cobra.Command) *cobra.Command {
+func addJSONFlag(cmd *cobra.Command) *cobra.Command {
 	cmd.Flags().Bool(flagJSON, false, "return in json format")
 	return cmd
 }

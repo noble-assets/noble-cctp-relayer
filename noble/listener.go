@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"cosmossdk.io/log"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/relayer"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
@@ -48,7 +49,7 @@ func (n *Noble) StartListener(
 	blockQueue := make(chan uint64, n.blockQueueChannelSize)
 
 	// history
-	currentBlock = currentBlock - lookback
+	currentBlock -= lookback
 	for currentBlock <= chainTip {
 		blockQueue <- currentBlock
 		currentBlock++
@@ -125,7 +126,6 @@ func (n *Noble) flushMechanism(
 	logger log.Logger,
 	blockQueue chan uint64,
 ) {
-
 	logger.Debug(fmt.Sprintf("Flush mechanism started. Will flush every %v", flushInterval))
 
 	for {

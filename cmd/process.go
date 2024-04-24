@@ -8,11 +8,13 @@ import (
 	"strconv"
 	"time"
 
-	"cosmossdk.io/log"
-	"cosmossdk.io/math"
 	cctptypes "github.com/circlefin/noble-cctp/x/cctp/types"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
+
+	"cosmossdk.io/log"
+	"cosmossdk.io/math"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/circle"
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/noble"
@@ -37,11 +39,10 @@ func Start(a *AppState) *cobra.Command {
 			a.InitAppState()
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-
 			logger := a.Logger
 			cfg := a.Config
 
-			go startApi(a)
+			go startAPI(a)
 
 			// messageState processing queue
 			var processingQueue = make(chan *types.TxState, 10000)
@@ -117,8 +118,11 @@ func Start(a *AppState) *cobra.Command {
 
 			defer func() {
 				for _, c := range registeredDomains {
-					fmt.Printf("\n%s: latest-block: %d last-flushed-block: %d", c.Name(), c.LatestBlock(), c.LastFlushedBlock())
-					c.CloseClients()
+					logger.Info(fmt.Sprintf("%s: latest-block: %d last-flushed-block: %d", c.Name(), c.LatestBlock(), c.LastFlushedBlock()))
+					err := c.CloseClients()
+					if err != nil {
+						logger.Error("Error closing clients", "error", err)
+					}
 				}
 			}()
 
@@ -157,7 +161,6 @@ func StartProcessor(
 		var broadcastMsgs = make(map[types.Domain][]*types.MessageState)
 		var requeue bool
 		for _, msg := range tx.Msgs {
-
 			// if a filter's condition is met, mark as filtered
 			if FilterDisabledCCTPRoutes(cfg, logger, msg) ||
 				filterInvalidDestinationCallers(registeredDomains, logger, msg) ||
@@ -169,32 +172,35 @@ func StartProcessor(
 
 			// if the message is burned or pending, check for an attestation
 			if msg.Status == types.Created || msg.Status == types.Pending {
-				response := circle.CheckAttestation(cfg.Circle.AttestationBaseUrl, logger, msg.IrisLookupId, msg.SourceTxHash, msg.SourceDomain, msg.DestDomain)
+				response := circle.CheckAttestation(cfg.Circle.AttestationBaseURL, logger, msg.IrisLookupID, msg.SourceTxHash, msg.SourceDomain, msg.DestDomain)
 
-				if response == nil {
-					logger.Debug("Attestation is still processing for 0x" + msg.IrisLookupId + ".  Retrying...")
+				switch {
+				case response == nil:
+					logger.Debug("Attestation is still processing for 0x" + msg.IrisLookupID + ".  Retrying...")
 					requeue = true
 					continue
-				} else if msg.Status == types.Created && response.Status == "pending_confirmations" {
-					logger.Debug("Attestation is created but still pending confirmations for 0x" + msg.IrisLookupId + ".  Retrying...")
+				case msg.Status == types.Created && response.Status == "pending_confirmations":
+					logger.Debug("Attestation is created but still pending confirmations for 0x" + msg.IrisLookupID + ".  Retrying...")
 					State.Mu.Lock()
 					msg.Status = types.Pending
 					msg.Updated = time.Now()
 					State.Mu.Unlock()
 					requeue = true
 					continue
-				} else if response.Status == "pending_confirmations" {
-					logger.Debug("Attestation is still pending for 0x" + msg.IrisLookupId + ".  Retrying...")
+				case response.Status == "pending_confirmations":
+					logger.Debug("Attestation is still pending for 0x" + msg.IrisLookupID + ".  Retrying...")
 					requeue = true
 					continue
-				} else if response.Status == "complete" {
-					logger.Debug("Attestation is complete for 0x" + msg.IrisLookupId + ".")
+				case response.Status == "complete":
+					logger.Debug("Attestation is complete for 0x" + msg.IrisLookupID + ".")
 					State.Mu.Lock()
 					msg.Status = types.Attested
 					msg.Attestation = response.Attestation
 					msg.Updated = time.Now()
 					broadcastMsgs[msg.DestDomain] = append(broadcastMsgs[msg.DestDomain], msg)
 					State.Mu.Unlock()
+				default:
+					logger.Error("Attestation failed for unknown reason for 0x" + msg.IrisLookupID + ".  Status: " + response.Status)
 				}
 			}
 		}
@@ -250,7 +256,6 @@ func FilterDisabledCCTPRoutes(cfg *types.Config, logger log.Logger, msg *types.M
 	logger.Info(fmt.Sprintf("Filtered tx %s because relaying from %d to %d is not enabled",
 		msg.SourceTxHash, msg.SourceDomain, msg.DestDomain))
 	return true
-
 }
 
 // filterInvalidDestinationCallers returns true if the minter is not the destination caller for the specified domain
@@ -317,20 +322,24 @@ func filterLowTransfers(cfg *types.Config, logger log.Logger, msg *types.Message
 	return false
 }
 
-func startApi(a *AppState) {
+func startAPI(a *AppState) {
 	logger := a.Logger
 	cfg := a.Config
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
 
-	err := router.SetTrustedProxies(cfg.Api.TrustedProxies) // vpn.primary.strange.love
+	err := router.SetTrustedProxies(cfg.API.TrustedProxies) // vpn.primary.strange.love
 	if err != nil {
 		logger.Error("Unable to set trusted proxies on API server: " + err.Error())
 		os.Exit(1)
 	}
 
 	router.GET("/tx/:txHash", getTxByHash)
-	router.Run("localhost:8000")
+	err = router.Run("localhost:8000")
+	if err != nil {
+		logger.Error("Unable to start API server: " + err.Error())
+		os.Exit(1)
+	}
 }
 
 func getTxByHash(c *gin.Context) {

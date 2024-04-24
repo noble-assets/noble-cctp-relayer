@@ -4,12 +4,13 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rpc"
-	"math/big"
 )
 
-type JsonError interface {
+type JSONError interface {
 	Error() string
 	ErrorCode() int
 	ErrorData() interface{}

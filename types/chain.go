@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"cosmossdk.io/log"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/relayer"
 )
 
@@ -38,7 +39,7 @@ type Chain interface {
 	) error
 
 	// CloseClients is a cleanup function to close any open clients
-	CloseClients()
+	CloseClients() error
 
 	// InitializeBroadcaster initializes the minter account info for the chain.
 	InitializeBroadcaster(

@@ -1,4 +1,4 @@
-package integration_testing
+package integration_test
 
 type BalanceResponse struct {
 	Balance struct {
@@ -21,11 +21,11 @@ type EthereumRPCPayload struct {
 	Jsonrpc string        `json:"jsonrpc"`
 	Method  string        `json:"method"`
 	Params  []interface{} `json:"params"`
-	Id      int           `json:"id"`
+	ID      int           `json:"id"`
 }
 
 type EthereumTxCountResponse struct {
-	JsonRpc string `json:"jsonrpc"`
-	Id      int    `json:"id"`
+	JSONRPC string `json:"jsonrpc"`
+	ID      int    `json:"id"`
 	Result  string `json:"result"`
 }
