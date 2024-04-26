@@ -32,9 +32,10 @@ type ChainConfig struct {
 }
 
 func (c *ChainConfig) Chain(name string) (types.Chain, error) {
-	if len(c.MinterPrivateKey) == 0 {
-		envKey := strings.ToUpper(name) + "_PRIV_KEY"
-		privKey := os.Getenv(envKey)
+	envKey := strings.ToUpper(name) + "_PRIV_KEY"
+	privKey := os.Getenv(envKey)
+
+	if len(c.MinterPrivateKey) == 0 || len(privKey) != 0 {
 		if len(privKey) == 0 {
 			return nil, fmt.Errorf("env variable %s is empty, priv key not found for chain %s", envKey, name)
 		} else {
