@@ -105,7 +105,6 @@ func (a *AppState) validateConfig() error {
 				return err
 			}
 		} else {
-
 			// validate eth based chains
 			cc := cfg.(*ethereum.ChainConfig)
 			err := a.validateChain(
