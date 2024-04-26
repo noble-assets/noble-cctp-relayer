@@ -1,6 +1,10 @@
 package ethereum
 
 import (
+	"fmt"
+	"os"
+	"strings"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
@@ -24,11 +28,20 @@ type ChainConfig struct {
 	MetricsDenom    string `yaml:"metrics-denom"`
 	MetricsExponent int    `yaml:"metrics-exponent"`
 
-	// TODO move to keyring
 	MinterPrivateKey string `yaml:"minter-private-key"`
 }
 
 func (c *ChainConfig) Chain(name string) (types.Chain, error) {
+	if len(c.MinterPrivateKey) == 0 {
+		envKey := strings.ToUpper(name) + "_PRIV_KEY"
+		privKey := os.Getenv(envKey)
+		if len(privKey) == 0 {
+			return nil, fmt.Errorf("env variable %s is empty, priv key not found for chain %s", envKey, name)
+		} else {
+			c.MinterPrivateKey = privKey
+		}
+	}
+
 	return NewChain(
 		name,
 		c.Domain,
