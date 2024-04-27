@@ -1,6 +1,12 @@
 package noble
 
-import "github.com/strangelove-ventures/noble-cctp-relayer/types"
+import (
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/strangelove-ventures/noble-cctp-relayer/types"
+)
 
 var _ types.ChainConfig = (*ChainConfig)(nil)
 
@@ -23,11 +29,21 @@ type ChainConfig struct {
 
 	MinMintAmount uint64 `yaml:"min-mint-amount"`
 
-	// TODO move to keyring
 	MinterPrivateKey string `yaml:"minter-private-key"`
 }
 
 func (c *ChainConfig) Chain(name string) (types.Chain, error) {
+	envKey := strings.ToUpper(name) + "_PRIV_KEY"
+	privKey := os.Getenv(envKey)
+
+	if len(c.MinterPrivateKey) == 0 || len(privKey) != 0 {
+		if len(privKey) == 0 {
+			return nil, fmt.Errorf("env variable %s is empty, priv key not found for chain %s", envKey, name)
+		} else {
+			c.MinterPrivateKey = privKey
+		}
+	}
+
 	return NewChain(
 		c.RPC,
 		c.ChainID,

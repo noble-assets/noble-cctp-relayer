@@ -36,12 +36,24 @@ By default, metrics are exported at on port :2112/metrics (`http://localhost:211
 | cctp_relayer_chain_latest_height    | Current height of the chain.                                                                                                                       | Gauge    |
 | cctp_relayer_broadcast_errors_total | The total number of failed broadcasts. Note: this is AFTER it retries `broadcast-retries` (config setting) number of times.                        | Counter  |
 
-### Noble Key
+### Minter Private Keys
+Minter private keys are required on a per chain basis to broadcast transactions to the target chain. These private keys can either be set in the `config.yaml` or via environment variables. 
 
-The noble private key you input into the config must be hex encoded. The easiest way to get this is via a chain binary:
+#### Config Private Keys
+
+Please see `./config/sample-config.yaml` for setting minter private keys in configuration. Please note that this method is insecure as the private keys are stored in plain text.
+
+#### Env Vars Private Keys
+
+To pass in a private key via an environment variable, first identify the chain's name. A chain's name corresponds to the key under the `chains` section in the `config.yaml`. The sample config lists these chain names for example: `noble`, `ethereum`, `optimism`, etc. Now, take the chain name in all caps and append `_PRIV_KEY`.
+
+An environment variable for `noble` would look like: `NOBLE_PRIV_KEY=<PRIVATE_KEY_HERE>`
+
+#### Noble Private Key Format
+
+The noble private key you input into the config or via enviroment variables must be hex encoded. The easiest way to get this is via a chain binary:
 
 `nobled keys export <KEY_NAME> --unarmored-hex --unsafe`
-
 
 ### API
 Simple API to query message state cache
