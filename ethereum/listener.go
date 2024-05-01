@@ -261,6 +261,16 @@ func (e *Ethereum) consumeStream(
 	}
 }
 
+// flushMechanism looks back over the chain history every specified flushInterval.
+//
+// Each chain is configured with a lookback period which signifies how many blocks to look back
+// at each interval. The flush mechanism will start from the last flushed block and will rescan
+// the lookback period and consume all messages in that range. The flush mechanism will not flush
+// all the way to the chain's latest block to avoid consuming messages that are still in the queue.
+// There will be a minimum gap of the lookback period between the last flushed block and the latest block.
+//
+// Note: The first time the flush mechanism is run, it will set the lastFlushedBlock to the latest block
+// minus twice the lookback period.
 func (e *Ethereum) flushMechanism(
 	ctx context.Context,
 	logger log.Logger,
@@ -281,19 +291,31 @@ func (e *Ethereum) flushMechanism(
 
 			// initialize first lastFlushedBlock if not set
 			if e.lastFlushedBlock == 0 {
-				e.lastFlushedBlock = latestBlock - e.lookbackPeriod
+				e.lastFlushedBlock = latestBlock - 2*e.lookbackPeriod
+
+				if latestBlock < e.lookbackPeriod {
+					e.lastFlushedBlock = 0
+				}
 			}
 
-			// start from lastFlushedBlock
-			start := e.lastFlushedBlock
+			// start from the last block it flushed
+			startBlock := e.lastFlushedBlock
 
-			logger.Info(fmt.Sprintf("Flush started from %d to %d", start, latestBlock))
+			// set finish block to be latestBlock - lookbackPeriod
+			finishBlock := latestBlock - e.lookbackPeriod
 
-			// consume from lastFlushedBlock to the latestBlock
-			e.getAndConsumeHistory(ctx, logger, processingQueue, messageSent, messageTransmitterAddress, messageTransmitterABI, start, latestBlock)
+			if startBlock >= finishBlock {
+				logger.Debug("No new blocks to flush")
+				continue
+			}
+
+			logger.Info(fmt.Sprintf("Flush started from %d to %d (current height: %d, lookback period: %d)", startBlock, finishBlock, latestBlock, e.lookbackPeriod))
+
+			// consume from lastFlushedBlock to the finishBlock
+			e.getAndConsumeHistory(ctx, logger, processingQueue, messageSent, messageTransmitterAddress, messageTransmitterABI, startBlock, finishBlock)
 
 			// update lastFlushedBlock to the last block it flushed
-			e.lastFlushedBlock = latestBlock
+			e.lastFlushedBlock = finishBlock
 
 			logger.Info("Flush complete")
 

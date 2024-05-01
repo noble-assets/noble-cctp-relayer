@@ -20,21 +20,28 @@ Sample configs can be found in [config](config).
 
 ### Flush Interval
 
-Using the `--flush-interval` flag will run a flush on all paths every `duration`; ex `--flush-interval 5m`
+Using the `--flush-interval` flag will run a flush on all chains every `duration`; ex `--flush-interval 5m`
 
-The relayer will keep track of the latest flushed block. The first time the flush is run, the flush will start at the chains latest height - lookback period and flush up until height of the chain when the flush started. It will then store the height the flush ended on.
+The first time the flush is run per chain, the flush will start at the chains `latest height - (2 * lookback period)`. The flush will always finish at the `latest chain height - lookback period`. This allows the flush to lag behind the chain so that the flush does not compete for transactions that are actively being processed. For subsequent flushes, each chain will reference its last flushed block, start from there and flush to the `latest chain height - lookback period` again. The flushing process will continue as long as the relayer is running.
 
-After that, it will flush from the last stored height - lookback period up until the latest height of the chain.
+For best results and coverage, the lookback period in blocks should correspond to the flush interval. If a chain produces 1 block a second and the flush interval is set to 30 minutes (1800 seconds), the lookback period should be at least 1800 blocks. When in doubt, round up and add a small buffer.
+
+#### Examples
+
+Consider a 30 minute flush interval (1800 seconds)
+- Ethereum: 12 second blocks = (1800 / 12) = `150 blocks`
+- Polygon: 2 second blocks = (1800 / 2) = `900 blocks`
+- Arbitrum: 0.26 second blocks = (1800 / 0.26) = `~6950 blocks`
 
 ### Prometheus Metrics
 
 By default, metrics are exported at on port :2112/metrics (`http://localhost:2112/metrics`). You can customize the port using the `--metrics-port` flag. 
 
-| **Exported Metric**                 | **Description**                                                                                                                                    | **Type** |
-|-------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------|----------|
-| cctp_relayer_wallet_balance         | Current balance of a relayer wallet in Wei.<br><br>Noble balances are not currently exported b/c `MsgReceiveMessage` is free to submit on Noble.   | Gauge    |
-| cctp_relayer_chain_latest_height    | Current height of the chain.                                                                                                                       | Gauge    |
-| cctp_relayer_broadcast_errors_total | The total number of failed broadcasts. Note: this is AFTER it retries `broadcast-retries` (config setting) number of times.                        | Counter  |
+| **Exported Metric**                 | **Description**                                                                                                                                  | **Type** |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------- |
+| cctp_relayer_wallet_balance         | Current balance of a relayer wallet in Wei.<br><br>Noble balances are not currently exported b/c `MsgReceiveMessage` is free to submit on Noble. | Gauge    |
+| cctp_relayer_chain_latest_height    | Current height of the chain.                                                                                                                     | Gauge    |
+| cctp_relayer_broadcast_errors_total | The total number of failed broadcasts. Note: this is AFTER it retries `broadcast-retries` (config setting) number of times.                      | Counter  |
 
 ### Minter Private Keys
 Minter private keys are required on a per chain basis to broadcast transactions to the target chain. These private keys can either be set in the `config.yaml` or via environment variables. 
@@ -66,14 +73,14 @@ localhost:8000/tx/<hash>?domain=0
 
 ### State
 
-| IrisLookupId | Status   | SourceDomain | DestDomain | SourceTxHash  | DestTxHash | MsgSentBytes | Created | Updated |
-|:-------------|:---------|:-------------|:-----------|:--------------|:-----------|:-------------|:--------|:--------|
-| 0x123        | Created  | 0            | 4          | 0x123         | ABC123     | bytes...     | date    | date    |
-| 0x123        | Pending  | 0            | 4          | 0x123         | ABC123     | bytes...     | date    | date    |
-| 0x123        | Attested | 0            | 4          | 0x123         | ABC123     | bytes...     | date    | date    |
-| 0x123        | Complete | 0            | 4          | 0x123         | ABC123     | bytes...     | date    | date    |
-| 0x123        | Failed   | 0            | 4          | 0x123         | ABC123     | bytes...     | date    | date    |
-| 0x123        | Filtered | 0            | 4          | 0x123         | ABC123     | bytes...     | date    | date    |
+| IrisLookupId | Status   | SourceDomain | DestDomain | SourceTxHash | DestTxHash | MsgSentBytes | Created | Updated |
+| :----------- | :------- | :----------- | :--------- | :----------- | :--------- | :----------- | :------ | :------ |
+| 0x123        | Created  | 0            | 4          | 0x123        | ABC123     | bytes...     | date    | date    |
+| 0x123        | Pending  | 0            | 4          | 0x123        | ABC123     | bytes...     | date    | date    |
+| 0x123        | Attested | 0            | 4          | 0x123        | ABC123     | bytes...     | date    | date    |
+| 0x123        | Complete | 0            | 4          | 0x123        | ABC123     | bytes...     | date    | date    |
+| 0x123        | Failed   | 0            | 4          | 0x123        | ABC123     | bytes...     | date    | date    |
+| 0x123        | Filtered | 0            | 4          | 0x123        | ABC123     | bytes...     | date    | date    |
 
 ### Generating Go ABI bindings
 

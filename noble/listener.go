@@ -121,6 +121,16 @@ func (n *Noble) StartListener(
 	<-ctx.Done()
 }
 
+// flushMechanism looks back over the chain history every specified flushInterval.
+//
+// Each chain is configured with a lookback period which signifies how many blocks to look back
+// at each interval. The flush mechanism will start from the last flushed block and will rescan
+// the lookback period and consume all messages in that range. The flush mechanism will not flush
+// all the way to the chain's latest block to avoid consuming messages that are still in the queue.
+// There will be a minimum gap of the lookback period between the last flushed block and the latest block.
+//
+// Note: The first time the flush mechanism is run, it will set the lastFlushedBlock to the latest block
+// minus twice the lookback period.
 func (n *Noble) flushMechanism(
 	ctx context.Context,
 	logger log.Logger,
@@ -145,19 +155,32 @@ func (n *Noble) flushMechanism(
 				continue
 			}
 
+			// initialize first lastFlushedBlock if not set
 			if n.lastFlushedBlock == 0 {
-				n.lastFlushedBlock = latestBlock
+				n.lastFlushedBlock = latestBlock - (2 * n.lookbackPeriod)
+
+				if latestBlock < n.lookbackPeriod {
+					n.lastFlushedBlock = 0
+				}
 			}
-			lastFlushedBlock := n.lastFlushedBlock
 
-			flushStart := lastFlushedBlock - n.lookbackPeriod
+			// start from the last block it flushed
+			startBlock := n.lastFlushedBlock
 
-			logger.Info(fmt.Sprintf("Flush started from: %d to: %d", flushStart, latestBlock))
+			// set finish block to be latestBlock - lookbackPeriod
+			finishBlock := latestBlock - n.lookbackPeriod
 
-			for i := flushStart; i <= latestBlock; i++ {
+			if startBlock >= finishBlock {
+				logger.Debug("No new blocks to flush")
+				continue
+			}
+
+			logger.Info(fmt.Sprintf("Flush started from %d to %d (current height: %d, lookback period: %d)", startBlock, finishBlock, latestBlock, n.lookbackPeriod))
+
+			for i := startBlock; i <= finishBlock; i++ {
 				blockQueue <- i
 			}
-			n.lastFlushedBlock = latestBlock
+			n.lastFlushedBlock = finishBlock
 
 			logger.Info("Flush complete")
 
