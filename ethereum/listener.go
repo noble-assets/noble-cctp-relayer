@@ -291,7 +291,11 @@ func (e *Ethereum) flushMechanism(
 
 			// initialize first lastFlushedBlock if not set
 			if e.lastFlushedBlock == 0 {
-				e.lastFlushedBlock = latestBlock - (2 * e.lookbackPeriod)
+				e.lastFlushedBlock = latestBlock - 2*e.lookbackPeriod
+
+				if latestBlock < e.lookbackPeriod {
+					e.lastFlushedBlock = 0
+				}
 			}
 
 			// start from the last block it flushed
@@ -307,7 +311,7 @@ func (e *Ethereum) flushMechanism(
 
 			logger.Info(fmt.Sprintf("Flush started from %d to %d (current height: %d, lookback period: %d)", startBlock, finishBlock, latestBlock, e.lookbackPeriod))
 
-			// consume from lastFlushedBlock to the latestBlock
+			// consume from lastFlushedBlock to the finishBlock
 			e.getAndConsumeHistory(ctx, logger, processingQueue, messageSent, messageTransmitterAddress, messageTransmitterABI, startBlock, finishBlock)
 
 			// update lastFlushedBlock to the last block it flushed

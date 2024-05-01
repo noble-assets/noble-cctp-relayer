@@ -158,6 +158,10 @@ func (n *Noble) flushMechanism(
 			// initialize first lastFlushedBlock if not set
 			if n.lastFlushedBlock == 0 {
 				n.lastFlushedBlock = latestBlock - (2 * n.lookbackPeriod)
+
+				if latestBlock < n.lookbackPeriod {
+					n.lastFlushedBlock = 0
+				}
 			}
 
 			// start from the last block it flushed
