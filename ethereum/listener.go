@@ -33,6 +33,7 @@ func (e *Ethereum) StartListener(
 	ctx context.Context,
 	logger log.Logger,
 	processingQueue chan *types.TxState,
+	flushOnlyMode bool,
 	flushInterval time.Duration,
 ) {
 	logger = logger.With("chain", e.name, "chain_id", e.chainID, "domain", e.domain)
@@ -55,43 +56,49 @@ func (e *Ethereum) StartListener(
 		Ready: make(chan struct{}),
 	}
 
-	// start main stream (does not account for lookback period or specific start block)
-	stream, sub, history := e.startMainStream(ctx, logger, messageSent, messageTransmitterAddress)
+	// FlushOnlyMode should only run the flush mechanism, otherwise start the main listener,
+	// otherwise consume history and incoming msgs
+	if flushOnlyMode {
+		go e.flushMechanism(ctx, logger, processingQueue, messageSent, messageTransmitterAddress, messageTransmitterABI, flushOnlyMode, flushInterval, sig)
+	} else {
+		// start main stream (does not account for lookback period or specific start block)
+		stream, sub, history := e.startMainStream(ctx, logger, messageSent, messageTransmitterAddress)
 
-	go e.consumeStream(ctx, logger, processingQueue, messageSent, messageTransmitterABI, stream, sig)
-	consumeHistory(logger, history, processingQueue, messageSent, messageTransmitterABI)
+		go e.consumeStream(ctx, logger, processingQueue, messageSent, messageTransmitterABI, stream, sig)
+		consumeHistory(logger, history, processingQueue, messageSent, messageTransmitterABI)
 
-	// get history from (start block - lookback) up until latest block
-	latestBlock := e.LatestBlock()
-	start := latestBlock
-	if e.startBlock != 0 {
-		start = e.startBlock
-	}
-	startLookback := start - e.lookbackPeriod
-	logger.Info(fmt.Sprintf("Getting history from %d: starting at: %d looking back %d blocks", startLookback, start, e.lookbackPeriod))
-	e.getAndConsumeHistory(ctx, logger, processingQueue, messageSent, messageTransmitterAddress, messageTransmitterABI, startLookback, latestBlock)
+		// get history from (start block - lookback) up until latest block
+		latestBlock := e.LatestBlock()
+		start := latestBlock
+		if e.startBlock != 0 {
+			start = e.startBlock
+		}
+		startLookback := start - e.lookbackPeriod
 
-	logger.Info("Finished getting history")
+		logger.Info(fmt.Sprintf("Getting history from %d: starting at: %d looking back %d blocks", startLookback, start, e.lookbackPeriod))
+		e.getAndConsumeHistory(ctx, logger, processingQueue, messageSent, messageTransmitterAddress, messageTransmitterABI, startLookback, latestBlock)
+		logger.Info("Finished getting history")
 
-	if flushInterval > 0 {
-		go e.flushMechanism(ctx, logger, processingQueue, messageSent, messageTransmitterAddress, messageTransmitterABI, flushInterval, sig)
-	}
+		if flushInterval > 0 {
+			go e.flushMechanism(ctx, logger, processingQueue, messageSent, messageTransmitterAddress, messageTransmitterABI, flushOnlyMode, flushInterval, sig)
+		}
 
-	// listen for errors in the main websocket stream
-	// if error occurs, trigger sig.Ready
-	// This will cancel `consumeStream` and `flushMechanism` routines
-	select {
-	case <-ctx.Done():
-		return
-	case err := <-sub.Err():
-		logger.Error("Websocket disconnected. Reconnecting...", "err", err)
-		close(sig.Ready)
+		// listen for errors in the main websocket stream
+		// if error occurs, trigger sig.Ready
+		// This will cancel `consumeStream` and `flushMechanism` routines
+		select {
+		case <-ctx.Done():
+			return
+		case err := <-sub.Err():
+			logger.Error("Websocket disconnected. Reconnecting...", "err", err)
+			close(sig.Ready)
 
-		// restart
-		e.startBlock = e.lastFlushedBlock
-		time.Sleep(10 * time.Millisecond)
-		e.StartListener(ctx, logger, processingQueue, flushInterval)
-		return
+			// restart
+			e.startBlock = e.lastFlushedBlock
+			time.Sleep(10 * time.Millisecond)
+			e.StartListener(ctx, logger, processingQueue, flushOnlyMode, flushInterval)
+			return
+		}
 	}
 }
 
@@ -278,10 +285,18 @@ func (e *Ethereum) flushMechanism(
 	messageSent abi.Event,
 	messageTransmitterAddress common.Address,
 	messageTransmitterABI abi.ABI,
+	flushOnlyMode bool,
 	flushInterval time.Duration,
 	sig *errSignal,
 ) {
 	logger.Info(fmt.Sprintf("Starting flush mechanism. Will flush every %v", flushInterval))
+
+	// extraFlushBlocks is used to add an extra space between latest height and last flushed block
+	// this setting should only be used for the secondary, flush only relayer
+	extraFlushBlocks := uint64(0)
+	if flushOnlyMode {
+		extraFlushBlocks = 2 * e.lookbackPeriod
+	}
 
 	for {
 		timer := time.NewTimer(flushInterval)
@@ -291,7 +306,7 @@ func (e *Ethereum) flushMechanism(
 
 			// initialize first lastFlushedBlock if not set
 			if e.lastFlushedBlock == 0 {
-				e.lastFlushedBlock = latestBlock - 2*e.lookbackPeriod
+				e.lastFlushedBlock = latestBlock - (2*e.lookbackPeriod + extraFlushBlocks)
 
 				if latestBlock < e.lookbackPeriod {
 					e.lastFlushedBlock = 0
@@ -302,7 +317,7 @@ func (e *Ethereum) flushMechanism(
 			startBlock := e.lastFlushedBlock
 
 			// set finish block to be latestBlock - lookbackPeriod
-			finishBlock := latestBlock - e.lookbackPeriod
+			finishBlock := latestBlock - (e.lookbackPeriod + extraFlushBlocks)
 
 			if startBlock >= finishBlock {
 				logger.Debug("No new blocks to flush")

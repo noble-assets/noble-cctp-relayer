@@ -42,6 +42,27 @@ func Start(a *AppState) *cobra.Command {
 			logger := a.Logger
 			cfg := a.Config
 
+			flushInterval, err := cmd.Flags().GetDuration(flagFlushInterval)
+			if err != nil {
+				logger.Error("Invalid flush interval", "error", err)
+			}
+
+			flushOnly, err := cmd.Flags().GetBool(flagFlushOnlyMode)
+			if err != nil {
+				logger.Error("Invalid flush only flag", "error", err)
+				os.Exit(1)
+			}
+
+			if flushInterval == 0 {
+				if flushOnly {
+					logger.Error("Flush only mode requires a flush interval")
+					os.Exit(1)
+				} else {
+					logger.Info("Flush interval not set. Use the --flush-interval flag to set a reoccurring flush")
+				}
+			}
+
+			// start API on normal relayer only
 			go startAPI(a)
 
 			// messageState processing queue
@@ -53,14 +74,6 @@ func Start(a *AppState) *cobra.Command {
 			if err != nil {
 				logger.Error("Invalid port", "error", err)
 				os.Exit(1)
-			}
-
-			flushInterval, err := cmd.Flags().GetDuration(flagFlushInterval)
-			if err != nil {
-				logger.Error("Invalid flush interval", "error", err)
-			}
-			if flushInterval == 0 {
-				logger.Info("Flush interval not set. Use the --flush-interval flag to set a reoccurring flush")
 			}
 
 			metrics := relayer.InitPromMetrics(port)
@@ -100,7 +113,8 @@ func Start(a *AppState) *cobra.Command {
 					os.Exit(1)
 				}
 
-				go c.StartListener(cmd.Context(), logger, processingQueue, flushInterval)
+				go c.StartListener(cmd.Context(), logger, processingQueue, flushOnly, flushInterval)
+
 				go c.WalletBalanceMetric(cmd.Context(), a.Logger, metrics)
 
 				if _, ok := registeredDomains[c.Domain()]; ok {

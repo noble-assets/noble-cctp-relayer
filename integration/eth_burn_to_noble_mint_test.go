@@ -73,7 +73,7 @@ func TestEthBurnToNobleMint(t *testing.T) {
 
 	processingQueue := make(chan *types.TxState, 10)
 
-	go ethChain.StartListener(ctx, a.Logger, processingQueue, 0)
+	go ethChain.StartListener(ctx, a.Logger, processingQueue, false, 0)
 	go cmd.StartProcessor(ctx, a, registeredDomains, processingQueue, sequenceMap, nil)
 
 	_, _, generatedWallet := testdata.KeyTestPubAddr()

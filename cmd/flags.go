@@ -13,6 +13,7 @@ const (
 	flagJSON          = "json"
 	flagMetricsPort   = "metrics-port"
 	flagFlushInterval = "flush-interval"
+	flagFlushOnlyMode = "flush-only-mode"
 )
 
 func addAppPersistantFlags(cmd *cobra.Command, a *AppState) *cobra.Command {
@@ -21,6 +22,7 @@ func addAppPersistantFlags(cmd *cobra.Command, a *AppState) *cobra.Command {
 	cmd.PersistentFlags().StringVar(&a.LogLevel, flagLogLevel, "info", "log level (debug, info, warn, error)")
 	cmd.PersistentFlags().Int16P(flagMetricsPort, "p", 2112, "customize Prometheus metrics port")
 	cmd.PersistentFlags().DurationP(flagFlushInterval, "i", 0, "how frequently should a flush routine be run")
+	cmd.PersistentFlags().BoolP(flagFlushOnlyMode, "f", false, "only run the background flush routine (acts as a redundant relayer)")
 	return cmd
 }
 

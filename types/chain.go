@@ -53,6 +53,7 @@ type Chain interface {
 		ctx context.Context,
 		logger log.Logger,
 		processingQueue chan *TxState,
+		flushOnlyMode bool,
 		flushInterval time.Duration,
 	)
 
