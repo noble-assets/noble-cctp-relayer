@@ -33,6 +33,14 @@ Consider a 30 minute flush interval (1800 seconds)
 - Polygon: 2 second blocks = (1800 / 2) = `900 blocks`
 - Arbitrum: 0.26 second blocks = (1800 / 0.26) = `~6950 blocks`
 
+### Flush Only Mode
+
+This relayer also supports a `--flush-only-mode`. This mode will only flush the chain and not actively listen for new events as they occur. This is useful for running a secondary relayer which "lags" behind the primary relayer. It is only responsible for retrying failed transactions. 
+
+When the relayer is in flush only mode, the flush mechanism will start at `latest height - (4 * lookback period)` and finish at `latest height - (3 * lookback period)`. For all subsequent flushes, the relayer will start at the last flushed block and finish at `latest height - (3 * lookback period)`. Please see the notes above for configuring the flush interval and lookback period.
+
+> Note: It is highly recommended to use the same configuration for both the primary and secondary relayer. This ensures that there is zero overlap between the relayers.
+
 ### Prometheus Metrics
 
 By default, metrics are exported at on port :2112/metrics (`http://localhost:2112/metrics`). You can customize the port using the `--metrics-port` flag. 
