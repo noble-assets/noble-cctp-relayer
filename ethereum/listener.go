@@ -56,8 +56,7 @@ func (e *Ethereum) StartListener(
 		Ready: make(chan struct{}),
 	}
 
-	// FlushOnlyMode should only run the flush mechanism, otherwise start the main listener,
-	// otherwise consume history and incoming msgs
+	// FlushOnlyMode is used for the secondary, flush only relayer. When enabled, the main stream is not started.
 	if flushOnlyMode {
 		go e.flushMechanism(ctx, logger, processingQueue, messageSent, messageTransmitterAddress, messageTransmitterABI, flushOnlyMode, flushInterval, sig)
 	} else {
