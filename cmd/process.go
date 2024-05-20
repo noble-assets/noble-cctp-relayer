@@ -38,7 +38,7 @@ func Start(a *AppState) *cobra.Command {
 		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
 			a.InitAppState()
 		},
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := a.Logger
 			cfg := a.Config
 
@@ -49,16 +49,14 @@ func Start(a *AppState) *cobra.Command {
 
 			flushOnly, err := cmd.Flags().GetBool(flagFlushOnlyMode)
 			if err != nil {
-				logger.Error("Invalid flush only flag", "error", err)
-				os.Exit(1)
+				return fmt.Errorf("invalid flush only flag error=%e", err)
 			}
 
 			if flushInterval == 0 {
 				if flushOnly {
-					logger.Error("Flush only mode requires a flush interval")
-					os.Exit(1)
+					return fmt.Errorf("flush only mode requires a flush interval")
 				} else {
-					logger.Info("Flush interval not set. Use the --flush-interval flag to set a reoccurring flush")
+					logger.Error("Flush interval not set. Use the --flush-interval flag to set a reoccurring flush")
 				}
 			}
 
@@ -72,8 +70,7 @@ func Start(a *AppState) *cobra.Command {
 
 			port, err := cmd.Flags().GetInt16(flagMetricsPort)
 			if err != nil {
-				logger.Error("Invalid port", "error", err)
-				os.Exit(1)
+				return fmt.Errorf("invalid port error=%e", err)
 			}
 
 			metrics := relayer.InitPromMetrics(port)
@@ -81,15 +78,13 @@ func Start(a *AppState) *cobra.Command {
 			for name, cfg := range cfg.Chains {
 				c, err := cfg.Chain(name)
 				if err != nil {
-					logger.Error("Error creating chain", "err: ", err)
-					os.Exit(1)
+					return fmt.Errorf("error creating chain error=%e", err)
 				}
 
 				logger = logger.With("name", c.Name(), "domain", c.Domain())
 
 				if err := c.InitializeClients(cmd.Context(), logger); err != nil {
-					logger.Error("Error initializing client", "err", err)
-					os.Exit(1)
+					return fmt.Errorf("error initializing client error=%e", err)
 				}
 
 				go c.TrackLatestBlockHeight(cmd.Context(), logger, metrics)
@@ -103,14 +98,12 @@ func Start(a *AppState) *cobra.Command {
 						break
 					}
 					if i == maxRetries-1 {
-						logger.Error("Unable to get height")
-						os.Exit(1)
+						return fmt.Errorf("unable to get height")
 					}
 				}
 
 				if err := c.InitializeBroadcaster(cmd.Context(), logger, sequenceMap); err != nil {
-					logger.Error("Error initializing broadcaster", "error", err)
-					os.Exit(1)
+					return fmt.Errorf("error initializing broadcaster error=%e", err)
 				}
 
 				go c.StartListener(cmd.Context(), logger, processingQueue, flushOnly, flushInterval)
@@ -118,8 +111,7 @@ func Start(a *AppState) *cobra.Command {
 				go c.WalletBalanceMetric(cmd.Context(), a.Logger, metrics)
 
 				if _, ok := registeredDomains[c.Domain()]; ok {
-					logger.Error("Duplicate domain found", "domain", c.Domain(), "name:", c.Name())
-					os.Exit(1)
+					return fmt.Errorf("duplicate domain found domain=%d name=%s", c.Domain(), c.Name())
 				}
 
 				registeredDomains[c.Domain()] = c
@@ -130,17 +122,19 @@ func Start(a *AppState) *cobra.Command {
 				go StartProcessor(cmd.Context(), a, registeredDomains, processingQueue, sequenceMap, metrics)
 			}
 
-			defer func() {
-				for _, c := range registeredDomains {
-					logger.Info(fmt.Sprintf("%s: latest-block: %d last-flushed-block: %d", c.Name(), c.LatestBlock(), c.LastFlushedBlock()))
-					err := c.CloseClients()
-					if err != nil {
-						logger.Error("Error closing clients", "error", err)
-					}
-				}
-			}()
-
+			// wait for context to be done
 			<-cmd.Context().Done()
+
+			// close clients & output latest block heights
+			for _, c := range registeredDomains {
+				logger.Info(fmt.Sprintf("%s: latest-block: %d last-flushed-block: %d", c.Name(), c.LatestBlock(), c.LastFlushedBlock()))
+				err := c.CloseClients()
+				if err != nil {
+					logger.Error("Error closing clients", "error", err)
+				}
+			}
+
+			return nil
 		},
 	}
 
