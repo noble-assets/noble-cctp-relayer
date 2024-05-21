@@ -49,7 +49,7 @@ func Start(a *AppState) *cobra.Command {
 
 			flushOnly, err := cmd.Flags().GetBool(flagFlushOnlyMode)
 			if err != nil {
-				return fmt.Errorf("invalid flush only flag error=%e", err)
+				return fmt.Errorf("invalid flush only flag error=%w", err)
 			}
 
 			if flushInterval == 0 {
@@ -70,7 +70,7 @@ func Start(a *AppState) *cobra.Command {
 
 			port, err := cmd.Flags().GetInt16(flagMetricsPort)
 			if err != nil {
-				return fmt.Errorf("invalid port error=%e", err)
+				return fmt.Errorf("invalid port error=%w", err)
 			}
 
 			metrics := relayer.InitPromMetrics(port)
@@ -78,13 +78,13 @@ func Start(a *AppState) *cobra.Command {
 			for name, cfg := range cfg.Chains {
 				c, err := cfg.Chain(name)
 				if err != nil {
-					return fmt.Errorf("error creating chain error=%e", err)
+					return fmt.Errorf("error creating chain error=%w", err)
 				}
 
 				logger = logger.With("name", c.Name(), "domain", c.Domain())
 
 				if err := c.InitializeClients(cmd.Context(), logger); err != nil {
-					return fmt.Errorf("error initializing client error=%e", err)
+					return fmt.Errorf("error initializing client error=%w", err)
 				}
 
 				go c.TrackLatestBlockHeight(cmd.Context(), logger, metrics)
@@ -103,7 +103,7 @@ func Start(a *AppState) *cobra.Command {
 				}
 
 				if err := c.InitializeBroadcaster(cmd.Context(), logger, sequenceMap); err != nil {
-					return fmt.Errorf("error initializing broadcaster error=%e", err)
+					return fmt.Errorf("error initializing broadcaster error=%w", err)
 				}
 
 				go c.StartListener(cmd.Context(), logger, processingQueue, flushOnly, flushInterval)
