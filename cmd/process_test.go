@@ -6,12 +6,14 @@ import (
 	"testing"
 	"time"
 
-	"cosmossdk.io/log"
 	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/require"
+
+	"cosmossdk.io/log"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd"
 	testutil "github.com/strangelove-ventures/noble-cctp-relayer/test_util"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
-	"github.com/stretchr/testify/require"
 )
 
 // var a *cmd.AppState
@@ -64,10 +66,10 @@ func TestProcessDisabledCctpRoute(t *testing.T) {
 		Msgs: []*types.MessageState{
 			{
 				SourceTxHash:      "123",
-				IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
+				IrisLookupID:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
 				Status:            types.Created,
 				SourceDomain:      0,
-				DestDomain:        5, //not configured
+				DestDomain:        5, // not configured
 				DestinationCaller: emptyBz,
 			},
 		},
@@ -99,7 +101,7 @@ func TestProcessInvalidDestinationCaller(t *testing.T) {
 		Msgs: []*types.MessageState{
 			{
 				SourceTxHash:      "123",
-				IrisLookupId:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
+				IrisLookupID:      "a404f4155166a1fc7ffee145b5cac6d0f798333745289ab1db171344e226ef0c",
 				Status:            types.Created,
 				SourceDomain:      0,
 				DestDomain:        4,
@@ -119,7 +121,6 @@ func TestProcessInvalidDestinationCaller(t *testing.T) {
 
 // we want to filter out the transaction if the route is not enabled
 func TestFilterDisabledCCTPRoutes(t *testing.T) {
-
 	logger := log.NewLogger(os.Stdout, log.LevelOption(zerolog.DebugLevel))
 
 	var msgState types.MessageState
@@ -153,5 +154,4 @@ func TestFilterDisabledCCTPRoutes(t *testing.T) {
 	}
 	filterTx = cmd.FilterDisabledCCTPRoutes(&cfg, logger, &msgState)
 	require.True(t, filterTx)
-
 }

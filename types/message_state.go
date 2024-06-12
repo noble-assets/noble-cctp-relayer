@@ -33,7 +33,7 @@ type TxState struct {
 }
 
 type MessageState struct {
-	IrisLookupId      string // hex encoded MessageSent bytes
+	IrisLookupID      string // hex encoded MessageSent bytes
 	Status            string // created, pending, attested, complete, failed, filtered
 	Attestation       string // hex encoded attestation
 	SourceDomain      Domain // uint32 source domain id
@@ -63,7 +63,7 @@ func EvmLogToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log)
 	hashedHexStr := hex.EncodeToString(hashed)
 
 	messageState = &MessageState{
-		IrisLookupId:      hashedHexStr,
+		IrisLookupID:      hashedHexStr,
 		Status:            Created,
 		SourceDomain:      Domain(message.SourceDomain),
 		DestDomain:        Domain(message.DestinationDomain),
@@ -85,7 +85,7 @@ func EvmLogToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log)
 
 // Equal checks if two MessageState instances are equal
 func (m *MessageState) Equal(other *MessageState) bool {
-	return (m.IrisLookupId == other.IrisLookupId &&
+	return (m.IrisLookupID == other.IrisLookupID &&
 		m.Status == other.Status &&
 		m.Attestation == other.Attestation &&
 		m.SourceDomain == other.SourceDomain &&

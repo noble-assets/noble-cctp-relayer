@@ -8,11 +8,13 @@ import (
 	"strconv"
 	"time"
 
-	"cosmossdk.io/log"
-	"cosmossdk.io/math"
 	cctptypes "github.com/circlefin/noble-cctp/x/cctp/types"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
+
+	"cosmossdk.io/log"
+	"cosmossdk.io/math"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/circle"
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/noble"
@@ -36,12 +38,30 @@ func Start(a *AppState) *cobra.Command {
 		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
 			a.InitAppState()
 		},
-		Run: func(cmd *cobra.Command, args []string) {
-
+		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := a.Logger
 			cfg := a.Config
 
-			go startApi(a)
+			flushInterval, err := cmd.Flags().GetDuration(flagFlushInterval)
+			if err != nil {
+				logger.Error("Invalid flush interval", "error", err)
+			}
+
+			flushOnly, err := cmd.Flags().GetBool(flagFlushOnlyMode)
+			if err != nil {
+				return fmt.Errorf("invalid flush only flag error=%w", err)
+			}
+
+			if flushInterval == 0 {
+				if flushOnly {
+					return fmt.Errorf("flush only mode requires a flush interval")
+				} else {
+					logger.Error("Flush interval not set. Use the --flush-interval flag to set a reoccurring flush")
+				}
+			}
+
+			// start API on normal relayer only
+			go startAPI(a)
 
 			// messageState processing queue
 			var processingQueue = make(chan *types.TxState, 10000)
@@ -50,16 +70,7 @@ func Start(a *AppState) *cobra.Command {
 
 			port, err := cmd.Flags().GetInt16(flagMetricsPort)
 			if err != nil {
-				logger.Error("Invalid port", "error", err)
-				os.Exit(1)
-			}
-
-			flushInterval, err := cmd.Flags().GetDuration(flagFlushInterval)
-			if err != nil {
-				logger.Error("Invalid flush interval", "error", err)
-			}
-			if flushInterval == 0 {
-				logger.Info("Flush interval not set. Use the --flush-interval flag to set a reoccurring flush")
+				return fmt.Errorf("invalid port error=%w", err)
 			}
 
 			metrics := relayer.InitPromMetrics(port)
@@ -67,15 +78,13 @@ func Start(a *AppState) *cobra.Command {
 			for name, cfg := range cfg.Chains {
 				c, err := cfg.Chain(name)
 				if err != nil {
-					logger.Error("Error creating chain", "err: ", err)
-					os.Exit(1)
+					return fmt.Errorf("error creating chain error=%w", err)
 				}
 
 				logger = logger.With("name", c.Name(), "domain", c.Domain())
 
 				if err := c.InitializeClients(cmd.Context(), logger); err != nil {
-					logger.Error("Error initializing client", "err", err)
-					os.Exit(1)
+					return fmt.Errorf("error initializing client error=%w", err)
 				}
 
 				go c.TrackLatestBlockHeight(cmd.Context(), logger, metrics)
@@ -89,22 +98,20 @@ func Start(a *AppState) *cobra.Command {
 						break
 					}
 					if i == maxRetries-1 {
-						logger.Error("Unable to get height")
-						os.Exit(1)
+						return fmt.Errorf("unable to get height")
 					}
 				}
 
 				if err := c.InitializeBroadcaster(cmd.Context(), logger, sequenceMap); err != nil {
-					logger.Error("Error initializing broadcaster", "error", err)
-					os.Exit(1)
+					return fmt.Errorf("error initializing broadcaster error=%w", err)
 				}
 
-				go c.StartListener(cmd.Context(), logger, processingQueue, flushInterval)
+				go c.StartListener(cmd.Context(), logger, processingQueue, flushOnly, flushInterval)
+
 				go c.WalletBalanceMetric(cmd.Context(), a.Logger, metrics)
 
 				if _, ok := registeredDomains[c.Domain()]; ok {
-					logger.Error("Duplicate domain found", "domain", c.Domain(), "name:", c.Name())
-					os.Exit(1)
+					return fmt.Errorf("duplicate domain found domain=%d name=%s", c.Domain(), c.Name())
 				}
 
 				registeredDomains[c.Domain()] = c
@@ -115,14 +122,19 @@ func Start(a *AppState) *cobra.Command {
 				go StartProcessor(cmd.Context(), a, registeredDomains, processingQueue, sequenceMap, metrics)
 			}
 
-			defer func() {
-				for _, c := range registeredDomains {
-					fmt.Printf("\n%s: latest-block: %d last-flushed-block: %d", c.Name(), c.LatestBlock(), c.LastFlushedBlock())
-					c.CloseClients()
-				}
-			}()
-
+			// wait for context to be done
 			<-cmd.Context().Done()
+
+			// close clients & output latest block heights
+			for _, c := range registeredDomains {
+				logger.Info(fmt.Sprintf("%s: latest-block: %d last-flushed-block: %d", c.Name(), c.LatestBlock(), c.LastFlushedBlock()))
+				err := c.CloseClients()
+				if err != nil {
+					logger.Error("Error closing clients", "error", err)
+				}
+			}
+
+			return nil
 		},
 	}
 
@@ -157,7 +169,6 @@ func StartProcessor(
 		var broadcastMsgs = make(map[types.Domain][]*types.MessageState)
 		var requeue bool
 		for _, msg := range tx.Msgs {
-
 			// if a filter's condition is met, mark as filtered
 			if FilterDisabledCCTPRoutes(cfg, logger, msg) ||
 				filterInvalidDestinationCallers(registeredDomains, logger, msg) ||
@@ -169,32 +180,35 @@ func StartProcessor(
 
 			// if the message is burned or pending, check for an attestation
 			if msg.Status == types.Created || msg.Status == types.Pending {
-				response := circle.CheckAttestation(cfg.Circle.AttestationBaseUrl, logger, msg.IrisLookupId, msg.SourceTxHash, msg.SourceDomain, msg.DestDomain)
+				response := circle.CheckAttestation(cfg.Circle.AttestationBaseURL, logger, msg.IrisLookupID, msg.SourceTxHash, msg.SourceDomain, msg.DestDomain)
 
-				if response == nil {
-					logger.Debug("Attestation is still processing for 0x" + msg.IrisLookupId + ".  Retrying...")
+				switch {
+				case response == nil:
+					logger.Debug("Attestation is still processing for 0x" + msg.IrisLookupID + ".  Retrying...")
 					requeue = true
 					continue
-				} else if msg.Status == types.Created && response.Status == "pending_confirmations" {
-					logger.Debug("Attestation is created but still pending confirmations for 0x" + msg.IrisLookupId + ".  Retrying...")
+				case msg.Status == types.Created && response.Status == "pending_confirmations":
+					logger.Debug("Attestation is created but still pending confirmations for 0x" + msg.IrisLookupID + ".  Retrying...")
 					State.Mu.Lock()
 					msg.Status = types.Pending
 					msg.Updated = time.Now()
 					State.Mu.Unlock()
 					requeue = true
 					continue
-				} else if response.Status == "pending_confirmations" {
-					logger.Debug("Attestation is still pending for 0x" + msg.IrisLookupId + ".  Retrying...")
+				case response.Status == "pending_confirmations":
+					logger.Debug("Attestation is still pending for 0x" + msg.IrisLookupID + ".  Retrying...")
 					requeue = true
 					continue
-				} else if response.Status == "complete" {
-					logger.Debug("Attestation is complete for 0x" + msg.IrisLookupId + ".")
+				case response.Status == "complete":
+					logger.Debug("Attestation is complete for 0x" + msg.IrisLookupID + ".")
 					State.Mu.Lock()
 					msg.Status = types.Attested
 					msg.Attestation = response.Attestation
 					msg.Updated = time.Now()
 					broadcastMsgs[msg.DestDomain] = append(broadcastMsgs[msg.DestDomain], msg)
 					State.Mu.Unlock()
+				default:
+					logger.Error("Attestation failed for unknown reason for 0x" + msg.IrisLookupID + ".  Status: " + response.Status)
 				}
 			}
 		}
@@ -250,7 +264,6 @@ func FilterDisabledCCTPRoutes(cfg *types.Config, logger log.Logger, msg *types.M
 	logger.Info(fmt.Sprintf("Filtered tx %s because relaying from %d to %d is not enabled",
 		msg.SourceTxHash, msg.SourceDomain, msg.DestDomain))
 	return true
-
 }
 
 // filterInvalidDestinationCallers returns true if the minter is not the destination caller for the specified domain
@@ -317,20 +330,24 @@ func filterLowTransfers(cfg *types.Config, logger log.Logger, msg *types.Message
 	return false
 }
 
-func startApi(a *AppState) {
+func startAPI(a *AppState) {
 	logger := a.Logger
 	cfg := a.Config
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
 
-	err := router.SetTrustedProxies(cfg.Api.TrustedProxies) // vpn.primary.strange.love
+	err := router.SetTrustedProxies(cfg.API.TrustedProxies) // vpn.primary.strange.love
 	if err != nil {
 		logger.Error("Unable to set trusted proxies on API server: " + err.Error())
 		os.Exit(1)
 	}
 
 	router.GET("/tx/:txHash", getTxByHash)
-	router.Run("localhost:8000")
+	err = router.Run("localhost:8000")
+	if err != nil {
+		logger.Error("Unable to start API server: " + err.Error())
+		os.Exit(1)
+	}
 }
 
 func getTxByHash(c *gin.Context) {

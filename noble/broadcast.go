@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"time"
 
-	"cosmossdk.io/log"
 	nobletypes "github.com/circlefin/noble-cctp/x/cctp/types"
+
 	sdkclient "github.com/cosmos/cosmos-sdk/client"
 	clientTx "github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -19,6 +19,9 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	xauthsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	xauthtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
+
+	"cosmossdk.io/log"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/relayer"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
@@ -92,11 +95,9 @@ func (n *Noble) attemptBroadcast(
 	sdkContext sdkclient.Context,
 	txBuilder sdkclient.TxBuilder,
 ) error {
-
 	var receiveMsgs []sdk.Msg
 	for _, msg := range msgs {
-
-		used, err := n.cc.QueryUsedNonce(ctx, types.Domain(msg.SourceDomain), msg.Nonce)
+		used, err := n.cc.QueryUsedNonce(ctx, msg.SourceDomain, msg.Nonce)
 		if err != nil {
 			return fmt.Errorf("unable to query used nonce: %w", err)
 		}
@@ -153,39 +154,39 @@ func (n *Noble) attemptBroadcast(
 			SignMode:  sdkContext.TxConfig.SignModeHandler().DefaultMode(),
 			Signature: nil,
 		},
-		Sequence: uint64(accountSequence),
+		Sequence: accountSequence,
 	}
 
 	signerData := xauthsigning.SignerData{
 		ChainID:       n.chainID,
-		AccountNumber: uint64(n.accountNumber),
-		Sequence:      uint64(accountSequence),
+		AccountNumber: n.accountNumber,
+		Sequence:      accountSequence,
 	}
 
-	txBuilder.SetSignatures(sigV2)
+	err := txBuilder.SetSignatures(sigV2)
+	if err != nil {
+		return fmt.Errorf("failed to set signatures: %w", err)
+	}
 
-	sigV2, err := clientTx.SignWithPrivKey(
+	sigV2, err = clientTx.SignWithPrivKey(
 		sdkContext.TxConfig.SignModeHandler().DefaultMode(),
 		signerData,
 		txBuilder,
 		n.privateKey,
 		sdkContext.TxConfig,
-		uint64(accountSequence),
+		accountSequence,
 	)
 	if err != nil {
-
 		return fmt.Errorf("failed to sign tx: %w", err)
 	}
 
 	if err := txBuilder.SetSignatures(sigV2); err != nil {
-
 		return fmt.Errorf("failed to set signatures: %w", err)
 	}
 
 	// Generated Protobuf-encoded bytes.
 	txBytes, err := sdkContext.TxConfig.TxEncoder()(txBuilder.GetTx())
 	if err != nil {
-
 		return fmt.Errorf("failed to proto encode tx: %w", err)
 	}
 

@@ -1,27 +1,28 @@
-package integration_testing
+package integration_test
 
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
 	"math/big"
 	"testing"
 	"time"
 
-	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
-	"github.com/cosmos/cosmos-sdk/testutil/testdata"
-	"github.com/cosmos/cosmos-sdk/types/bech32"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/stretchr/testify/require"
+
+	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
+	"github.com/cosmos/cosmos-sdk/testutil/testdata"
+	"github.com/cosmos/cosmos-sdk/types/bech32"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd"
 	"github.com/strangelove-ventures/noble-cctp-relayer/cosmos"
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum/contracts"
 	"github.com/strangelove-ventures/noble-cctp-relayer/noble"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
-	"github.com/stretchr/testify/require"
 )
 
 // TestEthBurnToNobleMint broadcasts a depositForBurn on Sepolia of 0.000001 USDC
@@ -61,7 +62,7 @@ func TestEthBurnToNobleMint(t *testing.T) {
 
 	var burnAmount = big.NewInt(1)
 
-	fmt.Println("Starting relayer...")
+	t.Log("Starting relayer...")
 	registeredDomains := make(map[types.Domain]types.Chain)
 	registeredDomains[0] = ethChain
 	registeredDomains[4] = nobleChain
@@ -72,31 +73,31 @@ func TestEthBurnToNobleMint(t *testing.T) {
 
 	processingQueue := make(chan *types.TxState, 10)
 
-	go ethChain.StartListener(ctx, a.Logger, processingQueue, 0)
+	go ethChain.StartListener(ctx, a.Logger, processingQueue, false, 0)
 	go cmd.StartProcessor(ctx, a, registeredDomains, processingQueue, sequenceMap, nil)
 
 	_, _, generatedWallet := testdata.KeyTestPubAddr()
 	destAddress, _ := bech32.ConvertAndEncode("noble", generatedWallet)
-	fmt.Println("Noble destination address: ", destAddress)
-	fmt.Println("Minting on Noble to https://testnet.mintscan.io/noble-testnet/account/" + destAddress)
+	t.Logf("Noble destination address: %s", destAddress)
+	t.Logf("Minting on Noble to https://testnet.mintscan.io/noble-testnet/account/%s", destAddress)
 
 	// verify noble usdc amount
 	cc, err := cosmos.NewProvider(nobleCfg.RPC)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	originalNobleBalance, err := getNobleAccountBalance(ctx, cc, destAddress, uusdcDenom)
 	require.NoError(t, err)
 
 	// eth client
 	client, err := ethclient.Dial(ethCfg.RPC)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer client.Close()
 
 	privateKey, err := crypto.HexToECDSA(ethCfg.MinterPrivateKey)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	sepoliaChainID := big.NewInt(ethCfg.ChainID)
 	auth, err := bind.NewKeyedTransactorWithChainID(privateKey, sepoliaChainID)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// deal w/ nonce
 	ethRelayerAddress, err := ethConvertPrivateKeytoAddress(ethCfg.MinterPrivateKey)
@@ -110,17 +111,17 @@ func TestEthBurnToNobleMint(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = erc20.Approve(auth, common.HexToAddress(TokenMessengerAddressSepolia), burnAmount)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Ensure approval is on chain
 	time.Sleep(20 * time.Second)
 
 	// create tokenMessenger
 	tokenMessenger, err := contracts.NewTokenMessenger(common.HexToAddress(TokenMessengerAddressSepolia), client)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	mintRecipientPadded := append([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, generatedWallet...)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	auth.Nonce = big.NewInt(nextNonce + 1)
 
@@ -130,7 +131,7 @@ func TestEthBurnToNobleMint(t *testing.T) {
 	require.NoError(t, err)
 	privKey := secp256k1.PrivKey{Key: keyBz}
 	caller, err := bech32.ConvertAndEncode("noble", privKey.PubKey().Address())
-	require.Nil(t, err)
+	require.NoError(t, err)
 	_, callerRaw, err := bech32.DecodeAndConvert(caller)
 	require.NoError(t, err)
 	destinationCallerPadded := append([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, callerRaw...)
@@ -148,15 +149,15 @@ func TestEthBurnToNobleMint(t *testing.T) {
 	}
 
 	time.Sleep(5 * time.Second)
-	fmt.Printf("Transaction broadcasted: https://sepolia.etherscan.io/tx/%s\n", tx.Hash().String())
+	t.Logf("Transaction broadcasted: https://sepolia.etherscan.io/tx/%s", tx.Hash().String())
 
 	var newBalance uint64
-	fmt.Println("Waiting for circle to approve and destination wallet to receive funds.")
+	t.Log("Waiting for circle to approve and destination wallet to receive funds.")
 	for i := 0; i < 250; i++ {
 		newBalance, err = getNobleAccountBalance(ctx, cc, destAddress, uusdcDenom)
 		require.NoError(t, err)
 		if originalNobleBalance+burnAmount.Uint64() == newBalance {
-			fmt.Println("Successfully minted at https://testnet.mintscan.io/noble-testnet/account/" + destAddress)
+			t.Logf("Successfully minted at https://testnet.mintscan.io/noble-testnet/account/%s", destAddress)
 			break
 		}
 		time.Sleep(2 * time.Second)

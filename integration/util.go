@@ -1,33 +1,35 @@
-package integration_testing
+package integration_test
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
 	"log"
 	"math/big"
 	"strings"
 
-	"crypto/ecdsa"
-
-	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
-	bankTypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	bankTypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/cosmos"
 )
 
+//nolint:gosec
 const (
 	usdcTokenAddressSepolia      = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
 	TokenMessengerAddressSepolia = "0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5"
-
-	uusdcDenom = "uusdc"
+	uusdcDenom                   = "uusdc"
 )
 
+// nolint:unparam
 func getNobleAccountBalance(ctx context.Context, cc *cosmos.CosmosProvider, address, denom string) (uint64, error) {
 	qc := bankTypes.NewQueryClient(cc)
 	res, err := qc.Balance(ctx, &bankTypes.QueryBalanceRequest{
@@ -54,7 +56,6 @@ func getNobleAccountNumberSequenceGRPC(cc *cosmos.CosmosProvider, address string
 	}
 
 	return acc.GetAccountNumber(), acc.GetSequence(), nil
-
 }
 
 func getEthBalance(client *ethclient.Client, usdcTokenAddress, walletAddress string) (uint64, error) {

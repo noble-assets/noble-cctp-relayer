@@ -6,7 +6,7 @@ type Config struct {
 	Circle        CircleSettings         `yaml:"circle"`
 
 	ProcessorWorkerCount uint32 `yaml:"processor-worker-count"`
-	Api                  struct {
+	API                  struct {
 		TrustedProxies []string `yaml:"trusted-proxies"`
 	} `yaml:"api"`
 }
@@ -17,13 +17,13 @@ type ConfigWrapper struct {
 	Circle        CircleSettings            `yaml:"circle"`
 
 	ProcessorWorkerCount uint32 `yaml:"processor-worker-count"`
-	Api                  struct {
+	API                  struct {
 		TrustedProxies []string `yaml:"trusted-proxies"`
 	} `yaml:"api"`
 }
 
 type CircleSettings struct {
-	AttestationBaseUrl string `yaml:"attestation-base-url"`
+	AttestationBaseURL string `yaml:"attestation-base-url"`
 	FetchRetries       int    `yaml:"fetch-retries"`
 	FetchRetryInterval int    `yaml:"fetch-retry-interval"`
 }

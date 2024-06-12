@@ -1,29 +1,37 @@
 package testutil
 
 import (
-	"fmt"
 	"os"
 	"testing"
 
 	"github.com/joho/godotenv"
+	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/require"
+
+	"cosmossdk.io/log"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd"
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/noble"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
-	"github.com/stretchr/testify/require"
 )
 
+var logger log.Logger
 var EnvFile = os.ExpandEnv("$GOPATH/src/github.com/strangelove-ventures/noble-cctp-relayer/.env")
 
 func init() {
+	// define logger
+	logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.ErrorLevel))
+
 	err := godotenv.Load(EnvFile)
 	if err != nil {
-		fmt.Println(fmt.Errorf("error loading env file"))
+		logger.Error("error loading env file", "err", err)
 		os.Exit(1)
 	}
 }
 
 func ConfigSetup(t *testing.T) (a *cmd.AppState, registeredDomains map[types.Domain]types.Chain) {
+	t.Helper()
 
 	var testConfig = types.Config{
 		Chains: map[string]types.ChainConfig{
@@ -40,7 +48,7 @@ func ConfigSetup(t *testing.T) (a *cmd.AppState, registeredDomains map[types.Dom
 			},
 		},
 		Circle: types.CircleSettings{
-			AttestationBaseUrl: "https://iris-api-sandbox.circle.com/attestations/",
+			AttestationBaseURL: "https://iris-api-sandbox.circle.com/attestations/",
 			FetchRetries:       0,
 			FetchRetryInterval: 3,
 		},
@@ -65,5 +73,4 @@ func ConfigSetup(t *testing.T) (a *cmd.AppState, registeredDomains map[types.Dom
 	}
 
 	return a, registeredDomains
-
 }

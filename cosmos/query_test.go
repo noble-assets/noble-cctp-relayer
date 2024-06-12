@@ -4,8 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/strangelove-ventures/noble-cctp-relayer/cosmos"
 	"github.com/stretchr/testify/require"
+
+	"github.com/strangelove-ventures/noble-cctp-relayer/cosmos"
 )
 
 func TestUsedNonce(t *testing.T) {

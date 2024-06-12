@@ -7,10 +7,11 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v2"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/noble"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
-	"gopkg.in/yaml.v2"
 )
 
 // Command for printing current configuration
@@ -26,7 +27,6 @@ func configShowCmd(a *AppState) *cobra.Command {
 $ %s show-config --config %s
 $ %s sc`, appName, defaultConfigPath, appName)),
 		RunE: func(cmd *cobra.Command, args []string) error {
-
 			jsn, err := cmd.Flags().GetBool(flagJSON)
 			if err != nil {
 				return err
@@ -50,8 +50,7 @@ $ %s sc`, appName, defaultConfigPath, appName)),
 			}
 		},
 	}
-	addJsonFlag(cmd)
-	return cmd
+	return addJSONFlag(cmd)
 }
 
 // ParseConfig parses the app config file
@@ -70,7 +69,7 @@ func ParseConfig(file string) (*types.Config, error) {
 		EnabledRoutes:        cfg.EnabledRoutes,
 		Circle:               cfg.Circle,
 		ProcessorWorkerCount: cfg.ProcessorWorkerCount,
-		Api:                  cfg.Api,
+		API:                  cfg.API,
 		Chains:               make(map[string]types.ChainConfig),
 	}
 

@@ -10,10 +10,12 @@ import (
 	"strconv"
 	"time"
 
-	"cosmossdk.io/log"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+
+	"cosmossdk.io/log"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum/contracts"
 	"github.com/strangelove-ventures/noble-cctp-relayer/relayer"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
@@ -40,7 +42,6 @@ func (e *Ethereum) Broadcast(
 	sequenceMap *types.SequenceMap,
 	m *relayer.PromMetrics,
 ) error {
-
 	logger = logger.With("chain", e.name, "chain_id", e.chainID, "domain", e.domain)
 
 	backend := NewContractBackendWrapper(e.rpcClient)
@@ -144,14 +145,12 @@ func (e *Ethereum) attemptBroadcast(
 	response, nonceErr := messageTransmitter.UsedNonces(co, [32]byte(crypto.Keccak256(key)))
 	if nonceErr != nil {
 		logger.Debug("Error querying whether nonce was used.   Continuing...", "error:", nonceErr)
-	} else {
-		if response.Uint64() == uint64(1) {
-			// nonce has already been used, mark as complete
-			logger.Debug(fmt.Sprintf("This source domain/nonce has already been used: %d %d",
-				msg.SourceDomain, msg.Nonce), "src-tx", msg.SourceTxHash, "reviever")
-			msg.Status = types.Complete
-			return nil
-		}
+	} else if response.Uint64() == uint64(1) {
+		// nonce has already been used, mark as complete
+		logger.Debug(fmt.Sprintf("This source domain/nonce has already been used: %d %d",
+			msg.SourceDomain, msg.Nonce), "src-tx", msg.SourceTxHash, "reviever")
+		msg.Status = types.Complete
+		return nil
 	}
 
 	// broadcast txn
@@ -171,7 +170,7 @@ func (e *Ethereum) attemptBroadcast(
 	}
 
 	logger.Error(fmt.Sprintf("error during broadcast: %s", err.Error()))
-	if parsedErr, ok := err.(JsonError); ok {
+	if parsedErr, ok := err.(JSONError); ok {
 		if parsedErr.ErrorCode() == 3 && parsedErr.Error() == "execution reverted: Nonce already used" {
 			msg.Status = types.Complete
 			logger.Error(fmt.Sprintf("This account nonce has already been used: %d", nonce))

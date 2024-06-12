@@ -1,4 +1,4 @@
-package integration_testing
+package integration_test
 
 import (
 	"os"
@@ -26,11 +26,11 @@ type IntegrationConfig struct {
 }
 
 type IntegrationChain struct {
-	ChainId               string `yaml:"chain-id"`
+	ChainID               string `yaml:"chain-id"`
 	Domain                uint32 `yaml:"domain"`
 	Address               string `yaml:"address"`
 	PrivateKey            string `yaml:"private-key"`
-	Rpc                   string `yaml:"rpc"`
+	RPC                   string `yaml:"rpc"`
 	UsdcTokenAddress      string `yaml:"usdc-token-address"`
 	TokenMessengerAddress string `yaml:"token-messenger-address"`
 	DestinationCaller     string `yaml:"destination-caller"`

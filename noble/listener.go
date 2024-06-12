@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"cosmossdk.io/log"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/relayer"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
@@ -16,6 +17,7 @@ func (n *Noble) StartListener(
 	ctx context.Context,
 	logger log.Logger,
 	processingQueue chan *types.TxState,
+	flushOnlyMode bool,
 	flushInterval_ time.Duration,
 ) {
 	logger = logger.With("chain", n.Name(), "chain_id", n.chainID, "domain", n.Domain())
@@ -47,40 +49,42 @@ func (n *Noble) StartListener(
 	}
 	blockQueue := make(chan uint64, n.blockQueueChannelSize)
 
-	// history
-	currentBlock = currentBlock - lookback
-	for currentBlock <= chainTip {
-		blockQueue <- currentBlock
-		currentBlock++
-	}
+	if !flushOnlyMode {
+		// history
+		currentBlock -= lookback
+		for currentBlock <= chainTip {
+			blockQueue <- currentBlock
+			currentBlock++
+		}
 
-	// listen for new blocks
-	go func() {
-		// inner function to queue blocks
-		queueBlocks := func() {
-			chainTip = n.LatestBlock()
-			if chainTip >= currentBlock {
-				for i := currentBlock; i <= chainTip; i++ {
-					blockQueue <- i
+		// listen for new blocks
+		go func() {
+			// inner function to queue blocks
+			queueBlocks := func() {
+				chainTip = n.LatestBlock()
+				if chainTip >= currentBlock {
+					for i := currentBlock; i <= chainTip; i++ {
+						blockQueue <- i
+					}
+					currentBlock = chainTip + 1
 				}
-				currentBlock = chainTip + 1
 			}
-		}
 
-		// initial queue
-		queueBlocks()
+			// initial queue
+			queueBlocks()
 
-		for {
-			timer := time.NewTimer(6 * time.Second)
-			select {
-			case <-timer.C:
-				queueBlocks()
-			case <-ctx.Done():
-				timer.Stop()
-				return
+			for {
+				timer := time.NewTimer(6 * time.Second)
+				select {
+				case <-timer.C:
+					queueBlocks()
+				case <-ctx.Done():
+					timer.Stop()
+					return
+				}
 			}
-		}
-	}()
+		}()
+	}
 
 	// constantly query for blocks
 	for i := 0; i < int(n.workers); i++ {
@@ -114,19 +118,36 @@ func (n *Noble) StartListener(
 	}
 
 	if flushInterval > 0 {
-		go n.flushMechanism(ctx, logger, blockQueue)
+		go n.flushMechanism(ctx, logger, blockQueue, flushOnlyMode)
 	}
 
 	<-ctx.Done()
 }
 
+// flushMechanism looks back over the chain history every specified flushInterval.
+//
+// Each chain is configured with a lookback period which signifies how many blocks to look back
+// at each interval. The flush mechanism will start from the last flushed block and will rescan
+// the lookback period and consume all messages in that range. The flush mechanism will not flush
+// all the way to the chain's latest block to avoid consuming messages that are still in the queue.
+// There will be a minimum gap of the lookback period between the last flushed block and the latest block.
+//
+// Note: The first time the flush mechanism is run, it will set the lastFlushedBlock to the latest block
+// minus twice the lookback period.
 func (n *Noble) flushMechanism(
 	ctx context.Context,
 	logger log.Logger,
 	blockQueue chan uint64,
+	flushOnlyMode bool,
 ) {
+	logger.Info(fmt.Sprintf("Starting flush mechanism. Will flush every %v", flushInterval))
 
-	logger.Debug(fmt.Sprintf("Flush mechanism started. Will flush every %v", flushInterval))
+	// extraFlushBlocks is used to add an extra space between latest height and last flushed block
+	// this setting should only be used for the secondary, flush only relayer
+	extraFlushBlocks := uint64(0)
+	if flushOnlyMode {
+		extraFlushBlocks = 2 * n.lookbackPeriod
+	}
 
 	for {
 		timer := time.NewTimer(flushInterval)
@@ -145,19 +166,32 @@ func (n *Noble) flushMechanism(
 				continue
 			}
 
+			// initialize first lastFlushedBlock if not set
 			if n.lastFlushedBlock == 0 {
-				n.lastFlushedBlock = latestBlock
+				n.lastFlushedBlock = latestBlock - (2*n.lookbackPeriod + extraFlushBlocks)
+
+				if latestBlock < n.lookbackPeriod {
+					n.lastFlushedBlock = 0
+				}
 			}
-			lastFlushedBlock := n.lastFlushedBlock
 
-			flushStart := lastFlushedBlock - n.lookbackPeriod
+			// start from the last block it flushed
+			startBlock := n.lastFlushedBlock
 
-			logger.Info(fmt.Sprintf("Flush started from: %d to: %d", flushStart, latestBlock))
+			// set finish block to be latestBlock - lookbackPeriod
+			finishBlock := latestBlock - (n.lookbackPeriod + extraFlushBlocks)
 
-			for i := flushStart; i <= latestBlock; i++ {
+			if startBlock >= finishBlock {
+				logger.Debug("No new blocks to flush")
+				continue
+			}
+
+			logger.Info(fmt.Sprintf("Flush started from %d to %d (current height: %d, lookback period: %d)", startBlock, finishBlock, latestBlock, n.lookbackPeriod))
+
+			for i := startBlock; i <= finishBlock; i++ {
 				blockQueue <- i
 			}
-			n.lastFlushedBlock = latestBlock
+			n.lastFlushedBlock = finishBlock
 
 			logger.Info("Flush complete")
 

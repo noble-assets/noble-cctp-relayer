@@ -8,13 +8,14 @@ import (
 	"os"
 	"time"
 
-	"cosmossdk.io/log"
 	ethereum "github.com/ethereum/go-ethereum"
-	ethtypes "github.com/ethereum/go-ethereum/core/types"
-
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/pascaldekloe/etherstream"
+
+	"cosmossdk.io/log"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/relayer"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
@@ -32,6 +33,7 @@ func (e *Ethereum) StartListener(
 	ctx context.Context,
 	logger log.Logger,
 	processingQueue chan *types.TxState,
+	flushOnlyMode bool,
 	flushInterval time.Duration,
 ) {
 	logger = logger.With("chain", e.name, "chain_id", e.chainID, "domain", e.domain)
@@ -54,43 +56,48 @@ func (e *Ethereum) StartListener(
 		Ready: make(chan struct{}),
 	}
 
-	// start main stream (does not account for lookback period or specific start block)
-	stream, sub, history := e.startMainStream(ctx, logger, messageSent, messageTransmitterAddress)
+	// FlushOnlyMode is used for the secondary, flush only relayer. When enabled, the main stream is not started.
+	if flushOnlyMode {
+		go e.flushMechanism(ctx, logger, processingQueue, messageSent, messageTransmitterAddress, messageTransmitterABI, flushOnlyMode, flushInterval, sig)
+	} else {
+		// start main stream (does not account for lookback period or specific start block)
+		stream, sub, history := e.startMainStream(ctx, logger, messageSent, messageTransmitterAddress)
 
-	go e.consumeStream(ctx, logger, processingQueue, messageSent, messageTransmitterABI, stream, sig)
-	consumeHistory(logger, history, processingQueue, messageSent, messageTransmitterABI)
+		go e.consumeStream(ctx, logger, processingQueue, messageSent, messageTransmitterABI, stream, sig)
+		consumeHistory(logger, history, processingQueue, messageSent, messageTransmitterABI)
 
-	// get history from (start block - lookback) up until latest block
-	latestBlock := e.LatestBlock()
-	start := latestBlock
-	if e.startBlock != 0 {
-		start = e.startBlock
-	}
-	startLookback := start - e.lookbackPeriod
-	logger.Info(fmt.Sprintf("Getting history from %d: starting at: %d looking back %d blocks", startLookback, start, e.lookbackPeriod))
-	e.getAndConsumeHistory(ctx, logger, processingQueue, messageSent, messageTransmitterAddress, messageTransmitterABI, startLookback, latestBlock)
+		// get history from (start block - lookback) up until latest block
+		latestBlock := e.LatestBlock()
+		start := latestBlock
+		if e.startBlock != 0 {
+			start = e.startBlock
+		}
+		startLookback := start - e.lookbackPeriod
 
-	logger.Info("Finished getting history")
+		logger.Info(fmt.Sprintf("Getting history from %d: starting at: %d looking back %d blocks", startLookback, start, e.lookbackPeriod))
+		e.getAndConsumeHistory(ctx, logger, processingQueue, messageSent, messageTransmitterAddress, messageTransmitterABI, startLookback, latestBlock)
+		logger.Info("Finished getting history")
 
-	if flushInterval > 0 {
-		go e.flushMechanism(ctx, logger, processingQueue, messageSent, messageTransmitterAddress, messageTransmitterABI, flushInterval, sig)
-	}
+		if flushInterval > 0 {
+			go e.flushMechanism(ctx, logger, processingQueue, messageSent, messageTransmitterAddress, messageTransmitterABI, flushOnlyMode, flushInterval, sig)
+		}
 
-	// listen for errors in the main websocket stream
-	// if error occurs, trigger sig.Ready
-	// This will cancel `consumeStream` and `flushMechanism` routines
-	select {
-	case <-ctx.Done():
-		return
-	case err := <-sub.Err():
-		logger.Error("Websocket disconnected. Reconnecting...", "err", err)
-		close(sig.Ready)
+		// listen for errors in the main websocket stream
+		// if error occurs, trigger sig.Ready
+		// This will cancel `consumeStream` and `flushMechanism` routines
+		select {
+		case <-ctx.Done():
+			return
+		case err := <-sub.Err():
+			logger.Error("Websocket disconnected. Reconnecting...", "err", err)
+			close(sig.Ready)
 
-		// restart
-		e.startBlock = e.lastFlushedBlock
-		time.Sleep(10 * time.Millisecond)
-		e.StartListener(ctx, logger, processingQueue, flushInterval)
-		return
+			// restart
+			e.startBlock = e.lastFlushedBlock
+			time.Sleep(10 * time.Millisecond)
+			e.StartListener(ctx, logger, processingQueue, flushOnlyMode, flushInterval)
+			return
+		}
 	}
 }
 
@@ -99,9 +106,7 @@ func (e *Ethereum) startMainStream(
 	logger log.Logger,
 	messageSent abi.Event,
 	messageTransmitterAddress common.Address,
-
 ) (stream <-chan ethtypes.Log, sub ethereum.Subscription, history []ethtypes.Log) {
-
 	var err error
 
 	etherReader := etherstream.Reader{Backend: e.wsClient}
@@ -142,7 +147,6 @@ func (e *Ethereum) getAndConsumeHistory(
 	messageTransmitterAddress common.Address,
 	messageTransmitterABI abi.ABI,
 	start, end uint64) {
-
 	var toUnSub ethereum.Subscription
 	var history []ethtypes.Log
 	var err error
@@ -203,7 +207,8 @@ func consumeHistory(
 	messageSent abi.Event,
 	messageTransmitterABI abi.ABI,
 ) {
-	for _, historicalLog := range history {
+	for i := range history {
+		historicalLog := history[i]
 		parsedMsg, err := types.EvmLogToMessageState(messageTransmitterABI, messageSent, &historicalLog)
 		if err != nil {
 			logger.Error("Unable to parse history log into MessageState, skipping", "tx hash", historicalLog.TxHash.Hex(), "err", err)
@@ -243,14 +248,15 @@ func (e *Ethereum) consumeStream(
 				continue
 			}
 			logger.Info(fmt.Sprintf("New stream msg from %d with tx hash %s", parsedMsg.SourceDomain, parsedMsg.SourceTxHash))
-			if txState == nil {
+
+			switch {
+			case txState == nil:
 				txState = &types.TxState{TxHash: parsedMsg.SourceTxHash, Msgs: []*types.MessageState{parsedMsg}}
-			} else if parsedMsg.SourceTxHash != txState.TxHash {
+			case parsedMsg.SourceTxHash != txState.TxHash:
 				processingQueue <- txState
 				txState = &types.TxState{TxHash: parsedMsg.SourceTxHash, Msgs: []*types.MessageState{parsedMsg}}
-			} else {
+			default:
 				txState.Msgs = append(txState.Msgs, parsedMsg)
-
 			}
 		default:
 			if txState != nil {
@@ -261,6 +267,16 @@ func (e *Ethereum) consumeStream(
 	}
 }
 
+// flushMechanism looks back over the chain history every specified flushInterval.
+//
+// Each chain is configured with a lookback period which signifies how many blocks to look back
+// at each interval. The flush mechanism will start from the last flushed block and will rescan
+// the lookback period and consume all messages in that range. The flush mechanism will not flush
+// all the way to the chain's latest block to avoid consuming messages that are still in the queue.
+// There will be a minimum gap of the lookback period between the last flushed block and the latest block.
+//
+// Note: The first time the flush mechanism is run, it will set the lastFlushedBlock to the latest block
+// minus twice the lookback period.
 func (e *Ethereum) flushMechanism(
 	ctx context.Context,
 	logger log.Logger,
@@ -268,10 +284,18 @@ func (e *Ethereum) flushMechanism(
 	messageSent abi.Event,
 	messageTransmitterAddress common.Address,
 	messageTransmitterABI abi.ABI,
+	flushOnlyMode bool,
 	flushInterval time.Duration,
 	sig *errSignal,
 ) {
 	logger.Info(fmt.Sprintf("Starting flush mechanism. Will flush every %v", flushInterval))
+
+	// extraFlushBlocks is used to add an extra space between latest height and last flushed block
+	// this setting should only be used for the secondary, flush only relayer
+	extraFlushBlocks := uint64(0)
+	if flushOnlyMode {
+		extraFlushBlocks = 2 * e.lookbackPeriod
+	}
 
 	for {
 		timer := time.NewTimer(flushInterval)
@@ -281,19 +305,31 @@ func (e *Ethereum) flushMechanism(
 
 			// initialize first lastFlushedBlock if not set
 			if e.lastFlushedBlock == 0 {
-				e.lastFlushedBlock = latestBlock - e.lookbackPeriod
+				e.lastFlushedBlock = latestBlock - (2*e.lookbackPeriod + extraFlushBlocks)
+
+				if latestBlock < e.lookbackPeriod {
+					e.lastFlushedBlock = 0
+				}
 			}
 
-			// start from lastFlushedBlock
-			start := e.lastFlushedBlock
+			// start from the last block it flushed
+			startBlock := e.lastFlushedBlock
 
-			logger.Info(fmt.Sprintf("Flush started from %d to %d", start, latestBlock))
+			// set finish block to be latestBlock - lookbackPeriod
+			finishBlock := latestBlock - (e.lookbackPeriod + extraFlushBlocks)
 
-			// consume from lastFlushedBlock to the latestBlock
-			e.getAndConsumeHistory(ctx, logger, processingQueue, messageSent, messageTransmitterAddress, messageTransmitterABI, start, latestBlock)
+			if startBlock >= finishBlock {
+				logger.Debug("No new blocks to flush")
+				continue
+			}
+
+			logger.Info(fmt.Sprintf("Flush started from %d to %d (current height: %d, lookback period: %d)", startBlock, finishBlock, latestBlock, e.lookbackPeriod))
+
+			// consume from lastFlushedBlock to the finishBlock
+			e.getAndConsumeHistory(ctx, logger, processingQueue, messageSent, messageTransmitterAddress, messageTransmitterABI, startBlock, finishBlock)
 
 			// update lastFlushedBlock to the last block it flushed
-			e.lastFlushedBlock = latestBlock
+			e.lastFlushedBlock = finishBlock
 
 			logger.Info("Flush complete")
 

@@ -3,13 +3,14 @@ package cosmos
 import (
 	"time"
 
+	"google.golang.org/grpc/encoding"
+	"google.golang.org/grpc/encoding/proto"
+
 	rpcclient "github.com/cometbft/cometbft/rpc/client"
 	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
 	libclient "github.com/cometbft/cometbft/rpc/jsonrpc/client"
-	gogogrpc "github.com/cosmos/gogoproto/grpc"
 
-	"google.golang.org/grpc/encoding"
-	"google.golang.org/grpc/encoding/proto"
+	gogogrpc "github.com/cosmos/gogoproto/grpc"
 )
 
 var _ gogogrpc.ClientConn = &CosmosProvider{}
