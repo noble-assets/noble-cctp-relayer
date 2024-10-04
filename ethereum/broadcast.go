@@ -121,7 +121,9 @@ func (e *Ethereum) attemptBroadcast(
 	defer e.mu.Unlock()
 
 	// TODO remove
+	logger.Info("!!POLKA TESTING!!-- Nonce before query: ", nonce)
 	nextNonce, err := GetEthereumAccountNonce(e.rpcURL, e.minterAddress)
+	logger.Info("!!POLKA TESTING!!-- Nonce after query", "next nonce", nextNonce, "err", err)
 	if err != nil {
 		logger.Error("unable to retrieve account number")
 	} else {
