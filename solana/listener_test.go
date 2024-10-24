@@ -1,6 +1,7 @@
 package solana_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -16,6 +17,7 @@ import (
 func TestParseTransaction(t *testing.T) {
 	// ACT: Attempt to fetch and parse a transaction.
 	events, err := new(solana.Solana).ParseTransaction(
+		context.Background(),
 		"https://corie-nhz8jx-fast-mainnet.helius-rpc.com",
 		"4XhuTtTHxNFDfGn6A7ngvqT2dNoxRQFK7kpZwNY25gxXU5SPFCAk6ihj9JJdq5g7UMb7MSwyTt5r3TJbM4RgMVyJ",
 	)
