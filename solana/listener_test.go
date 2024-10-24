@@ -3,8 +3,9 @@ package solana_test
 import (
 	"testing"
 
-	"github.com/strangelove-ventures/noble-cctp-relayer/solana"
 	"github.com/stretchr/testify/require"
+
+	"github.com/strangelove-ventures/noble-cctp-relayer/solana"
 )
 
 // TestParseTransaction tests the transaction parsing utility used by the relayer.

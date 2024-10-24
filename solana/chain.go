@@ -3,7 +3,7 @@ package solana
 import "github.com/strangelove-ventures/noble-cctp-relayer/types"
 
 // TODO: Uncomment this once the full interface is implemented!
-//var _ types.Chain = (*Solana)(nil)
+// var _ types.Chain = (*Solana)(nil)
 
 type Solana struct{}
 

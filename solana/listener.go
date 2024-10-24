@@ -1,15 +1,18 @@
 package solana
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
-	"github.com/cosmos/btcutil/base58"
 	"github.com/gagliardetto/solana-go"
 	"github.com/google/uuid"
+
+	"github.com/cosmos/btcutil/base58"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/solana/generated/message_transmitter"
 )
 
@@ -45,7 +48,8 @@ type Transaction struct {
 func (s *Solana) NewTransactionRequest(endpoint string, hash string) (*http.Request, error) {
 	data := fmt.Sprintf(`{"method":"getTransaction","jsonrpc":"2.0","params":["%s",{"encoding":"jsonParsed","commitment":"confirmed","maxSupportedTransactionVersion":0}],"id":"%s"}`, hash, uuid.New().String())
 
-	return http.NewRequest("POST", endpoint, strings.NewReader(data))
+	// TODO: Receive the context from the main listener!
+	return http.NewRequestWithContext(context.Background(), http.MethodPost, endpoint, strings.NewReader(data))
 }
 
 // ParseTransaction is a utility that fetches a transaction from the Solana RPC
@@ -59,6 +63,7 @@ func (s *Solana) ParseTransaction(endpoint string, hash string) (events []messag
 	if err != nil {
 		return nil, err
 	}
+	defer res.Body.Close()
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
