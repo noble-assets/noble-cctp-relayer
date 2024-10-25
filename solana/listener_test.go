@@ -15,13 +15,19 @@ import (
 // https://solscan.io/tx/4XhuTtTHxNFDfGn6A7ngvqT2dNoxRQFK7kpZwNY25gxXU5SPFCAk6ihj9JJdq5g7UMb7MSwyTt5r3TJbM4RgMVyJ
 // https://www.mintscan.io/noble/tx/98C4BB3B29FBA6EBA3B14C3DFA85925C8223A88E268CBA8FBEAD6E5F3F9333D9
 func TestParseTransaction(t *testing.T) {
-	// ACT: Attempt to fetch and parse a transaction.
-	events, err := new(solana.Solana).ParseTransaction(
-		context.Background(),
+	// ARRANGE: Create a new instance of Solana.
+	chain := solana.NewSolana(
 		"https://corie-nhz8jx-fast-mainnet.helius-rpc.com",
+		"",
+		"CCTPmbSD7gX1bxKPAmg77w8oFzNFpaQiQUWD43TKaecd",
+	)
+
+	// ACT: Attempt to fetch and parse a transaction.
+	event, err := chain.ParseTransaction(
+		context.Background(),
 		"4XhuTtTHxNFDfGn6A7ngvqT2dNoxRQFK7kpZwNY25gxXU5SPFCAk6ihj9JJdq5g7UMb7MSwyTt5r3TJbM4RgMVyJ",
 	)
 	// ASSERT: The action should've succeeded, and returned on message.
 	require.NoError(t, err)
-	require.Len(t, events, 1)
+	require.NotNil(t, event)
 }

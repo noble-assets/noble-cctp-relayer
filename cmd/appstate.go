@@ -13,7 +13,10 @@ import (
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
-const nobleChainName = "noble"
+const (
+	nobleChainName  = "noble"
+	solanaChainName = "solana"
+)
 
 // appState is the modifiable state of the application.
 type AppState struct {
@@ -87,8 +90,8 @@ func (a *AppState) loadConfigFile() {
 func (a *AppState) validateConfig() error {
 	// validate chains
 	for name, cfg := range a.Config.Chains {
-		// check if chain is noble
-		if name == nobleChainName {
+		switch name {
+		case nobleChainName:
 			// validate noble chain
 			cc := cfg.(*noble.ChainConfig)
 			err := a.validateChain(
@@ -104,7 +107,10 @@ func (a *AppState) validateConfig() error {
 			if err != nil {
 				return err
 			}
-		} else {
+		case solanaChainName:
+			// TODO: Validate!!!
+			continue
+		default:
 			// validate eth based chains
 			cc := cfg.(*ethereum.ChainConfig)
 			err := a.validateChain(

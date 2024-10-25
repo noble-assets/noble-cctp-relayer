@@ -11,14 +11,10 @@ import (
 	"github.com/google/uuid"
 )
 
-// AccountInfo defines the expected response structure when using Solana's
-// getAccountInfo RPC method with the "base64" encoding type.
-type AccountInfo struct {
-	Result struct {
-		Value struct {
-			Data []string `json:"data"`
-		} `json:"value"`
-	} `json:"result"`
+// BlockHeight defines the expected response structure when using Solana's
+// getBlockHeight RPC method with the "finalized" commitment type.
+type BlockHeight struct {
+	Result uint64 `json:"result"`
 }
 
 // Transaction defines the expected response structure when using Solana's
@@ -33,6 +29,7 @@ type Transaction struct {
 					Data     string   `json:"data"`
 				} `json:"instructions"`
 			} `json:"innerInstructions"`
+			LogMessages []string `json:"logMessages"`
 		} `json:"meta"`
 		Transaction struct {
 			Message struct {
@@ -50,41 +47,38 @@ type Transaction struct {
 	} `json:"result"`
 }
 
-// GetAccountInfo is a utility that returns the response of a request using
-// Solana's getAccountInfo RPC method with the "base64" encoding type.
-func (s *Solana) GetAccountInfo(ctx context.Context, endpoint string, account string) (*AccountInfo, error) {
+// GetBlockHeight is a utility that returns the response of a request using
+// Solana's getBlockHeight RPC method with the "finalized" commitment type.
+// TODO: Actually filter by "finalized" commitment type!
+func (s *Solana) GetBlockHeight(ctx context.Context) (uint64, error) {
 	data := fmt.Sprintf(`{
 		"jsonrpc": "2.0",
-		"method": "getAccountInfo",
-		"id": "%s",
-		"params": [
-			"%s",
-			{ "encoding": "base64" }
-		]
-	}`, uuid.New().String(), account)
+		"method": "getBlockHeight",
+		"id": "%s"
+	}`, uuid.New().String())
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(data))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.endpoints.RPC, strings.NewReader(data))
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
 	defer res.Body.Close()
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
-	var info AccountInfo
-	if err = json.Unmarshal(body, &info); err != nil {
-		return nil, err
+	var blockHeight BlockHeight
+	if err = json.Unmarshal(body, &blockHeight); err != nil {
+		return 0, err
 	}
 
-	return &info, nil
+	return blockHeight.Result, nil
 }
 
 // GetTransaction is a utility that returns the response of a request using
@@ -98,7 +92,7 @@ func (s *Solana) GetTransaction(ctx context.Context, endpoint string, hash strin
 			"%s",
 			{
 				"encoding": "jsonParsed",
-				"commitment": "confirmed",
+				"commitment": "finalized",
 				"maxSupportedTransactionVersion": 0
 			}
 		]
