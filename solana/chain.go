@@ -1,11 +1,14 @@
 package solana
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
 	"github.com/gagliardetto/solana-go/rpc/ws"
@@ -13,6 +16,8 @@ import (
 	"cosmossdk.io/log"
 
 	"github.com/strangelove-ventures/noble-cctp-relayer/relayer"
+	"github.com/strangelove-ventures/noble-cctp-relayer/solana/generated/message_transmitter"
+	"github.com/strangelove-ventures/noble-cctp-relayer/solana/generated/token_messenger_minter"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
@@ -23,24 +28,54 @@ type Solana struct {
 		RPC string
 		WS  string
 	}
-	messageTransmitter solana.PublicKey
+	rpcClient *rpc.Client
+	wallet    solana.Wallet
+
+	messageTransmitter   solana.PublicKey
+	tokenMessengerMinter solana.PublicKey
+	fiatToken            solana.PublicKey
+	remoteTokens         map[types.Domain]solana.PublicKey
 
 	mu               sync.Mutex
 	latestBlock      uint64
 	lastFlushedBlock uint64
 }
 
-func NewSolana(
-	rpcEndpoint string,
-	wsEndpoint string,
-	messageTransmitter string,
-) *Solana {
+func NewSolana(cfg Config) *Solana {
+	wallet, err := solana.WalletFromPrivateKeyBase58(cfg.PrivateKey)
+	if err != nil {
+		panic(err)
+	}
+
+	messageTransmitter := solana.MustPublicKeyFromBase58(cfg.MessageTransmitter)
+	message_transmitter.SetProgramID(messageTransmitter)
+
+	tokenMessengerMinter := solana.MustPublicKeyFromBase58(cfg.TokenMessengerMinter)
+	token_messenger_minter.SetProgramID(tokenMessengerMinter)
+
+	remoteTokens := make(map[types.Domain]solana.PublicKey)
+	for domain, rawRemoteToken := range cfg.RemoteTokens {
+		if strings.HasPrefix(rawRemoteToken, "0x") {
+			remoteToken := make([]byte, 32)
+			tmpRemoteToken := common.FromHex(rawRemoteToken)
+			copy(remoteToken[32-len(tmpRemoteToken):], tmpRemoteToken)
+
+			remoteTokens[domain] = solana.PublicKeyFromBytes(remoteToken)
+		} else {
+			panic("unsupported remote token: " + rawRemoteToken)
+		}
+	}
+
 	return &Solana{
 		endpoints: struct {
 			RPC string
 			WS  string
-		}{RPC: rpcEndpoint, WS: wsEndpoint},
-		messageTransmitter: solana.MustPublicKeyFromBase58(messageTransmitter),
+		}{RPC: cfg.RPC, WS: cfg.WS},
+		wallet:               *wallet,
+		messageTransmitter:   messageTransmitter,
+		tokenMessengerMinter: tokenMessengerMinter,
+		fiatToken:            solana.MustPublicKeyFromBase58(cfg.FiatToken),
+		remoteTokens:         remoteTokens,
 	}
 }
 
@@ -69,15 +104,14 @@ func (s *Solana) SetLatestBlock(block uint64) {
 // LastFlushedBlock implements the types.Chain interface.
 func (s *Solana) LastFlushedBlock() uint64 { return s.lastFlushedBlock }
 
-// IsDestinationCaller implements the types.Chain interface.
-// TODO: Implement!!!
-func (s *Solana) IsDestinationCaller(_ []byte) (isCaller bool, readableAddress string) {
-	return false, ""
+// IsDestinationCaller checks if the relayer wallet is the specified destination caller.
+func (s *Solana) IsDestinationCaller(destinationCaller []byte) (isCaller bool, readableAddress string) {
+	return bytes.Equal(destinationCaller, s.wallet.PublicKey().Bytes()), s.wallet.PublicKey().String()
 }
 
-// InitializeClients implements the types.Chain interface.
-// NOTE: This is left empty intentionally, as there are no Solana clients to initialize.
+// InitializeClients creates a new client for a Solana RPC endpoint.
 func (s *Solana) InitializeClients(_ context.Context, _ log.Logger) error {
+	s.rpcClient = rpc.New(s.endpoints.RPC)
 	return nil
 }
 
@@ -86,7 +120,7 @@ func (s *Solana) InitializeClients(_ context.Context, _ log.Logger) error {
 func (s *Solana) CloseClients() error { return nil }
 
 // InitializeBroadcaster implements the types.Chain interface.
-// TODO: Implement!!!
+// NOTE: This is left empty intentionally, as there is no Solana broadcaster to initialize.
 func (s *Solana) InitializeBroadcaster(_ context.Context, _ log.Logger, _ *types.SequenceMap) error {
 	return nil
 }
@@ -129,19 +163,55 @@ func (s *Solana) StartListener(ctx context.Context, logger log.Logger, processin
 	}
 }
 
-// Broadcast implements the types.Chain interfaces.
-// TODO: Implement!!!
-func (s *Solana) Broadcast(_ context.Context, _ log.Logger, _ []*types.MessageState, _ *types.SequenceMap, _ *relayer.PromMetrics) error {
-	return nil
+// Broadcast receives and executes a list of messages from other domains to Solana.
+func (s *Solana) Broadcast(ctx context.Context, _ log.Logger, inputs []*types.MessageState, _ *types.SequenceMap, _ *relayer.PromMetrics) error {
+	var instructions []solana.Instruction
+
+	for _, input := range inputs {
+		instruction := message_transmitter.NewReceiveMessageInstructionBuilder()
+
+		instruction.SetParams(message_transmitter.ReceiveMessageParams{
+			Message:     input.MsgSentBytes,
+			Attestation: common.FromHex(input.Attestation),
+		})
+		err := instruction.SetAccounts(s.GetReceiveMessageAccounts(input))
+		if err != nil {
+			return err
+		}
+
+		instructions = append(instructions, instruction.Build())
+	}
+
+	recent, err := s.rpcClient.GetRecentBlockhash(ctx, rpc.CommitmentFinalized)
+	if err != nil {
+		return err
+	}
+	tx, err := solana.NewTransaction(instructions, recent.Value.Blockhash)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Sign(func(key solana.PublicKey) *solana.PrivateKey {
+		if key == s.wallet.PublicKey() {
+			return &s.wallet.PrivateKey
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = s.rpcClient.SendTransaction(ctx, tx)
+	return err
 }
 
 // TrackLatestBlockHeight continuously queries Solana for the latest block height.
-// TODO: Ensure we are querying finalized blocks only!
 func (s *Solana) TrackLatestBlockHeight(ctx context.Context, logger log.Logger, metrics *relayer.PromMetrics) {
 	domain := fmt.Sprint(s.Domain())
 
 	updateBlockHeight := func() {
-		blockHeight, err := s.GetBlockHeight(ctx)
+		blockHeight, err := s.rpcClient.GetBlockHeight(ctx, rpc.CommitmentFinalized)
 		if err != nil {
 			logger.Error("Unable to query Solana's block height", "err", err)
 		} else {
@@ -167,6 +237,28 @@ func (s *Solana) TrackLatestBlockHeight(ctx context.Context, logger log.Logger, 
 	}
 }
 
-// WalletBalanceMetric implements the types.Chain interface.
-// TODO: Implement!!!
-func (s *Solana) WalletBalanceMetric(_ context.Context, _ log.Logger, _ *relayer.PromMetrics) {}
+// WalletBalanceMetric continuously queries Solana for the SOL balance of the relayer wallet.
+func (s *Solana) WalletBalanceMetric(ctx context.Context, logger log.Logger, metrics *relayer.PromMetrics) {
+	updateBalance := func() {
+		res, err := s.rpcClient.GetBalance(ctx, s.wallet.PublicKey(), rpc.CommitmentFinalized)
+		if err != nil {
+			logger.Error("Unable to query relayer wallet balance", "err", err)
+		} else if metrics != nil {
+			balance := float64(res.Value) / 1e9
+			metrics.SetWalletBalance(s.Name(), s.wallet.PublicKey().String(), "SOL", balance)
+		}
+	}
+
+	updateBalance()
+
+	for {
+		timer := time.NewTimer(5 * time.Minute)
+		select {
+		case <-timer.C:
+			updateBalance()
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		}
+	}
+}

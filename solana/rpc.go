@@ -11,12 +11,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// BlockHeight defines the expected response structure when using Solana's
-// getBlockHeight RPC method with the "finalized" commitment type.
-type BlockHeight struct {
-	Result uint64 `json:"result"`
-}
-
 // Transaction defines the expected response structure when using Solana's
 // getTransaction RPC method with the "jsonParsed" encoding type.
 type Transaction struct {
@@ -45,40 +39,6 @@ type Transaction struct {
 			} `json:"message"`
 		} `json:"transaction"`
 	} `json:"result"`
-}
-
-// GetBlockHeight is a utility that returns the response of a request using
-// Solana's getBlockHeight RPC method with the "finalized" commitment type.
-// TODO: Actually filter by "finalized" commitment type!
-func (s *Solana) GetBlockHeight(ctx context.Context) (uint64, error) {
-	data := fmt.Sprintf(`{
-		"jsonrpc": "2.0",
-		"method": "getBlockHeight",
-		"id": "%s"
-	}`, uuid.New().String())
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.endpoints.RPC, strings.NewReader(data))
-	if err != nil {
-		return 0, err
-	}
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return 0, err
-	}
-
-	defer res.Body.Close()
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return 0, err
-	}
-
-	var blockHeight BlockHeight
-	if err = json.Unmarshal(body, &blockHeight); err != nil {
-		return 0, err
-	}
-
-	return blockHeight.Result, nil
 }
 
 // GetTransaction is a utility that returns the response of a request using
