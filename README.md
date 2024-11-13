@@ -99,6 +99,18 @@ abigen --abi ethereum/abi/ERC20.json --pkg integration_testing --type ERC20 --ou
 abigen --abi ethereum/abi/MessageTransmitter.json --pkg contracts- --type MessageTransmitter --out ethereum/contracts/MessageTransmitter.go
 ```
 
+### Generating Go IDL bindings
+
+We utilize [anchor-go](https://github.com/gagliardetto/anchor-go) to generate Anchor IDL into Golang bindings.
+
+```shell
+# CCTP Message Transmitter Program
+anchor-go -src solana/generated/message_transmitter.json -dst solana/generated/message_transmitter
+
+# CCTP Token Messenger & Minter Program
+anchor-go -src solana/generated/token_messenger_minter.json -dst solana/generated/token_messenger_minter
+```
+
 ### Useful links
 [Relayer Flow Charts](./docs/flows.md)
 
