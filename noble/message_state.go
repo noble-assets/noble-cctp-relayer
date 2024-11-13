@@ -27,12 +27,10 @@ func txToMessageState(tx *ctypes.ResultTx) ([]*types.MessageState, error) {
 			var parsed bool
 			var parseErrs error
 			for _, attr := range event.Attributes {
-				decodedKey := attr.Key
-				if string(decodedKey) == "message" {
-					decodedValue := attr.Value
-					encoded := decodedValue[1 : len(decodedValue)-1]
+				if attr.Key == "message" {
+					encoded := attr.Value[1 : len(attr.Value)-1]
 					// Because we are using cometBFT v0.38, we need to decode the value twice.
-					rawMessageSentBytes, err := base64.StdEncoding.DecodeString(string(encoded))
+					rawMessageSentBytes, err := base64.StdEncoding.DecodeString(encoded)
 					if err != nil {
 						parseErrs = errors.Join(parseErrs, fmt.Errorf("failed to decode message: %w", err))
 						continue
