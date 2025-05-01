@@ -73,7 +73,12 @@ func Start(a *AppState) *cobra.Command {
 				return fmt.Errorf("invalid port error=%w", err)
 			}
 
-			metrics := relayer.InitPromMetrics(port)
+			address, err := cmd.Flags().GetString(flagMetricsAddress)
+			if err != nil {
+				return fmt.Errorf("invalid address error=%w", err)
+			}
+
+			metrics := relayer.InitPromMetrics(address, port)
 
 			for name, cfg := range cfg.Chains {
 				c, err := cfg.Chain(name)
