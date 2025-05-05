@@ -16,7 +16,7 @@ type PromMetrics struct {
 	BroadcastErrors *prometheus.CounterVec
 }
 
-func InitPromMetrics(port int16) *PromMetrics {
+func InitPromMetrics(address string, port int16) *PromMetrics {
 	reg := prometheus.NewRegistry()
 
 	// labels
@@ -49,7 +49,7 @@ func InitPromMetrics(port int16) *PromMetrics {
 	go func() {
 		http.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{Registry: reg}))
 		server := &http.Server{
-			Addr:        fmt.Sprintf(":%d", port),
+			Addr:        fmt.Sprintf("%s:%d", address, port),
 			ReadTimeout: 3 * time.Second,
 		}
 		log.Fatal(server.ListenAndServe())
